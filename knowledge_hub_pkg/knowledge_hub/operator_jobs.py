@@ -81,10 +81,11 @@ class JobRunner:
         self._stop = threading.Event()
         self._thread: Optional[threading.Thread] = None
         self._services: Optional[dict[str, Any]] = None  # lazy heavy stack
-        # Registered kinds — Stage 3 adds 'reextract_scope' here. A kind's
-        # executor MUST be idempotent to re-run (see module docstring).
+        # Registered kinds. A kind's executor MUST be idempotent to re-run
+        # (see module docstring).
         self._kinds: dict[str, Callable[[dict[str, Any]], dict[str, Any]]] = {
             "folder_ingest": self._run_folder_ingest,
+            "reextract_scope": self._run_reextract_scope,
         }
 
     # ---------------------------------------------------------- lifecycle --
@@ -297,4 +298,121 @@ class JobRunner:
                 """, (tenant, tenant)).fetchone()
         counts["queue_leftover_dispatch"] = leftovers["dispatch"]
         counts["queue_leftover_extraction"] = leftovers["extraction"]
+        return counts
+
+    # ---------------------------------------------------- scoped re-extract --
+    def _run_reextract_scope(self, job: dict[str, Any]) -> dict[str, Any]:
+        """Re-extract a FIXED document population under the job's frozen
+        target version (d.s Stage 3), never overwriting: each document
+        re-runs the exact per-document extraction path proven in Stage 2
+        with a call-time version pin; when its new facts PROMOTE, the old
+        vocabulary's facts retire through the promotion cutover
+        (Pipeline._promote_document_group, reason='ontology_superseded') —
+        retained and queryable, one transaction, one timestamp.
+
+        Resumable + idempotent: the population is materialized once
+        (ON CONFLICT DO NOTHING); each document extracts and is marked in
+        its own step (a crash at N resumes at N+1); a re-run replays
+        already-extracted documents as no-ops via the idempotency ledger
+        (keyed on the ontology version), so nothing double-writes.
+
+        A document that stages nothing under the target keeps its old
+        facts current (promotion-gated supersession — an empty or failed
+        new yield never erases a served corpus); it still shows as done
+        with its B-run on the ledger, so A-vs-B queries surface it.
+
+        params (frozen by the write op at creation):
+          ontology_version   the TARGET — resolved at creation, never
+                             re-read mid-run (the split-brain defense)
+          scope_version      docs whose ledger has an ok-run under this
+                             version (the default scope shape)
+          source_ref / source_system   optional narrowing
+          all_documents      explicit blanket (never the default)
+          affected           the count the operator confirmed
+        """
+        tenant, job_id, p = job["tenant_id"], job["id"], job["params"]
+        target = p["ontology_version"]
+        extraction, resolution = self._stage_services()
+
+        total = self._store.materialize_job_documents(
+            tenant, job_id,
+            {"scope_version": p.get("scope_version"),
+             "source_ref": p.get("source_ref"),
+             "source_system": p.get("source_system")})
+        counts: dict[str, Any] = {
+            "ontology_version": target,
+            "scope_version": p.get("scope_version"),
+            "docs_total": total,
+            "units_extracted": 0, "units_replayed": 0,
+            "facts_staged": 0, "facts_promoted": 0,
+            "facts_superseded": 0, "failed_documents": [],
+            **self._store.job_document_counts(tenant, job_id),
+        }
+        self._store.update_job_counts(tenant, job_id, counts)
+
+        def sweep_and_count() -> None:
+            summary = resolution.sweep(tenant, limit=500)
+            counts["facts_promoted"] += len(summary.promoted_facts)
+
+        processed_since_sweep = 0
+        while True:
+            batch = self._store.pending_job_documents(tenant, job_id,
+                                                      limit=50)
+            if not batch:
+                break
+            for raw_id in batch:
+                try:
+                    summary = extraction.extract(tenant, raw_id,
+                                                 ontology_version=target)
+                except Exception as e:
+                    logger.warning("job %d: re-extract of raw_document "
+                                   "id=%s failed: %s", job_id, raw_id, e)
+                    self._store.mark_job_document(
+                        tenant, job_id, raw_id, status="failed",
+                        error=f"{type(e).__name__}: {e}")
+                    if len(counts["failed_documents"]) < 25:
+                        counts["failed_documents"].append(raw_id)
+                    continue
+                if summary.status == "review":
+                    # Held for a human (§8.1a): not silently skipped — the
+                    # document stays visible as failed with the way forward.
+                    self._store.mark_job_document(
+                        tenant, job_id, raw_id, status="failed",
+                        error="document is held for human review — resolve "
+                              "its flag, then re-run this job (idempotent)")
+                    if len(counts["failed_documents"]) < 25:
+                        counts["failed_documents"].append(raw_id)
+                    continue
+                counts["units_extracted"] += (summary.units
+                                              - summary.units_replayed)
+                counts["units_replayed"] += summary.units_replayed
+                counts["facts_staged"] += summary.facts
+                self._store.mark_job_document(tenant, job_id, raw_id,
+                                              status="done")
+                processed_since_sweep += 1
+                if processed_since_sweep >= 25:
+                    sweep_and_count()
+                    processed_since_sweep = 0
+                counts.update(self._store.job_document_counts(tenant,
+                                                              job_id))
+                self._store.update_job_counts(tenant, job_id, counts)
+
+        # Final drain: resolve + promote until quiet — promotion is where
+        # the old vocabulary's facts retire, so the job is not done until
+        # the resolver is.
+        for _ in range(_MAX_DRAIN_PASSES):
+            summary = resolution.sweep(tenant, limit=500)
+            counts["facts_promoted"] += len(summary.promoted_facts)
+            if summary.swept == 0 and not summary.promoted_facts:
+                break
+
+        with self._store.transaction(tenant) as conn:
+            superseded = conn.execute(
+                "SELECT count(*) AS n FROM facts"
+                " WHERE tenant_id = %s AND retraction_reason = %s"
+                "   AND valid_to >= %s",
+                (tenant, "ontology_superseded",
+                 job["started_at"])).fetchone()
+        counts["facts_superseded"] = superseded["n"]
+        counts.update(self._store.job_document_counts(tenant, job_id))
         return counts

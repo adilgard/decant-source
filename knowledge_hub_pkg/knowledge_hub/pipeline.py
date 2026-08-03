@@ -26,10 +26,18 @@ REVIEW_KINDS = ("mention", "match", "oversized_fact", "document",
 # propagation (the doc was DELETED at the source; reversible on revival);
 # 'superseded' is written by re-version supersession at promotion time (the
 # doc was EDITED — version N's facts retire as version N+1's become current,
-# §8.1g). One mechanism, two triggers, never a parallel deletion path:
-# both flow through _retract_facts_for_documents below.
+# §8.1g); 'ontology_superseded' (d.s Stage 3) is written when the SAME
+# document's facts re-promote under a DIFFERENT ontology version (operator
+# re-extraction) — the old vocabulary's facts retire as the new one's become
+# current, retained and queryable, never deleted. One mechanism, three
+# triggers, never a parallel deletion path: all flow through
+# _retract_facts_for_documents below, and the per-trigger reason is what
+# makes a bad swap reversible (a future reversal op can clear exactly
+# 'ontology_superseded' and nothing else, the way revival clears exactly
+# 'source_tombstone').
 RETRACTED_BY_TOMBSTONE = "source_tombstone"
 RETRACTED_BY_REVERSION = "superseded"
+RETRACTED_BY_ONTOLOGY = "ontology_superseded"
 
 
 class Pipeline:
@@ -164,15 +172,27 @@ class Pipeline:
     @staticmethod
     def _retract_facts_for_documents(conn, tenant_id: str, doc_ids: list[int],
                                      *, valid_to: datetime, reason: str,
-                                     keep_fact_ids: tuple = ()) -> int:
+                                     keep_fact_ids: tuple = (),
+                                     other_than_ontology_version:
+                                     Optional[str] = None) -> int:
         """THE facts.valid_to writer — the BP7 retraction primitive's
-        document-scoped core, shared by both triggers (tombstone propagation
-        and re-version supersession; the reason discriminates). Retracts
-        every CURRENT fact anchored to `doc_ids` per the provenance-link
-        rule (source_document_id, else the chunk's document), except
-        `keep_fact_ids` — the supersession diff's survivors, which stay
-        temporally continuous. Runs on the caller's connection so the
-        caller's transaction owns atomicity. Returns rows retracted."""
+        document-scoped core, shared by all three triggers (tombstone
+        propagation, re-version supersession, ontology supersession; the
+        reason discriminates). Retracts every CURRENT fact anchored to
+        `doc_ids` per the provenance-link rule (source_document_id, else
+        the chunk's document), except `keep_fact_ids` — the supersession
+        diff's survivors, which stay temporally continuous.
+        `other_than_ontology_version` narrows the retraction to facts NOT
+        carrying that version — the ontology-supersession trigger's guard:
+        the newly promoted rows (which ARE current) carry the new version
+        and must survive their own cutover. Runs on the caller's connection
+        so the caller's transaction owns atomicity. Returns rows retracted."""
+        version_guard = ""
+        params: list = [valid_to, reason, tenant_id, list(keep_fact_ids),
+                        doc_ids, tenant_id, doc_ids]
+        if other_than_ontology_version is not None:
+            version_guard = " AND ontology_version <> %s"
+            params.append(other_than_ontology_version)
         return conn.execute(
             """
             UPDATE facts SET valid_to = %s, retraction_reason = %s
@@ -184,9 +204,8 @@ class Pipeline:
                            SELECT id FROM chunks
                            WHERE tenant_id = %s
                              AND document_id = ANY(%s))))
-            """,
-            (valid_to, reason, tenant_id, list(keep_fact_ids), doc_ids,
-             tenant_id, doc_ids),
+            """ + version_guard,
+            tuple(params),
         ).rowcount
 
     def revive_raw(self, tenant_id: str, source_system: str,
@@ -418,7 +437,15 @@ class Pipeline:
                 conn, tenant_id, anchor_document_id)
             prior_index = (self._current_triples(conn, tenant_id, prior_docs)
                            if prior_docs else {})
+            # d.s Stage 3: ontology versions THIS document currently serves.
+            # A promoting fact carrying a different version means this wave
+            # is an ontology re-extraction cutover (the third supersession
+            # trigger) — never anything else, because same-doc facts only
+            # ever arrive under a new version by deliberate re-extraction.
+            current_versions = self._current_ontology_versions(
+                conn, tenant_id, anchor_document_id)
             kept: set[int] = set()
+            promoted_versions: set[str] = set()
             for pending_id in pending_ids:
                 pending = self.store.get_pending_fact(tenant_id, pending_id)
                 fact = self._rewrite_refs(pending)
@@ -433,9 +460,14 @@ class Pipeline:
                     fact_id = surviving
                     kept.add(surviving)
                 else:
-                    if prior_docs and fact.valid_from is None:
+                    supersedes_ontology = bool(
+                        current_versions and
+                        fact.ontology_version not in current_versions)
+                    if fact.valid_from is None and (prior_docs or
+                                                    supersedes_ontology):
                         fact.valid_from = cutover  # validity begins at cutover
                     fact_id = self.store.write_facts([fact])[0]
+                promoted_versions.add(fact.ontology_version)
                 conn.execute(
                     "UPDATE pending_facts SET resolution_status = 'promoted',"
                     " promoted_fact_id = %s WHERE tenant_id = %s AND id = %s",
@@ -452,7 +484,50 @@ class Pipeline:
                     " WHERE tenant_id = %s AND id = ANY(%s)"
                     "   AND valid_to IS NULL",
                     (cutover, RETRACTED_BY_REVERSION, tenant_id, prior_docs))
+            # d.s Stage 3: ontology supersession. When this wave promoted
+            # facts under exactly ONE version and the document was serving a
+            # DIFFERENT one, the old vocabulary's facts retire — retained,
+            # reason-tagged, same cutover timestamp, same transaction: no
+            # query window ever sees both vocabularies or neither. NEVER
+            # overwrite: the new facts are their own rows; A-vs-B stays
+            # answerable via facts.ontology_version. A mixed-version wave
+            # (only reachable through odd partial states) deliberately
+            # skips — superseding on ambiguous evidence loses data, waiting
+            # for the next wave loses nothing. Promotion-gated on purpose:
+            # a re-extraction that stages NOTHING leaves the old facts
+            # current — an empty new yield must never silently erase a
+            # served corpus (the conservative reading of "reversible").
+            if (anchor_document_id is not None and promoted
+                    and len(promoted_versions) == 1):
+                new_version = next(iter(promoted_versions))
+                if current_versions - {new_version}:
+                    self._retract_facts_for_documents(
+                        conn, tenant_id, [anchor_document_id],
+                        valid_to=cutover, reason=RETRACTED_BY_ONTOLOGY,
+                        keep_fact_ids=tuple(promoted) + tuple(kept),
+                        other_than_ontology_version=new_version)
         return promoted
+
+    @staticmethod
+    def _current_ontology_versions(conn, tenant_id: str,
+                                   document_id: Optional[int]) -> set[str]:
+        """Distinct ontology versions on the document's CURRENT facts
+        (provenance-link rule) — the ontology-supersession trigger's
+        evidence."""
+        if document_id is None:
+            return set()
+        rows = conn.execute(
+            """
+            SELECT DISTINCT ontology_version FROM facts
+            WHERE tenant_id = %s AND valid_to IS NULL
+              AND (source_document_id = %s
+                   OR (source_document_id IS NULL
+                       AND source_chunk_id IN (
+                           SELECT id FROM chunks
+                           WHERE tenant_id = %s AND document_id = %s)))
+            """,
+            (tenant_id, document_id, tenant_id, document_id)).fetchall()
+        return {r["ontology_version"] for r in rows}
 
     @staticmethod
     def _prior_version_documents(conn, tenant_id: str,

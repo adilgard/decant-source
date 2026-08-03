@@ -603,6 +603,110 @@ class PostgresFactStore(FactStore):
                 " ORDER BY id DESC LIMIT %s", (tenant_id, limit)).fetchall()
         return [dict(r) for r in rows]
 
+    # -------------------------------------------- re-extraction scope (013) --
+    @staticmethod
+    def _scope_where(scope: Mapping[str, Any]) -> tuple[str, list]:
+        """WHERE fragment + params for a re-extraction scope — ONE builder
+        shared by the preview count and the job materialization, so the
+        number the operator confirmed is the population the job iterates.
+        Population = CURRENT documents (raw not tombstoned, document row
+        not retracted); scope_version narrows to documents whose extraction
+        ledger carries an ok-run under that version; source_ref /
+        source_system narrow by origin; all_documents drops the version
+        filter (allowed, never the default — the write op enforces that)."""
+        where = ("r.tenant_id = %s AND r.deleted_at IS NULL"
+                 " AND d.valid_to IS NULL")
+        params: list = []
+        if scope.get("scope_version"):
+            where += (" AND EXISTS (SELECT 1 FROM extraction_runs er"
+                      " WHERE er.tenant_id = r.tenant_id"
+                      "   AND er.document_id = d.id"
+                      "   AND er.ontology_version = %s"
+                      "   AND er.status = 'ok')")
+            params.append(scope["scope_version"])
+        if scope.get("source_ref"):
+            where += " AND r.native_metadata ->> 'source_ref' = %s"
+            params.append(scope["source_ref"])
+        if scope.get("source_system"):
+            where += " AND r.source_system = %s"
+            params.append(scope["source_system"])
+        return where, params
+
+    def count_scope_documents(self, tenant_id: str,
+                              scope: Mapping[str, Any]) -> int:
+        """The affected-document count the UI warns with before confirm."""
+        where, params = self._scope_where(scope)
+        with self.transaction(tenant_id) as conn:
+            row = conn.execute(
+                f"SELECT count(DISTINCT r.id) AS n FROM raw_documents r"
+                f" JOIN documents d ON d.raw_document_id = r.id"
+                f"  AND d.tenant_id = r.tenant_id"
+                f" WHERE {where}", (tenant_id, *params)).fetchone()
+        return row["n"]
+
+    def materialize_job_documents(self, tenant_id: str, job_id: int,
+                                  scope: Mapping[str, Any]) -> int:
+        """Freeze the job's document population (idempotent — ON CONFLICT
+        DO NOTHING, so a resumed job keeps its original scope and never
+        sweeps in documents ingested after it started). Returns rows in
+        the population after the insert."""
+        where, params = self._scope_where(scope)
+        with self.transaction(tenant_id) as conn:
+            conn.execute(
+                f"""
+                INSERT INTO operator_job_documents
+                    (job_id, tenant_id, raw_document_id)
+                SELECT DISTINCT %s, r.tenant_id, r.id
+                FROM raw_documents r
+                JOIN documents d ON d.raw_document_id = r.id
+                 AND d.tenant_id = r.tenant_id
+                WHERE {where}
+                ON CONFLICT (job_id, raw_document_id) DO NOTHING
+                """, (job_id, tenant_id, *params))
+            row = conn.execute(
+                "SELECT count(*) AS n FROM operator_job_documents"
+                " WHERE job_id = %s", (job_id,)).fetchone()
+        return row["n"]
+
+    def pending_job_documents(self, tenant_id: str, job_id: int,
+                              limit: int = 50) -> list[int]:
+        """The resume scan: still-pending documents, id order — a crash at
+        document N resumes at N+1 because done/failed rows are filtered."""
+        with self.transaction(tenant_id) as conn:
+            rows = conn.execute(
+                "SELECT raw_document_id FROM operator_job_documents"
+                " WHERE job_id = %s AND tenant_id = %s"
+                "   AND status = 'pending'"
+                " ORDER BY raw_document_id LIMIT %s",
+                (job_id, tenant_id, limit)).fetchall()
+        return [r["raw_document_id"] for r in rows]
+
+    def mark_job_document(self, tenant_id: str, job_id: int,
+                          raw_document_id: int, *, status: str,
+                          error: Optional[str] = None) -> None:
+        if status not in ("done", "failed"):
+            raise ValueError(f"job-document status must be done|failed,"
+                             f" got {status!r}")
+        with self.transaction(tenant_id) as conn:
+            conn.execute(
+                "UPDATE operator_job_documents SET status = %s, error = %s,"
+                " finished_at = now()"
+                " WHERE job_id = %s AND tenant_id = %s"
+                "   AND raw_document_id = %s",
+                (status, error, job_id, tenant_id, raw_document_id))
+
+    def job_document_counts(self, tenant_id: str,
+                            job_id: int) -> dict[str, int]:
+        with self.transaction(tenant_id) as conn:
+            rows = conn.execute(
+                "SELECT status, count(*) AS n FROM operator_job_documents"
+                " WHERE job_id = %s AND tenant_id = %s GROUP BY status",
+                (job_id, tenant_id)).fetchall()
+        counts = {r["status"]: r["n"] for r in rows}
+        return {"docs_pending": counts.get("pending", 0),
+                "docs_done": counts.get("done", 0),
+                "docs_failed": counts.get("failed", 0)}
+
     def requeue_stale_jobs(self, worker_tenant: str = DEFAULT_TENANT) -> int:
         """Runner-start recovery: rows still 'running' belong to a runner
         that died (single-runner deployment — documented in JobRunner).

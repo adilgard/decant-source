@@ -157,15 +157,17 @@ class ExtractionService:
                                      ExtractionStrategy]] = {
             binding.version: (binding, llm_strategy, structured_strategy)}
 
-    def _trio_for(self, raw: RawDocument) -> tuple[
+    def _trio_for(self, raw: RawDocument,
+                  ontology_version: Optional[str] = None) -> tuple[
             OntologyBinding, ExtractionStrategy, ExtractionStrategy]:
-        """The binding + strategies this document extracts under: its
-        capture-time override when one is stamped, the service default
-        otherwise. An override with no factory is a HARD error — extracting
-        under the wrong version silently would be a provenance lie; the
-        nack keeps the document visible on the queue instead."""
-        override = (raw.native_metadata or {}).get(
-            "ontology_version_override")
+        """The binding + strategies this document extracts under: an
+        explicit call-time pin first (Stage 3 re-extraction passes the
+        job's frozen version per call), else its capture-time stamp, else
+        the service default. An override with no factory is a HARD error —
+        extracting under the wrong version silently would be a provenance
+        lie; the nack keeps the document visible on the queue instead."""
+        override = ontology_version if ontology_version is not None else \
+            (raw.native_metadata or {}).get("ontology_version_override")
         if override is None or override == self.binding.version:
             return self.binding, self.llm_strategy, self.structured_strategy
         if override not in self._trios:
@@ -202,10 +204,15 @@ class ExtractionService:
         return results
 
     # ------------------------------------------------------------ extract --
-    def extract(self, tenant_id: str, raw_document_id: int) -> ExtractSummary:
+    def extract(self, tenant_id: str, raw_document_id: int,
+                ontology_version: Optional[str] = None) -> ExtractSummary:
         """Extract one processed document into staged mentions + pending
         facts. Idempotent per unit content hash: already-extracted units
-        replay as no-ops."""
+        replay as no-ops. `ontology_version` pins THIS call to a specific
+        vocabulary (Stage 3 re-extraction: the job's frozen target), taking
+        precedence over any capture-time stamp; the idempotency ledger keys
+        on the version, so the same content under a new version is fresh
+        work, never a replay."""
         raw = self.store.get_raw_document(tenant_id, raw_document_id)
         if raw is None:
             raise LookupError(f"raw_document id={raw_document_id} not found "
@@ -227,7 +234,8 @@ class ExtractionService:
                 document_id=document.id, status="review",
                 reason=document.review_reason)
 
-        binding, llm_strategy, structured_strategy = self._trio_for(raw)
+        binding, llm_strategy, structured_strategy = self._trio_for(
+            raw, ontology_version)
         if document.data_track == PROSE_TRACK:
             summary = self._extract_prose(raw, document, binding,
                                           llm_strategy)

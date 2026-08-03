@@ -36,6 +36,7 @@ const state = {
   current: null,         // loaded review detail
   cleared: 0,
   lastMergeId: null,     // S reverses the last merge made this session
+  retiredVersion: null,  // the ontology a swap just retired (re-extract prefill)
   offline: false,
   timers: [],
 };
@@ -625,6 +626,7 @@ async function refreshOntology() {
     return;
   }
   body.versions.forEach((v) => list.appendChild(ontologyRow(v)));
+  populateReextractScope(body.versions, body.active);
 }
 
 function ontologyRow(v) {
@@ -651,6 +653,7 @@ function ontologyRow(v) {
 }
 
 async function selectOntology(version) {
+  const retiring = $("onto-active").textContent;   // the version being retired
   let resp;
   try {
     resp = await api("/v1/actions/select_ontology", {
@@ -661,9 +664,87 @@ async function selectOntology(version) {
     ontoSay(false, "Not selected — " + (body.detail || body.error || resp.status) + ".");
     return;
   }
+  // d.s Stage 3: OFFER the two paths, never force. Path 1 (nothing runs)
+  // is this message; path 2 is the re-extract box, prefilled with the
+  // version that was just retired.
   ontoSay(true, "Active ontology is now " + version + ". This applies to future ingests only — " +
-    "facts already extracted keep the version that produced them. The selection is on the audit trail.");
+    "facts already extracted keep the version that produced them. If you want existing data " +
+    "brought under " + version + ", use the re-extract box below (scope preselected to " + retiring + "); " +
+    "otherwise nothing re-runs. The selection is on the audit trail.");
+  state.retiredVersion = retiring && retiring !== "none selected" ? retiring : null;
   await refreshOntology();
+}
+
+/* ------------------------------------------------- re-extract (Stage 3) */
+function rxSay(ok, text) {
+  $("rx-msg-box").classList.toggle("kh-hide", !ok);
+  $("rx-err-box").classList.toggle("kh-hide", ok);
+  $(ok ? "rx-msg" : "rx-err").textContent = text;
+}
+
+function rxScopeParams() {
+  const params = {};
+  if ($("rx-all").checked) params.all_documents = true;
+  else if ($("rx-scope").value) params.scope_version = $("rx-scope").value;
+  if ($("rx-source").value.trim()) params.source_ref = $("rx-source").value.trim();
+  return params;
+}
+
+function populateReextractScope(versions, active) {
+  const sel = $("rx-scope");
+  const current = sel.value || state.retiredVersion || "";
+  sel.textContent = "";
+  const none = document.createElement("option");
+  none.value = "";
+  none.textContent = "— pick the version to re-extract from —";
+  sel.appendChild(none);
+  versions.forEach((v) => {
+    if (v.version === active) return;   // scope == target is a no-op, refused server-side
+    const opt = document.createElement("option");
+    opt.value = v.version;
+    opt.textContent = v.version;
+    sel.appendChild(opt);
+  });
+  sel.value = current;
+  refreshReextractPreview().catch(() => {});
+}
+
+async function refreshReextractPreview() {
+  const p = rxScopeParams();
+  if (!p.all_documents && !p.scope_version) {
+    $("rx-count").textContent = "pick a scope to see the affected count";
+    return;
+  }
+  const qs = new URLSearchParams();
+  if (p.scope_version) qs.set("scope_version", p.scope_version);
+  if (p.source_ref) qs.set("source_ref", p.source_ref);
+  const resp = await api("/v1/reextract-preview?" + qs.toString());
+  if (resp.status !== 200) return;
+  const n = (await resp.json()).affected_documents;
+  $("rx-count").textContent = fmt(n) + " document(s) affected — a background job re-extracts them";
+}
+
+async function confirmReextract() {
+  const p = rxScopeParams();
+  if (!p.all_documents && !p.scope_version) {
+    rxSay(false, "Pick a scope first — the version to re-extract from, or tick all documents. A blanket run never happens by default.");
+    return;
+  }
+  let resp;
+  try {
+    resp = await api("/v1/actions/reextract_scope", {
+      method: "POST", body: JSON.stringify(p) });
+  } catch (e) { return; }
+  const body = await resp.json();
+  if (resp.status === 403) { rxSay(false, "Operator role required."); return; }
+  if (resp.status !== 200) {
+    rxSay(false, "Not started — " + (body.detail || body.error || resp.status) + ".");
+    return;
+  }
+  const r = body.result;
+  rxSay(true, "Job " + r.job_id + " queued: " + fmt(r.affected_documents) + " document(s) re-extract under " +
+    r.ontology_version + ". Old facts are retained and marked superseded as new ones promote. " +
+    "Progress lives on the Data landing tab; the job is resumable and safe to re-run.");
 }
 
 async function importOntologyFile(file) {
@@ -852,6 +933,13 @@ document.addEventListener("DOMContentLoaded", () => {
   $("token-input").addEventListener("keydown", (e) => {
     if (e.key === "Enter") unlock($("token-input").value.trim());
   });
+  $("rx-confirm").addEventListener("click", () => confirmReextract().catch(() => {}));
+  ["rx-scope", "rx-all", "rx-source"].forEach((id) =>
+    $(id).addEventListener("change", () => refreshReextractPreview().catch(() => {})));
+  $("rx-all").addEventListener("change", () => {
+    $("rx-scope").disabled = $("rx-all").checked;   // one or the other, like the server
+  });
+
   $("ld-start").addEventListener("click", () => startIngest().catch(() => {}));
   $("ld-path").addEventListener("keydown", (e) => {
     if (e.key === "Enter") startIngest().catch(() => {});

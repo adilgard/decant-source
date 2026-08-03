@@ -72,6 +72,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping, Optional
+from urllib.parse import parse_qs
 
 from psycopg.types.json import Jsonb
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -646,6 +647,80 @@ class OperatorService:
                 r[ts] = r[ts].isoformat() if r[ts] else None
         return {"jobs": rows}
 
+    def reextract_scope(self, principal: Principal,
+                        p: dict[str, Any]) -> WriteOutcome:
+        """Create one scoped re-extraction job (d.s Stage 3). Everything is
+        resolved and FROZEN here, at creation: the target version (explicit
+        or the active selection — never re-read mid-run), the scope, and
+        the affected count the operator confirmed. Scope is explicit by
+        design: the caller names the version being retired (scope_version)
+        or says all_documents — a blanket run can never happen by
+        omission."""
+        tenant = principal.tenant_id
+        target = p.get("ontology_version")
+        if target:
+            try:
+                self._store.get_ontology_definition(tenant, target)
+            except LookupError:
+                raise WriteCallError(
+                    f"reextract_scope: ontology_version {target!r} is not "
+                    f"imported — import and select it first")
+        else:
+            target, _ = self._store.get_ontology_definition(tenant)
+
+        scope_version = p.get("scope_version")
+        all_docs = p.get("all_documents", False)
+        if all_docs and scope_version:
+            raise WriteCallError(
+                "reextract_scope: pass scope_version OR all_documents=true, "
+                "not both — one names a vocabulary to retire, the other is "
+                "the explicit blanket")
+        if not all_docs and not scope_version:
+            raise WriteCallError(
+                "reextract_scope: no scope — pass scope_version (re-extract "
+                "documents whose extraction used that version; the usual "
+                "choice is the version you just retired) or say "
+                "all_documents=true explicitly. A blanket run never happens "
+                "by default.")
+        if scope_version:
+            try:
+                self._store.get_ontology_definition(tenant, scope_version)
+            except LookupError:
+                raise WriteCallError(
+                    f"reextract_scope: scope_version {scope_version!r} is "
+                    f"not a known ontology version")
+            if scope_version == target:
+                raise WriteCallError(
+                    f"reextract_scope: scope_version equals the target "
+                    f"({target!r}) — those documents are already extracted "
+                    f"under it; the job would replay everything as no-ops")
+
+        scope = {"scope_version": scope_version,
+                 "source_ref": p.get("source_ref"),
+                 "source_system": p.get("source_system")}
+        affected = self._store.count_scope_documents(tenant, scope)
+        params = {"ontology_version": target, **scope,
+                  "all_documents": all_docs, "affected": affected}
+        job_id = self._store.insert_job(tenant, "reextract_scope", params,
+                                        created_by=principal.principal_id)
+        return WriteOutcome(
+            result={"job_id": job_id, "affected_documents": affected,
+                    **params,
+                    "note": "queued — old facts are RETAINED and marked "
+                            "superseded as the new ones promote; progress "
+                            "under GET /v1/jobs; resumable and idempotent "
+                            "to re-run"},
+            target=f"job:{job_id}")
+
+    def reextract_preview(self, tenant: str,
+                          scope: dict[str, Any]) -> dict[str, Any]:
+        """The affected-document count the UI shows BEFORE the operator
+        confirms (read; routed like open_alerts). Same WHERE builder as the
+        job materialization, so the warning and the work agree."""
+        return {"affected_documents":
+                self._store.count_scope_documents(tenant, scope),
+                "scope": scope}
+
     @staticmethod
     def _require_folder(raw_path: Any):
         if not isinstance(raw_path, str) or not raw_path.strip():
@@ -924,6 +999,23 @@ def register_operator_defaults(gate: OperatorGate,
                         " the version that extracted them.",
             params={"version": P(type="str", required=True)},
             scope=OPERATE_SCOPE), service.select_ontology),
+        (WriteOperation(
+            name="reextract_scope",
+            description="Re-extract existing documents under an ontology"
+                        " version (d.s Stage 3), as a resumable background"
+                        " job. NEVER overwrites: the old facts retire as"
+                        " superseded when the new ones promote — retained"
+                        " and queryable. Scope is explicit: scope_version"
+                        " (documents whose extraction used that version —"
+                        " the default shape) or all_documents=true, each"
+                        " optionally narrowed by source_ref/source_system."
+                        " The target version is frozen at creation.",
+            params={"ontology_version": P(type="str"),
+                    "scope_version": P(type="str"),
+                    "source_ref": P(type="str"),
+                    "source_system": P(type="str"),
+                    "all_documents": P(type="bool", default=False)},
+            scope=OPERATE_SCOPE), service.reextract_scope),
     ]:
         gate.register(spec, handler)
 
@@ -965,6 +1057,7 @@ class OperatorApp:
             "GET /v1/monitor/activity",
             "GET /v1/ontology",
             "GET /v1/passages/<chunk_id>",
+            "GET /v1/reextract-preview?scope_version=&source_ref=&source_system=",
             "GET /v1/reviews",
             "GET /v1/reviews/<kind:id>",
             "GET /v1/health",
@@ -982,6 +1075,10 @@ class OperatorApp:
 
     def _route(self, method: str, raw_path: str, headers: Mapping[str, Any],
                body: bytes) -> tuple[int, Any]:
+        # Query strings exist for exactly one endpoint (the re-extraction
+        # preview); everywhere else the exact-match routing below sees the
+        # bare path, unchanged.
+        raw_path, _, raw_query = raw_path.partition("?")
         if method == "GET" and (raw_path in ("/", "/ui")
                                 or raw_path.startswith("/ui/")):
             # Static UI shell only — it renders nothing until the operator
@@ -1044,6 +1141,17 @@ class OperatorApp:
             with self._store_lock:
                 jobs = self.service.jobs(principal.tenant_id)
             return 200, {"tenant_id": principal.tenant_id, **jobs}
+        if method == "GET" and path == "/v1/reextract-preview":
+            if not {ROLE_REVIEWER, ROLE_OPERATOR} & set(principal.roles):
+                return 403, {"error": "forbidden"}
+            qs = parse_qs(raw_query)
+            scope = {k: qs[k][0] for k in
+                     ("scope_version", "source_ref", "source_system")
+                     if qs.get(k) and qs[k][0]}
+            with self._store_lock:
+                preview = self.service.reextract_preview(
+                    principal.tenant_id, scope)
+            return 200, {"tenant_id": principal.tenant_id, **preview}
         if method == "POST" and path.startswith("/v1/actions/"):
             name = path[len("/v1/actions/"):]
             if "/" in name or not name:

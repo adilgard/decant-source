@@ -1,0 +1,123 @@
+# Knowledge Hub — deployment profile presets (kit data, read by khctl).
+#
+# A profile names the COMMERCIAL OFFERING; it resolves to a shape (A/B) plus
+# per-seam defaults. Adding an offering = adding a table here, not code.
+# Seam values: "ours" | "theirs" | "ours|theirs" (operator decides when a
+# qualified client-side candidate exists).
+# inference: "local" | "local-external" | "remote" (BP46 Fix 5)
+#   local           we install and manage the model on this box
+#   local-external  inference on a LOCAL endpoint the operator supplied (an
+#                   in-chassis GPU we did not provision): the model is NOT
+#                   installed by us and text does NOT leave the box. Reached
+#                   with `--use inference=local-external:<local-url>`; it
+#                   exists so such a deploy stops being mislabelled "remote",
+#                   which would read as off-premises in a security review.
+#   remote          over a tunnel to our GPUs; client text LEAVES the premises
+#
+# Secrets are "ours" in EVERY profile deliberately: adopting a client's
+# existing Vault would put our serving/principals identity registry inside
+# an instance their admins can read — the S2 design walls that off.
+# Blast-radius isolation (§8.1b) says our vault, segmented, always.
+
+[kit]
+# Reachability targets for the egress probe (registry pull vs SSD-load, and
+# hosted feasibility). Replace with the real private registry + hosted
+# endpoint when they exist.
+egress_targets = ["https://ghcr.io"]
+
+# --- Extraction model tiers (VRAM floors in GB) ------------------------------
+# Ladder is consulted highest-VRAM-first against the probed GPU BUDGET
+# (Ollama splits layers across devices, so a multi-GPU box is one budget; on
+# a unified-memory APU the budget counts the GTT/shared pool — BP46 Fix 1).
+# status = "gated" -> selectable only with --allow-gated-tier until Axis D
+# measures the quality cost.
+# memory = which GPU memory topology the tier is valid on:
+#   "dedicated" real VRAM only, "unified" unified-memory APUs, "any" either.
+# It is not a preference knob: a dense model on a unified pool is
+# memory-BANDWIDTH-bound (§8.26b item 1), so fitting is not working.
+
+[tiers.fp16_27b]
+# The exact registry tag the kit carries (27B dense, bf16 ≈ 54GB store /
+# 54GB VRAM floor). NOTE: the pilot's starter digest was qwen3.6:latest
+# (36B MoE Q4_K_M) — this 16-bit dense tag supersedes it for walk-ins;
+# Axis D still owns the final model call.
+extraction_model = "qwen3.6:27b-bf16"
+vram_gb = 54
+status = "default"
+memory = "dedicated"             # dense: bandwidth-bound on unified memory
+
+[tiers.quant_27b]
+extraction_model = "qwen3.6:27b-q8_0"  # quantized variant; Axis D unmeasured
+vram_gb = 30
+status = "gated"                 # Axis D pending — never a silent downgrade
+memory = "dedicated"             # dense, same bandwidth argument
+
+[tiers.moe_35b_a3b_q4]
+# BP46 Fix 4 — THE tier an AMD Strix Halo box selects. Measured on node-a
+# (§8.26): 58.8 tok/s eval, 538 tok/s prefill, 42/42 layers offloaded, 100%
+# GPU, 21.8GiB runner VRAM at num_ctx 8192, 23GB on disk. The two dense 27b
+# tiers above cannot serve that box at all — 54GB and 30GB floors against a
+# ~29.5GB practical working set, and the dense 27b-q4_K_M someone reached
+# for is not a tag the model store carries.
+#
+# NOT exotic: this is the PILOT MODEL'S OWN LINEAGE. The pilot's starter
+# digest (see fp16_27b's note) was qwen3.6:latest = a 36B MoE Q4_K_M, i.e.
+# the same architecture and quantization family as this tag — known-good
+# weights, newly pinned exactly instead of floating on :latest.
+#
+# memory = "unified": scoped to APUs on purpose. It keeps the NVIDIA ladder
+# byte-for-byte unchanged (a dedicated-VRAM box never reaches this tier), so
+# "the CUDA path is unregressed" is a property of the data, not a hope. The
+# §8.26d Option A move — the NVIDIA appliance to `qwen3.6:35b-a3b-bf16` —
+# is a separate tier for a future kit build, deliberately not made here.
+#
+# Floor 26GB: 21.8GiB measured runner + KV-cache headroom, and it fits well
+# inside node-a's ~62GB GTT budget.
+extraction_model = "qwen3.6:35b-a3b-q4_K_M"
+vram_gb = 26
+status = "default"
+memory = "unified"
+
+# --- Offerings ---------------------------------------------------------------
+
+[profiles.appliance]
+# We bring/own the box (Scenario 3: the full deployment appliance) — the
+# whole stack is ours by definition. "Tenants" here are the client's own
+# data domains, not separate customers (§8.9 isolation note).
+# custody: appliance buyers bought uptime — we hold the unseal shares and
+# own the restart ceremony; client custody is the offered security upgrade
+# (--custody client at plan time).
+shape = "A"
+placement = "single_box"
+custody = "operator"
+seams = { postgres = "ours", object_store = "ours", secrets = "ours", inference = "local" }
+
+[profiles.client-gpu]
+# Their hardware, our stack (Scenarios 1-2). Their Postgres/store may be
+# adopted IF it passes the qualification bar — and the adoption is always
+# an explicit operator call, never a default.
+# custody: they have IT — sealed-envelope ceremony (5 shares, threshold 3,
+# we retain zero) is the default and the strongest premises-local story.
+shape = "A"
+placement = "single_box"
+custody = "client"
+seams = { postgres = "ours|theirs", object_store = "ours|theirs", secrets = "ours", inference = "local" }
+
+[profiles.client-gpu.qualify]
+# ext:age drops off this list when the AGE-retirement rider (build prompt
+# 09) lands — that is what unlocks managed-Postgres adoption.
+postgres = ["version>=16", "ext:vector", "ext:pg_trgm", "ext:age"]
+object_store = ["object_lock", "versioning"]
+
+[profiles.hosted]
+# Shape B (Scenario 4): connector/collector agent client-side, inference on
+# our GPUs over a secure tunnel. Client text leaves the premises — position
+# honestly. Plan requires --use inference=remote:<https-url>.
+# custody: the vault lives on OUR infra — KMS auto-unseal, unattended
+# reboots (auto is Shape-B-appropriate; on Shape A it would undermine
+# local-first, which is why no Shape-A preset defaults to it).
+shape = "B"
+placement = "single_box"
+footprint = "connector_agent"
+custody = "auto"
+seams = { inference = "remote" }

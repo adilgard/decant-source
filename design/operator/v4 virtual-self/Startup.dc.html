@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@200;300;400;500;600;700&amp;family=Cinzel:wght@400;600;700&amp;family=Silkscreen:wght@400&amp;display=swap" />
+<style>
+@keyframes khSpinSlow{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+@keyframes khSpinRev{from{transform:rotate(360deg)}to{transform:rotate(0)}}
+@keyframes khDiamondA{from{transform:rotate(45deg)}to{transform:rotate(405deg)}}
+@keyframes khDiamondB{from{transform:rotate(22deg)}to{transform:rotate(-338deg)}}
+@keyframes khFlicker{0%,89%,93%,100%{opacity:1;transform:translateX(0)}90%{opacity:.4;transform:translateX(1px)}91%{opacity:.8;transform:translateX(-1px)}92%{opacity:.55;transform:translateX(0)}}
+@keyframes khBlink{0%,100%{opacity:1}50%{opacity:.2}}
+@keyframes khFadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes khShine{0%{transform:translateX(-120%) skewX(-18deg)}60%{transform:translateX(420%) skewX(-18deg)}100%{transform:translateX(420%) skewX(-18deg)}}
+@keyframes khCrystal{0%,100%{filter:drop-shadow(0 0 18px rgba(150,180,255,.7)) drop-shadow(0 0 60px rgba(110,140,255,.4))}50%{filter:drop-shadow(0 0 34px rgba(200,220,255,.95)) drop-shadow(0 0 110px rgba(130,160,255,.6))}}
+@keyframes khGhost{0%,100%{opacity:.05}50%{opacity:.11}}
+@keyframes khDriftUp{0%{transform:translateY(30px);opacity:0}18%{opacity:.4}100%{transform:translateY(-70vh);opacity:0}}
+@keyframes khStripe{from{background-position:0 0}to{background-position:24px 0}}
+body{margin:0;background:#050810;font-family:Archivo,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
+a{color:#8fb4ff;text-decoration:none}
+a:hover{color:#c3d5ff;text-decoration:underline}
+</style>
+</helmet>
+<div style="position:relative;min-height:100vh;overflow:hidden;box-sizing:border-box;background:radial-gradient(120% 90% at 50% 42%,#101a3a 0%,#0a1128 40%,#050810 78%)">
+
+  <div style="position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(255,255,255,.028) 0 1px,transparent 1px 3px)"></div>
+  <div style="position:absolute;left:14%;top:22%;width:2px;height:2px;border-radius:50%;background:#cfe0ff;opacity:.6;pointer-events:none"></div>
+  <div style="position:absolute;left:78%;top:16%;width:2px;height:2px;border-radius:50%;background:#cfe0ff;opacity:.45;pointer-events:none"></div>
+  <div style="position:absolute;left:64%;top:74%;width:2px;height:2px;border-radius:50%;background:#cfe0ff;opacity:.5;pointer-events:none"></div>
+  <div style="position:absolute;left:28%;top:66%;width:1px;height:1px;border-radius:50%;background:#cfe0ff;opacity:.5;pointer-events:none"></div>
+  <div style="position:absolute;left:88%;top:54%;width:2px;height:2px;border-radius:50%;background:#cfe0ff;opacity:.35;pointer-events:none"></div>
+
+  <sc-if value="{{ isBoot }}" hint-placeholder-val="{{ true }}">
+  <div style="position:absolute;left:50%;top:46%;transform:translate(-50%,-50%);font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:clamp(24px,4vw,50px);white-space:nowrap;color:#a9c4ff;animation:khGhost 7s ease-in-out infinite;pointer-events:none">the boundless corpus will resolve into one record</div>
+
+  <div style="position:absolute;left:20%;bottom:8%;font-family:Silkscreen,Consolas,monospace;font-size:16px;color:rgba(160,190,255,.3);animation:khDriftUp 30s linear infinite;pointer-events:none">+</div>
+  <div style="position:absolute;left:74%;bottom:12%;font-family:Silkscreen,Consolas,monospace;font-size:12px;color:rgba(200,220,255,.35);animation:khDriftUp 38s linear 10s infinite;pointer-events:none">↑</div>
+
+  <div style="position:absolute;left:50%;top:46%;width:620px;height:620px;margin:-310px 0 0 -310px;pointer-events:none">
+    <div style="position:absolute;inset:0;border-radius:50%;border:1px dashed rgba(185,205,255,.35);animation:khSpinSlow 100s linear infinite"></div>
+    <div style="position:absolute;inset:46px;border-radius:50%;border:1px solid rgba(185,205,255,.22)"></div>
+    <div style="position:absolute;inset:100px;border-radius:50%;border:1px dashed rgba(140,170,255,.3);animation:khSpinRev 66s linear infinite"></div>
+    <div style="position:absolute;inset:132px;border:1px solid rgba(200,215,255,.3);animation:khDiamondA 80s linear infinite"></div>
+    <div style="position:absolute;inset:132px;border:1px solid rgba(200,215,255,.16);animation:khDiamondB 80s linear infinite"></div>
+    <div style="position:absolute;inset:0;animation:khSpinSlow 54s linear infinite">
+      <div style="position:absolute;left:50%;top:-19px;width:38px;height:38px;margin-left:-19px;border-radius:50%;border:1px solid rgba(200,215,255,.5);display:flex;align-items:center;justify-content:center;font-family:Silkscreen,Consolas,monospace;font-size:10px;color:rgba(200,220,255,.7)">+</div>
+      <div style="position:absolute;left:50%;bottom:-19px;width:38px;height:38px;margin-left:-19px;border-radius:50%;border:1px solid rgba(200,215,255,.35);display:flex;align-items:center;justify-content:center;font-family:Silkscreen,Consolas,monospace;font-size:10px;color:rgba(200,220,255,.55)">↑</div>
+      <div style="position:absolute;top:50%;left:-15px;width:30px;height:30px;margin-top:-15px;border-radius:50%;border:1px solid rgba(200,215,255,.4)"></div>
+      <div style="position:absolute;top:50%;right:-15px;width:30px;height:30px;margin-top:-15px;border-radius:50%;border:1px solid rgba(200,215,255,.4);background:rgba(160,185,255,.12)"></div>
+    </div>
+    <div style="position:absolute;left:50%;top:24px;transform:translateX(-50%);font-family:Consolas,'Lucida Console',monospace;font-size:9px;letter-spacing:.5em;color:rgba(170,195,255,.5)">/=≡7F3A≡=/</div>
+    <div style="position:absolute;left:50%;bottom:22px;transform:translateX(-50%);font-family:Consolas,'Lucida Console',monospace;font-size:9px;letter-spacing:.5em;color:rgba(170,195,255,.4)">::B18D-40A7::</div>
+  </div>
+
+  <div style="position:absolute;left:50%;top:46%;width:120px;height:190px;margin:-95px 0 0 -60px;pointer-events:none;animation:khCrystal 4.2s ease-in-out infinite">
+    <div style="position:absolute;left:24px;top:0;width:72px;height:190px;clip-path:polygon(50% 0%,88% 26%,88% 74%,50% 100%,12% 74%,12% 26%);background:linear-gradient(165deg,rgba(240,246,255,.95) 0%,rgba(190,210,255,.75) 26%,rgba(120,150,235,.6) 52%,rgba(220,232,255,.85) 74%,rgba(150,175,250,.7) 100%)"></div>
+    <div style="position:absolute;left:44px;top:16px;width:14px;height:74px;transform:rotate(8deg);background:linear-gradient(180deg,rgba(255,255,255,.95),rgba(255,255,255,.05));filter:blur(1px)"></div>
+    <div style="position:absolute;left:50%;top:50%;width:150px;height:26px;margin:-13px 0 0 -75px;border-radius:50%;background:radial-gradient(50% 50% at 50% 50%,rgba(255,255,255,.9),rgba(180,200,255,.25) 55%,rgba(180,200,255,0));filter:blur(3px)"></div>
+  </div>
+
+  <div style="position:absolute;right:calc(50% + 110px);top:calc(46% - 26px);text-align:right;pointer-events:none;white-space:nowrap">
+    <div style="font-family:Cinzel,Georgia,serif;font-size:clamp(20px,3.2vw,44px);font-weight:600;letter-spacing:.22em;color:#e9f0ff;text-shadow:0 0 22px rgba(160,190,255,.8),0 0 70px rgba(120,150,255,.4);line-height:1;animation:khFlicker 9s linear 2s infinite">DECANT</div>
+  </div>
+  <div style="position:absolute;left:calc(50% + 110px);top:calc(46% - 26px);pointer-events:none">
+    <div style="font-family:Cinzel,Georgia,serif;font-size:clamp(20px,3.2vw,44px);font-weight:600;letter-spacing:.22em;color:#e9f0ff;text-shadow:0 0 22px rgba(160,190,255,.8),0 0 70px rgba(120,150,255,.4);line-height:1;animation:khFlicker 7s linear infinite">.SOURCE</div>
+    <div style="margin-top:11px;display:flex;align-items:center;gap:8px;font-family:Consolas,'Lucida Console',monospace;font-size:9px;letter-spacing:.18em;color:rgba(170,195,255,.65)">
+      <div>=/≡≡7F—3A≡/=</div>
+      <div style="flex:1;height:1px;min-width:60px;background:rgba(190,210,255,.5);box-shadow:0 3px 0 rgba(190,210,255,.25)"></div>
+      <div>_04:2B</div>
+    </div>
+    <div style="margin-top:10px;font-family:Silkscreen,Consolas,monospace;font-size:9px;letter-spacing:.3em;color:#7db4e8">SYSTEM : WAKE</div>
+    <div style="margin-top:10px;display:flex;align-items:center;gap:9px;font-family:Consolas,'Lucida Console',monospace;font-size:12px;color:#8fa8d8">
+      <div style="animation:khBlink 1s ease-in-out infinite">··</div>
+      <div>{{ bootNow }}</div>
+    </div>
+  </div>
+
+  <div style="position:absolute;left:0;right:0;top:0;height:3px;background:rgba(255,255,255,.08)">
+    <div style="position:absolute;top:0;bottom:0;left:0;background:linear-gradient(90deg,#4d6bff,#9fc0ff);box-shadow:0 0 12px rgba(120,150,255,.8);transition:width .5s ease;width:{{ bootPct }}"></div>
+  </div>
+
+  <div style="position:absolute;right:34px;top:26px;text-align:right;pointer-events:none">
+    <div style="font-size:104px;font-weight:200;line-height:.86;letter-spacing:-.02em;color:rgba(190,210,255,.14)">{{ bootPct }}</div>
+    <div style="margin-top:8px;display:flex;justify-content:flex-end;align-items:center;gap:10px">
+      <div style="width:74px;height:12px;opacity:.5;background:repeating-linear-gradient(90deg,#b8ccff 0 2px,transparent 2px 5px,#b8ccff 5px 6px,transparent 6px 11px)"></div>
+      <div style="font-family:Silkscreen,Consolas,monospace;font-size:9px;letter-spacing:.2em;color:#7db4e8">COLD : START</div>
+    </div>
+    <div style="margin-top:6px;font-family:Consolas,'Lucida Console',monospace;font-size:9px;letter-spacing:.22em;color:rgba(150,175,225,.5)">viewport 01 · 1-1080-2160 · appliance only</div>
+  </div>
+
+  <div style="position:absolute;left:34px;top:26px;pointer-events:none;font-family:Consolas,'Lucida Console',monospace;font-size:9.5px;line-height:2.15;color:rgba(150,180,235,.6)">
+    <div>can you trace this particle of structured light?</div>
+    <div>every fact will carry its source passage.</div>
+    <div>the boundless corpus resolves into one record.</div>
+    <div>what is uncertain will say so, honestly.</div>
+    <div style="margin-top:9px;letter-spacing:.3em;opacity:.6">/≡/=—::=≡7F3A·B18D·2CE6::=—=/≡/</div>
+  </div>
+
+  <div style="position:absolute;right:34px;bottom:92px;display:flex;flex-direction:column;align-items:flex-end;gap:6px;font-family:Consolas,'Lucida Console',monospace;font-size:11.5px;text-align:right;pointer-events:none">
+    <sc-for list="{{ bootLines }}" as="l" hint-placeholder-count="4">
+      <div style="display:flex;align-items:center;gap:10px;padding:2px 0;animation:khFadeUp .4s ease both">
+        <div style="color:#b9cdf5">{{ l }}</div>
+        <div style="width:22px;height:1px;background:rgba(123,224,200,.5)"></div>
+        <div style="color:#7be0c8;flex:none">ok</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="position:absolute;left:26px;right:26px;bottom:22px;height:52px;clip-path:polygon(16px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 16px);background:linear-gradient(180deg,rgba(255,255,255,.12),rgba(255,255,255,.04));border:1px solid rgba(255,255,255,.18);backdrop-filter:blur(18px) saturate(1.4);box-shadow:0 8px 28px rgba(0,0,10,.5),0 1px 0 rgba(255,255,255,.18) inset;display:flex;align-items:center;gap:22px;padding:0 22px;box-sizing:border-box">
+    <div onClick="{{ skipBoot }}" style="cursor:pointer;font-family:Silkscreen,Consolas,monospace;font-size:9px;letter-spacing:.2em;color:#dbe7ff;padding:8px 18px;clip-path:polygon(8px 0,100% 0,100% calc(100% - 8px),calc(100% - 8px) 100%,0 100%,0 8px);border:1px solid rgba(255,255,255,.3);background:linear-gradient(180deg,rgba(255,255,255,.2),rgba(255,255,255,.07));box-shadow:0 1px 0 rgba(255,255,255,.25) inset" style-hover="background:linear-gradient(180deg,rgba(255,255,255,.32),rgba(255,255,255,.12));box-shadow:0 0 16px rgba(140,170,255,.5),0 1px 0 rgba(255,255,255,.3) inset">SKIP →</div>
+    <div style="flex:1"></div>
+    <div style="font-family:Silkscreen,Consolas,monospace;font-size:14px;letter-spacing:.14em;color:#9fc0ff;text-shadow:0 0 12px rgba(130,160,255,.7)">COLD START</div>
+    <div style="font-family:Silkscreen,Consolas,monospace;font-size:12px;color:rgba(230,240,255,.85)">↑ ↑ ↑</div>
+    <div style="font-family:Silkscreen,Consolas,monospace;font-size:12px;color:rgba(150,180,235,.7)">//// 2026</div>
+  </div>
+  </sc-if>
+
+  <sc-if value="{{ isWizard }}" hint-placeholder-val="{{ false }}">
+  <div style="padding:34px 26px;box-sizing:border-box">
+  <div style="position:relative;max-width:1080px;margin:0 auto;border-radius:20px;overflow:hidden;border:1px solid rgba(255,255,255,.18);box-shadow:0 30px 80px rgba(0,0,10,.6),0 1px 0 rgba(255,255,255,.14) inset,0 0 60px rgba(90,120,255,.12);background:rgba(14,20,42,.62);backdrop-filter:blur(22px) saturate(1.35)">
+
+    <div style="display:flex;align-items:center;gap:12px;padding:11px 16px;background:linear-gradient(180deg,rgba(255,255,255,.1),rgba(255,255,255,.03));border-bottom:1px solid rgba(255,255,255,.12)">
+      <div style="width:18px;height:18px;border-radius:50%;background:radial-gradient(circle at 34% 28%,rgba(255,255,255,.95),rgba(170,195,255,.5) 50%,rgba(90,120,235,.4));border:1px solid rgba(255,255,255,.4);box-shadow:0 0 10px rgba(140,170,255,.6)"></div>
+      <div style="font-family:Cinzel,Georgia,serif;font-size:13px;font-weight:600;letter-spacing:.1em;color:#e9f0ff;text-shadow:0 0 14px rgba(150,180,255,.6)">decant.Source</div>
+      <div style="font-family:Silkscreen,Consolas,monospace;font-size:8px;letter-spacing:.2em;color:#7db4e8">SETUP : FIRST-RUN</div>
+      <div style="width:58px;height:10px;opacity:.35;background:repeating-linear-gradient(90deg,#b8ccff 0 2px,transparent 2px 5px,#b8ccff 5px 6px,transparent 6px 11px)"></div>
+      <div style="flex:1"></div>
+      <div style="font-size:11px;font-weight:600;color:#8fa8d8">{{ stepLabel }}</div>
+      <div style="display:flex;gap:6px;margin-left:10px">
+        <div style="width:26px;height:17px;border-radius:9px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.08)"></div>
+        <div style="width:34px;height:17px;border-radius:9px;border:1px solid rgba(255,140,120,.5);background:rgba(255,110,90,.25)"></div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:238px 1fr">
+
+      <div style="padding:18px 16px;background:rgba(255,255,255,.03);border-right:1px solid rgba(255,255,255,.1)">
+        <div style="font-family:Silkscreen,Consolas,monospace;font-size:9px;letter-spacing:.24em;color:#7db4e8;margin-bottom:13px">SETUP</div>
+        <div style="position:relative;display:flex;flex-direction:column;gap:8px">
+          <div style="position:absolute;left:12px;top:12px;bottom:12px;width:1px;border-left:1px dashed rgba(185,205,255,.3)"></div>
+          <div style="display:flex;gap:13px;align-items:center;padding:7px 3px">
+            <div style="width:19px;height:19px;flex:none;transform:rotate(45deg);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(10px);border:{{ nav1b }};background:{{ nav1 }}"><span style="transform:rotate(-45deg);font-size:10px;font-weight:600;color:#e9f0ff">1</span></div>
+            <div style="font-size:12.5px;color:#dbe7ff;font-weight:500">What we found</div>
+          </div>
+          <div style="display:flex;gap:13px;align-items:center;padding:7px 3px">
+            <div style="width:19px;height:19px;flex:none;transform:rotate(45deg);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(10px);border:{{ nav2b }};background:{{ nav2 }}"><span style="transform:rotate(-45deg);font-size:10px;font-weight:600;color:#e9f0ff">2</span></div>
+            <div style="font-size:12.5px;color:#dbe7ff;font-weight:500">Your systems</div>
+          </div>
+          <div style="display:flex;gap:13px;align-items:center;padding:7px 3px">
+            <div style="width:19px;height:19px;flex:none;transform:rotate(45deg);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(10px);border:{{ nav3b }};background:{{ nav3 }}"><span style="transform:rotate(-45deg);font-size:10px;font-weight:600;color:#e9f0ff">3</span></div>
+            <div style="font-size:12.5px;color:#dbe7ff;font-weight:500">The plan</div>
+          </div>
+          <div style="display:flex;gap:13px;align-items:center;padding:7px 3px">
+            <div style="width:19px;height:19px;flex:none;transform:rotate(45deg);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(10px);border:{{ nav4b }};background:{{ nav4 }}"><span style="transform:rotate(-45deg);font-size:10px;font-weight:600;color:#e9f0ff">4</span></div>
+            <div style="font-size:12.5px;color:#dbe7ff;font-weight:500">Installing</div>
+          </div>
+          <div style="display:flex;gap:13px;align-items:center;padding:7px 3px">
+            <div style="width:19px;height:19px;flex:none;transform:rotate(45deg);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(10px);border:{{ nav5b }};background:{{ nav5 }}"><span style="transform:rotate(-45deg);font-size:10px;font-weight:600;color:#e9f0ff">5</span></div>
+            <div style="font-size:12.5px;color:#dbe7ff;font-weight:500">Keys &amp; custody</div>
+          </div>
+          <div style="display:flex;gap:13px;align-items:center;padding:7px 3px">
+            <div style="width:19px;height:19px;flex:none;transform:rotate(45deg);display:flex;align-items:center;justify-content:center;backdrop-filter:blur(10px);border:{{ nav6b }};background:{{ nav6 }}"><span style="transform:rotate(-45deg);font-size:10px;font-weight:600;color:#e9f0ff">6</span></div>
+            <div style="font-size:12.5px;color:#dbe7ff;font-weight:500">First source</div>
+          </div>
+        </div>
+
+        <div style="margin-top:18px;padding:12px;border-radius:14px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12)">
+          <div style="font-size:11px;color:#8fa8d8;margin-bottom:8px">Nothing happens on this box until you say so. Steps 1 to 3 only look.</div>
+          <div style="position:relative;height:8px;border-radius:4px;overflow:hidden;background:rgba(255,255,255,.08)">
+            <div style="position:absolute;top:0;bottom:0;left:0;background:linear-gradient(90deg,#4d6bff,#9fc0ff);box-shadow:0 0 10px rgba(120,150,255,.7);transition:width .4s ease;width:{{ wizPct }}"></div>
+          </div>
+        </div>
+
+        <div style="margin-top:20px;position:relative;height:112px;pointer-events:none">
+          <div style="position:absolute;left:50%;top:50%;width:100px;height:100px;margin:-50px 0 0 -50px;border-radius:50%;border:1px dashed rgba(185,205,255,.35);animation:khSpinSlow 44s linear infinite"></div>
+          <div style="position:absolute;left:50%;top:50%;width:66px;height:66px;margin:-33px 0 0 -33px;border:1px solid rgba(200,215,255,.25);animation:khDiamondA 66s linear infinite"></div>
+          <div style="position:absolute;left:50%;top:50%;width:40px;height:40px;margin:-20px 0 0 -20px;border-radius:50%;border:1px solid rgba(140,170,255,.35);animation:khSpinRev 30s linear infinite"></div>
+          <div style="position:absolute;left:50%;top:50%;width:10px;height:16px;margin:-8px 0 0 -5px;clip-path:polygon(50% 0%,100% 30%,100% 70%,50% 100%,0% 70%,0% 30%);background:linear-gradient(165deg,rgba(240,246,255,.95),rgba(140,170,250,.7));filter:drop-shadow(0 0 8px rgba(160,190,255,.8))"></div>
+        </div>
+        <div style="margin-top:8px;font-family:Silkscreen,Consolas,monospace;font-size:8px;letter-spacing:.2em;color:#7db4e8;text-align:center">CONFIGURE : SELF</div>
+        <div style="margin-top:8px;font-family:Consolas,'Lucida Console',monospace;font-size:9px;line-height:1.9;color:rgba(150,180,235,.55);text-align:center">what you decide here<br />is written down,<br />with your name on it.</div>
+      </div>
+
+      <div style="position:relative;padding:24px 28px;background:rgba(8,12,28,.35);min-height:600px;display:flex;flex-direction:column">
+        <div style="position:absolute;right:22px;top:16px;text-align:right;pointer-events:none;font-family:Consolas,'Lucida Console',monospace;font-size:8.5px;letter-spacing:.22em;color:rgba(150,175,225,.4);line-height:2">
+          <div>viewport 02 · setup only</div>
+          <div>/≡/=—::consent precedes execution::—=/≡/</div>
+        </div>
+        <div style="position:absolute;right:34px;top:64px;width:92px;height:92px;pointer-events:none;opacity:.9"><div style="position:absolute;inset:0;border-radius:50%;border:1px dashed rgba(185,205,255,.3);animation:khSpinSlow 34s linear infinite"></div><div style="position:absolute;inset:22px;border:1px solid rgba(200,215,255,.18);animation:khDiamondA 46s linear infinite"></div><div style="position:absolute;left:50%;top:50%;width:18px;height:30px;margin:-15px 0 0 -9px;animation:khCrystal 4.4s ease-in-out infinite"><div style="position:absolute;inset:0;clip-path:polygon(50% 0%,88% 26%,88% 74%,50% 100%,12% 74%,12% 26%);background:linear-gradient(165deg,rgba(240,246,255,.95),rgba(120,150,235,.6))"></div></div></div>
+
+        <sc-if value="{{ isStep1 }}" hint-placeholder-val="{{ true }}">
+        <div>
+          <div style="display:flex;align-items:center;gap:9px;margin-bottom:8px"><div style="font-family:Silkscreen,Consolas,monospace;font-size:10px;color:#9fc0ff">→</div><div style="font-family:Silkscreen,Consolas,monospace;font-size:8.5px;letter-spacing:.24em;color:#7db4e8">PHASE 01 : SURVEY</div></div>
+          <div style="font-size:23px;font-weight:300;letter-spacing:.02em;color:#e9f0ff;text-shadow:0 0 20px rgba(140,170,255,.35)">Here is what we found on this box</div>
+          <div style="font-size:12.5px;color:#8fa8d8;margin-top:7px;max-width:640px">A read-only sweep, run once. Nothing was changed, mounted or written. If any of this looks wrong, stop here rather than continuing.</div>
+
+          <div style="margin-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div style="padding:14px 16px;clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px);border:1px solid rgba(255,255,255,.14);background:linear-gradient(160deg,rgba(120,150,255,.09),rgba(255,255,255,.03));backdrop-filter:blur(10px)">
+              <div style="font-family:Silkscreen,Consolas,monospace;font-size:8px;letter-spacing:.2em;color:#7db4e8;margin-bottom:9px">MACHINE</div>
+              <div style="display:flex;flex-direction:column;gap:5px;font-size:12.5px;color:#b9cdf5">
+                <div>Windows 11 · 32 logical cores</div>
+                <div>61.6 GB memory · 6,502 GB free</div>
+                <div>Docker and Compose present</div>
+              </div>
+            </div>
+            <div style="padding:14px 16px;clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px);border:1px solid rgba(123,224,200,.28);background:linear-gradient(160deg,rgba(123,224,200,.1),rgba(123,224,200,.03));backdrop-filter:blur(10px)">
+              <div style="font-family:Silkscreen,Consolas,monospace;font-size:8px;letter-spacing:.2em;color:#7be0c8;margin-bottom:9px">GRAPHICS</div>
+              <div style="display:flex;flex-direction:column;gap:5px;font-size:12.5px;color:#b9cdf5">
+                <div>2× RTX PRO 6000 Blackwell</div>
+                <div>191.2 GB of video memory</div>
+                <div>Enough for the full-quality extraction model</div>
+              </div>
+            </div>
+            <div style="padding:14px 16px;clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px);border:1px solid rgba(255,255,255,.14);background:linear-gradient(160deg,rgba(120,150,255,.09),rgba(255,255,255,.03));backdrop-filter:blur(10px)">
+              <div style="font-family:Silkscreen,Consolas,monospace;font-size:8px;letter-spacing:.2em;color:#7db4e8;margin-bottom:9px">PORTS ALREADY ANSWERING</div>
+              <div style="display:flex;flex-direction:column;gap:5px;font-size:12.5px;color:#b9cdf5">
+                <div>5432 · a database</div>
+                <div>8333 · an object store</div>
+                <div>8200 · a secret vault</div>
+                <div>11434 · a model server</div>
+              </div>
+            </div>
+            <div style="padding:14px 16px;clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px);border:1px solid rgba(255,255,255,.14);background:linear-gradient(160deg,rgba(120,150,255,.09),rgba(255,255,255,.03));backdrop-filter:blur(10px)">
+              <div style="font-family:Silkscreen,Consolas,monospace;font-size:8px;letter-spacing:.2em;color:#7db4e8;margin-bottom:9px">INSTALL MEDIA</div>
+              <div style="display:flex;flex-direction:column;gap:5px;font-size:12.5px;color:#b9cdf5">
+                <div>Kit signature valid · org-2026</div>
+                <div>Every file accounted for in the manifest</div>
+                <div>Models carried on the drive — no download needed</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top:14px;padding:13px 15px;border-radius:12px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.03);font-size:12px;color:#8fa8d8">Saved as the engagement record for this site: what we found, what you decide next, and what actually got wired.</div>
+        </div>
+        </sc-if>
+
+        <sc-if value="{{ isStep2 }}" hint-placeholder-val="{{ false }}">
+        <div>
+          <div style="display:flex;align-items:center;gap:9px;margin-bottom:8px"><div style="font-family:Silkscreen,Consolas,monospace;font-size:10px;color:#9fc0ff">→</div><div style="font-family:Silkscreen,Consolas,monospace;font-size:8.5px;letter-spacing:.24em;color:#7db4e8">PHASE 02 : SEAMS</div></div>
+          <div style="font-size:23px;font-weight:300;color:#e9f0ff;text-shadow:0 0 20px rgba(140,170,255,.35)">Two of these are already yours</div>
+          <div style="font-size:12.5px;color:#8fa8d8;margin-top:7px;max-width:640px">We will not quietly take over anything that was here before us. Choose once, and the choice is recorded with your name on it.</div>
+
+          <div style="margin-top:20px;padding:14px 16px;border-radius:14px;border:1px solid rgba(255,150,130,.35);background:rgba(255,110,90,.08);backdrop-filter:blur(10px)">
+            <div style="display:flex;align-items:center;gap:10px">
+              <div style="width:10px;height:10px;border-radius:50%;background:#ff9b83;box-shadow:0 0 10px rgba(255,140,110,.8);animation:khBlink 1.8s ease-in-out infinite"></div>
+              <div style="font-size:13px;color:#ffcabb;font-weight:600">A Postgres 16 database is already running on this machine</div>
+            </div>
+            <div style="margin-top:7px;font-size:12px;color:#d99f92;font-family:Consolas,'Lucida Console',monospace">postgresql://…@localhost:5432 · reachable · has the three extensions we need.</div>
+          </div>
+
+          <div style="margin-top:16px;display:grid;grid-template-columns:1fr 1fr;gap:13px">
+            <div onClick="{{ pickOurs }}" style="cursor:pointer;padding:16px;clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px);backdrop-filter:blur(12px);border:{{ oursBorder }};background:{{ oursBg }};box-shadow:{{ oursGlow }}">
+              <div style="font-size:14px;color:#e9f0ff;font-weight:600">Stay self-contained</div>
+              <div style="font-size:12px;color:#8fa8d8;margin-top:7px;line-height:1.55">We bring our own database and leave yours alone. Detected, not touched. This is the recommendation for an appliance.</div>
+            </div>
+            <div onClick="{{ pickTheirs }}" style="cursor:pointer;padding:16px;clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px);backdrop-filter:blur(12px);border:{{ theirsBorder }};background:{{ theirsBg }};box-shadow:{{ theirsGlow }}">
+              <div style="font-size:14px;color:#e9f0ff;font-weight:600">Use the database you already have</div>
+              <div style="font-size:12px;color:#8fa8d8;margin-top:7px;line-height:1.55">A commitment, not a shortcut: we will write our schema into it and you will own its backups. Requires typing the endpoint.</div>
+            </div>
+          </div>
+
+          <div style="margin-top:16px;padding:13px 15px;border-radius:12px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.03);font-size:12px;color:#8fa8d8">{{ adoptionNote }}</div>
+
+          <div style="margin-top:18px;display:grid;grid-template-columns:repeat(3,1fr);gap:12px">
+            <div style="padding:13px 14px;clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px);border:1px solid rgba(123,224,200,.25);background:rgba(123,224,200,.05)">
+              <div style="font-size:12.5px;color:#a9ecd9;font-weight:600">Object store</div>
+              <div style="font-size:11.5px;color:#8fa8d8;margin-top:5px">Ours. Write-once storage for originals is part of the promise, so we do not adopt one.</div>
+            </div>
+            <div style="padding:13px 14px;clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px);border:1px solid rgba(123,224,200,.25);background:rgba(123,224,200,.05)">
+              <div style="font-size:12.5px;color:#a9ecd9;font-weight:600">Secret vault</div>
+              <div style="font-size:11.5px;color:#8fa8d8;margin-top:5px">Always ours. Source credentials are never handed to a store we do not control.</div>
+            </div>
+            <div style="padding:13px 14px;clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px);border:1px solid rgba(123,224,200,.25);background:rgba(123,224,200,.05)">
+              <div style="font-size:12.5px;color:#a9ecd9;font-weight:600">Inference</div>
+              <div style="font-size:11.5px;color:#8fa8d8;margin-top:5px">Local, on the two GPUs we found. No passage leaves this room.</div>
+            </div>
+          </div>
+        </div>
+        </sc-if>
+
+        <sc-if value="{{ isStep3 }}" hint-placeholder-val="{{ false }}">
+        <div>
+          <div style="display:flex;align-items:center;gap:9px;margin-bottom:8px"><div style="font-family:Silkscreen,Consolas,monospace;font-size:10px;color:#9fc0ff">→</div><div style="font-family:Silkscreen,Consolas,monospace;font-size:8.5px;letter-spacing:.24em;color:#7db4e8">PHASE 03 : PLAN</div></div>
+          <div style="font-size:23px;font-weight:300;color:#e9f0ff;text-shadow:0 0 20px rgba(140,170,255,.35)">This is what will happen</div>
+          <div style="font-size:12.5px;color:#8fa8d8;margin-top:7px;max-width:640px">Read it once. Nothing has been installed yet, and nothing will be until you press the glowing button.</div>
+
+          <div style="margin-top:20px;clip-path:polygon(16px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 16px);overflow:hidden;border:1px solid rgba(255,255,255,.14)">
+            <div style="display:grid;grid-template-columns:190px 1fr;padding:11px 16px;font-size:12.5px;background:rgba(255,255,255,.06);border-bottom:1px solid rgba(255,255,255,.08)"><div style="font-family:Silkscreen,Consolas,monospace;font-size:7.5px;letter-spacing:.16em;color:#7db4e8;align-self:center">OFFERING</div><div style="color:#dbe7ff;font-weight:500">Appliance — one box, everything local</div></div>
+            <div style="display:grid;grid-template-columns:190px 1fr;padding:11px 16px;font-size:12.5px;background:rgba(255,255,255,.03);border-bottom:1px solid rgba(255,255,255,.08)"><div style="font-family:Silkscreen,Consolas,monospace;font-size:7.5px;letter-spacing:.16em;color:#7db4e8;align-self:center">DATABASE</div><div style="color:#dbe7ff;font-weight:500">{{ planDb }}</div></div>
+            <div style="display:grid;grid-template-columns:190px 1fr;padding:11px 16px;font-size:12.5px;background:rgba(255,255,255,.06);border-bottom:1px solid rgba(255,255,255,.08)"><div style="font-family:Silkscreen,Consolas,monospace;font-size:7.5px;letter-spacing:.16em;color:#7db4e8;align-self:center">STORAGE</div><div style="color:#dbe7ff;font-weight:500">Ours · write-once bucket, versioned</div></div>
+            <div style="display:grid;grid-template-columns:190px 1fr;padding:11px 16px;font-size:12.5px;background:rgba(255,255,255,.03);border-bottom:1px solid rgba(255,255,255,.08)"><div style="font-family:Silkscreen,Consolas,monospace;font-size:7.5px;letter-spacing:.16em;color:#7db4e8;align-self:center">SECRET VAULT</div><div style="color:#dbe7ff;font-weight:500">Ours · production mode, sealed until unsealed</div></div>
+            <div style="display:grid;grid-template-columns:190px 1fr;padding:11px 16px;font-size:12.5px;background:rgba(255,255,255,.06);border-bottom:1px solid rgba(255,255,255,.08)"><div style="font-family:Silkscreen,Consolas,monospace;font-size:7.5px;letter-spacing:.16em;color:#7db4e8;align-self:center">INFERENCE</div><div style="color:#dbe7ff;font-weight:500">Local · 2× RTX PRO 6000</div></div>
+            <div style="display:grid;grid-template-columns:190px 1fr;padding:11px 16px;font-size:12.5px;background:rgba(255,255,255,.03);border-bottom:1px solid rgba(255,255,255,.08)"><div style="font-family:Silkscreen,Consolas,monospace;font-size:7.5px;letter-spacing:.16em;color:#7db4e8;align-self:center">EXTRACTION</div><div style="color:#dbe7ff;font-weight:500">qwen3.6, full precision — the best tier this hardware fits</div></div>
+            <div style="display:grid;grid-template-columns:190px 1fr;padding:11px 16px;font-size:12.5px;background:rgba(255,255,255,.06)"><div style="font-family:Silkscreen,Consolas,monospace;font-size:7.5px;letter-spacing:.16em;color:#7db4e8;align-self:center">ORGANIZATIONS</div><div style="color:#dbe7ff;font-weight:500">ops, finance — kept strictly apart</div></div>
+          </div>
+
+          <div style="margin-top:20px;display:flex;align-items:center;gap:11px">
+            <div onClick="{{ deploy }}" style="cursor:pointer;white-space:nowrap;flex:none;font-size:13px;font-weight:600;color:#ffffff;padding:12px 28px;clip-path:polygon(11px 0,100% 0,100% calc(100% - 11px),calc(100% - 11px) 100%,0 100%,0 11px);border:1px solid rgba(160,190,255,.6);background:linear-gradient(180deg,rgba(120,150,255,.5),rgba(70,100,235,.35));backdrop-filter:blur(12px);box-shadow:0 0 24px rgba(110,140,255,.5),0 1px 0 rgba(255,255,255,.35) inset" style-hover="background:linear-gradient(180deg,rgba(150,175,255,.6),rgba(90,120,245,.45));box-shadow:0 0 36px rgba(130,160,255,.7),0 1px 0 rgba(255,255,255,.4) inset">Install it</div>
+            <div onClick="{{ rehearse }}" style="cursor:pointer;font-size:12.5px;font-weight:500;color:#dbe7ff;padding:12px 22px;clip-path:polygon(11px 0,100% 0,100% calc(100% - 11px),calc(100% - 11px) 100%,0 100%,0 11px);border:1px solid rgba(255,255,255,.25);background:linear-gradient(180deg,rgba(255,255,255,.14),rgba(255,255,255,.05));backdrop-filter:blur(12px);box-shadow:0 1px 0 rgba(255,255,255,.2) inset" style-hover="background:linear-gradient(180deg,rgba(255,255,255,.24),rgba(255,255,255,.1))">Rehearse without touching anything</div>
+            <div style="font-size:11.5px;color:#5c6f9e;max-width:220px">A rehearsal walks all nine steps and writes nothing.</div>
+          </div>
+        </div>
+        </sc-if>
+
+        <sc-if value="{{ isStep4 }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;flex-direction:column;height:100%">
+          <div style="display:flex;align-items:center;gap:9px;margin-bottom:8px"><div style="font-family:Silkscreen,Consolas,monospace;font-size:10px;color:#9fc0ff">→</div><div style="font-family:Silkscreen,Consolas,monospace;font-size:8.5px;letter-spacing:.24em;color:#7db4e8">PHASE 04 : APPLY</div></div>
+          <div style="font-size:23px;font-weight:300;color:#e9f0ff;text-shadow:0 0 20px rgba(140,170,255,.35)">{{ applyTitle }}</div>
+          <div style="font-size:12.5px;color:#8fa8d8;margin-top:7px">{{ applySub }}</div>
+
+          <div style="margin-top:18px;position:relative;height:14px;border-radius:7px;overflow:hidden;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14)">
+            <div style="position:absolute;top:0;bottom:0;left:0;background:linear-gradient(90deg,#4d6bff,#9fc0ff);box-shadow:0 0 14px rgba(120,150,255,.8);transition:width .5s ease;width:{{ applyPct }}"></div>
+            <div style="position:absolute;top:0;bottom:0;left:0;width:18%;background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.55),rgba(255,255,255,0));animation:khShine 2s ease-in-out infinite"></div>
+          </div>
+
+          <div style="margin-top:18px;display:grid;grid-template-columns:1fr 1fr;gap:9px">
+            <sc-for list="{{ phases }}" as="p" hint-placeholder-count="9">
+              <div style="display:flex;gap:11px;align-items:flex-start;padding:10px 13px;border-radius:13px;border:1px solid rgba(255,255,255,.1);backdrop-filter:blur(8px);background:{{ p.bg }}">
+                <div style="width:9px;height:9px;margin-top:4px;flex:none;border-radius:50%;background:{{ p.dot }};box-shadow:{{ p.glow }}"></div>
+                <div>
+                  <div style="font-size:12.5px;color:#dbe7ff;font-weight:500">{{ p.name }}</div>
+                  <div style="font-size:11.5px;color:#5c6f9e;margin-top:2px">{{ p.note }}</div>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="margin-top:16px;display:flex;flex-direction:column;gap:5px;font-family:Consolas,'Lucida Console',monospace;font-size:11.5px">
+            <sc-for list="{{ applyLog }}" as="l" hint-placeholder-count="3">
+              <div style="display:flex;gap:9px;padding:5px 10px;border-radius:9px;background:rgba(0,2,10,.6);border:1px solid rgba(120,150,255,.18)">
+                <div style="color:#7db4e8;flex:none">{{ l.t }}</div>
+                <div style="color:#c9d8f8">{{ l.text }}</div>
+              </div>
+            </sc-for>
+          </div>
+
+          <div style="flex:1"></div>
+          <sc-if value="{{ applyDone }}" hint-placeholder-val="{{ false }}">
+          <div style="margin-top:16px;padding:14px 16px;border-radius:14px;border:1px solid rgba(123,224,200,.4);background:rgba(123,224,200,.08);box-shadow:0 0 24px rgba(100,220,190,.2);animation:khFadeUp .4s ease both">
+            <div style="display:flex;align-items:center;gap:11px">
+              <div style="width:14px;height:14px;border-radius:50%;background:#7be0c8;box-shadow:0 0 14px rgba(110,230,200,.9)"></div>
+              <div style="font-size:14px;color:#c6f3e6;font-weight:600">Installed, and all eleven checks came back green</div>
+            </div>
+            <div style="font-size:12px;color:#8fc7b8;margin-top:8px">Every claim in the plan was proved against the running system, not assumed: the vault answers, the models are resident on the GPUs, the serving door refuses an unknown caller, and nothing holds a direct connection to the database except us.</div>
+          </div>
+          </sc-if>
+        </div>
+        </sc-if>
+
+        <sc-if value="{{ isStep5 }}" hint-placeholder-val="{{ false }}">
+        <div>
+          <div style="display:flex;align-items:center;gap:9px;margin-bottom:8px"><div style="font-family:Silkscreen,Consolas,monospace;font-size:10px;color:#9fc0ff">→</div><div style="font-family:Silkscreen,Consolas,monospace;font-size:8.5px;letter-spacing:.24em;color:#7db4e8">PHASE 05 : CUSTODY</div></div>
+          <div style="font-size:23px;font-weight:300;color:#e9f0ff;text-shadow:0 0 20px rgba(140,170,255,.35)">The keys to the vault</div>
+          <div style="font-size:12.5px;color:#8fa8d8;margin-top:7px;max-width:660px">The vault holds every source credential. It starts sealed after each restart, and it takes three of these five shares to open it. This is the only time they will ever be shown.</div>
+
+          <div style="margin-top:20px;display:grid;grid-template-columns:repeat(5,1fr);gap:10px">
+            <div style="padding:12px 10px;clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);background:rgba(0,2,12,.65);border:1px solid rgba(140,170,255,.25);box-shadow:0 0 14px rgba(90,120,255,.15);text-align:center"><div style="font-family:Silkscreen,Consolas,monospace;font-size:8px;letter-spacing:.14em;color:#9fc0ff">SHARE 1</div><div style="margin-top:7px;font-family:Consolas,'Lucida Console',monospace;font-size:11px;color:#dbe7ff;filter:blur(4px)">7f3a91c8e2d4</div></div>
+            <div style="padding:12px 10px;clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);background:rgba(0,2,12,.65);border:1px solid rgba(140,170,255,.25);box-shadow:0 0 14px rgba(90,120,255,.15);text-align:center"><div style="font-family:Silkscreen,Consolas,monospace;font-size:8px;letter-spacing:.14em;color:#9fc0ff">SHARE 2</div><div style="margin-top:7px;font-family:Consolas,'Lucida Console',monospace;font-size:11px;color:#dbe7ff;filter:blur(4px)">b18d40a7c559</div></div>
+            <div style="padding:12px 10px;clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);background:rgba(0,2,12,.65);border:1px solid rgba(140,170,255,.25);box-shadow:0 0 14px rgba(90,120,255,.15);text-align:center"><div style="font-family:Silkscreen,Consolas,monospace;font-size:8px;letter-spacing:.14em;color:#9fc0ff">SHARE 3</div><div style="margin-top:7px;font-family:Consolas,'Lucida Console',monospace;font-size:11px;color:#dbe7ff;filter:blur(4px)">2ce6b7f01a83</div></div>
+            <div style="padding:12px 10px;clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);background:rgba(0,2,12,.65);border:1px solid rgba(140,170,255,.25);box-shadow:0 0 14px rgba(90,120,255,.15);text-align:center"><div style="font-family:Silkscreen,Consolas,monospace;font-size:8px;letter-spacing:.14em;color:#9fc0ff">SHARE 4</div><div style="margin-top:7px;font-family:Consolas,'Lucida Console',monospace;font-size:11px;color:#dbe7ff;filter:blur(4px)">9a52ffd36e07</div></div>
+            <div style="padding:12px 10px;clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);background:rgba(0,2,12,.65);border:1px solid rgba(140,170,255,.25);box-shadow:0 0 14px rgba(90,120,255,.15);text-align:center"><div style="font-family:Silkscreen,Consolas,monospace;font-size:8px;letter-spacing:.14em;color:#9fc0ff">SHARE 5</div><div style="margin-top:7px;font-family:Consolas,'Lucida Console',monospace;font-size:11px;color:#dbe7ff;filter:blur(4px)">4d8017be2fc9</div></div>
+          </div>
+          <div style="margin-top:9px;font-size:11.5px;color:#5c6f9e">Blurred here on purpose — they are printed once, on paper, into sealed envelopes. They are never written to this machine's disk.</div>
+
+          <div style="margin-top:18px;display:grid;grid-template-columns:1fr 1fr;gap:13px">
+            <div onClick="{{ pickOperator }}" style="cursor:pointer;padding:16px;clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px);backdrop-filter:blur(12px);border:{{ opBorder }};background:{{ opBg }};box-shadow:{{ opGlow }}">
+              <div style="font-size:14px;color:#e9f0ff;font-weight:600">We hold the shares</div>
+              <div style="font-size:12px;color:#8fa8d8;margin-top:7px;line-height:1.55">You bought uptime. After a power cut we unseal it for you, remotely or on site. Nobody at your desk needs a runbook.</div>
+            </div>
+            <div onClick="{{ pickClient }}" style="cursor:pointer;padding:16px;clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px);backdrop-filter:blur(12px);border:{{ clBorder }};background:{{ clBg }};box-shadow:{{ clGlow }}">
+              <div style="font-size:14px;color:#e9f0ff;font-weight:600">You hold the shares</div>
+              <div style="font-size:12px;color:#8fa8d8;margin-top:7px;line-height:1.55">We keep zero copies. Your security officer performs the test unseal today and owns every restart after that.</div>
+            </div>
+          </div>
+
+          <div style="margin-top:16px;padding:14px 16px;border-radius:14px;border:1px solid rgba(255,150,130,.3);background:rgba(255,110,90,.07)">
+            <div style="font-size:12.5px;color:#ffcabb;font-weight:600;margin-bottom:6px">Said plainly, because you should not learn it during an outage</div>
+            <div style="font-size:12px;color:#d99f92;line-height:1.6">These shares protect the data if the box is stolen or its drive is thrown away. They do not protect you from whoever operates the box while it is running. And if all five are lost there is no recovery — the vault is re-initialised and every source credential is entered again.</div>
+          </div>
+
+          <div style="margin-top:16px;padding:13px 15px;border-radius:12px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.03);font-size:12px;color:#8fa8d8">{{ custodyNote }}</div>
+        </div>
+        </sc-if>
+
+        <sc-if value="{{ isStep6 }}" hint-placeholder-val="{{ false }}">
+        <div>
+          <div style="display:flex;align-items:center;gap:9px;margin-bottom:8px"><div style="font-family:Silkscreen,Consolas,monospace;font-size:10px;color:#9fc0ff">→</div><div style="font-family:Silkscreen,Consolas,monospace;font-size:8.5px;letter-spacing:.24em;color:#7db4e8">PHASE 06 : SOURCE</div></div>
+          <div style="font-size:23px;font-weight:300;color:#e9f0ff;text-shadow:0 0 20px rgba(140,170,255,.35)">Now let it read something</div>
+          <div style="font-size:12.5px;color:#8fa8d8;margin-top:7px;max-width:660px">One source is enough to start. Everything after this is the same three moves: authorize, scope, pull.</div>
+
+          <div style="margin-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:13px">
+            <div style="padding:16px;border-radius:16px;border:1px solid rgba(160,190,255,.5);background:rgba(120,150,255,.1);backdrop-filter:blur(12px);box-shadow:0 0 24px rgba(110,140,255,.25)">
+              <div style="display:flex;align-items:center;gap:11px">
+                <div style="width:26px;height:26px;border-radius:50%;border:1px solid rgba(255,255,255,.4);background:linear-gradient(180deg,rgba(160,185,255,.55),rgba(90,120,235,.35));box-shadow:0 0 12px rgba(120,150,255,.6)"></div>
+                <div style="font-size:14px;color:#e9f0ff;font-weight:600">SharePoint &amp; OneDrive</div>
+              </div>
+              <div style="font-size:12px;color:#8fa8d8;margin-top:9px;line-height:1.55">Pull what is there now, then watch for changes. Needs one sign-in from someone who can approve access for the whole organization.</div>
+              <div style="margin-top:12px;display:inline-flex;align-items:center;gap:9px;cursor:pointer;font-size:12.5px;font-weight:600;color:#ffffff;padding:9px 20px;clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);border:1px solid rgba(160,190,255,.6);background:linear-gradient(180deg,rgba(120,150,255,.5),rgba(70,100,235,.35));box-shadow:0 0 18px rgba(110,140,255,.5),0 1px 0 rgba(255,255,255,.35) inset" style-hover="background:linear-gradient(180deg,rgba(150,175,255,.6),rgba(90,120,245,.45))">Sign in with Microsoft</div>
+            </div>
+            <div style="padding:16px;border-radius:16px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.05);backdrop-filter:blur(12px)">
+              <div style="display:flex;align-items:center;gap:11px">
+                <div style="width:26px;height:26px;border-radius:50%;border:1px solid rgba(255,255,255,.35);background:linear-gradient(180deg,rgba(123,224,200,.4),rgba(80,170,150,.25));box-shadow:0 0 12px rgba(110,220,190,.4)"></div>
+                <div style="font-size:14px;color:#e9f0ff;font-weight:600">A folder on this machine</div>
+              </div>
+              <div style="font-size:12px;color:#8fa8d8;margin-top:9px;line-height:1.55">Point us at a directory and we sweep it on a timer. No credential involved. The quickest way to see the pipeline move today.</div>
+              <div style="margin-top:12px;display:inline-flex;cursor:pointer;font-size:12.5px;font-weight:500;color:#dbe7ff;padding:9px 20px;clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);border:1px solid rgba(255,255,255,.25);background:linear-gradient(180deg,rgba(255,255,255,.14),rgba(255,255,255,.05));box-shadow:0 1px 0 rgba(255,255,255,.2) inset" style-hover="background:linear-gradient(180deg,rgba(255,255,255,.24),rgba(255,255,255,.1))">Choose a folder</div>
+            </div>
+          </div>
+
+          <div style="margin-top:16px;padding:13px 16px;border-radius:14px;border:1px solid rgba(123,224,200,.3);background:rgba(123,224,200,.06)">
+            <div style="font-size:12.5px;color:#a9ecd9;font-weight:600;margin-bottom:6px">Where the password goes</div>
+            <div style="font-size:12px;color:#8fc7b8;line-height:1.6">Straight from Microsoft into the vault. This wizard has no field that can hold a secret, and no screen anywhere in the product can read one back out. What you will see afterwards is a green “authorized”, and a reference to where it lives.</div>
+          </div>
+
+          <div style="margin-top:16px;padding:13px 16px;border-radius:14px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04)">
+            <div style="font-size:12.5px;color:#dbe7ff;font-weight:600;margin-bottom:8px">What happens the moment a source is connected</div>
+            <div style="display:flex;flex-direction:column;gap:6px;font-size:12px;color:#8fa8d8">
+              <div>Documents land in write-once storage, exactly as they were.</div>
+              <div>They are read, split and embedded, then facts are extracted with their source passage attached.</div>
+              <div>Anything the machine is unsure about goes to the review queue instead of into the knowledge base. Expect items there within the first hour — that is the system being honest, not broken.</div>
+            </div>
+          </div>
+
+          <div style="margin-top:20px;display:flex;align-items:center;gap:13px">
+            <a href="./Operator.dc.html" style="display:inline-block;white-space:nowrap;flex:none;font-size:13px;font-weight:600;color:#ffffff;padding:12px 28px;clip-path:polygon(11px 0,100% 0,100% calc(100% - 11px),calc(100% - 11px) 100%,0 100%,0 11px);border:1px solid rgba(160,190,255,.6);background:linear-gradient(180deg,rgba(120,150,255,.5),rgba(70,100,235,.35));box-shadow:0 0 24px rgba(110,140,255,.5),0 1px 0 rgba(255,255,255,.35) inset;text-decoration:none">Open the console</a>
+            <div style="font-size:11.5px;color:#5c6f9e">Setup is finished. The console is where you watch it work.</div>
+          </div>
+        </div>
+        </sc-if>
+
+        <div style="margin-top:22px;padding-top:16px;border-top:1px solid rgba(255,255,255,.1);display:flex;align-items:center;gap:11px">
+          <div onClick="{{ back }}" style="cursor:pointer;font-size:12.5px;font-weight:500;color:#dbe7ff;padding:9px 22px;clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);border:1px solid rgba(255,255,255,.22);background:linear-gradient(180deg,rgba(255,255,255,.12),rgba(255,255,255,.04));backdrop-filter:blur(10px)" style-hover="background:linear-gradient(180deg,rgba(255,255,255,.22),rgba(255,255,255,.08))">Back</div>
+          <div style="font-family:Consolas,'Lucida Console',monospace;font-size:9px;letter-spacing:.2em;color:rgba(150,175,225,.35)">::7F3A::</div>
+          <div style="flex:1;font-size:11.5px;color:#5c6f9e">{{ footerNote }}</div>
+          <div onClick="{{ next }}" style="cursor:pointer;white-space:nowrap;font-size:12.5px;font-weight:600;color:#ffffff;padding:9px 26px;clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);border:1px solid rgba(160,190,255,.6);background:linear-gradient(180deg,rgba(120,150,255,.5),rgba(70,100,235,.35));backdrop-filter:blur(10px);box-shadow:0 0 18px rgba(110,140,255,.45),0 1px 0 rgba(255,255,255,.35) inset" style-hover="background:linear-gradient(180deg,rgba(150,175,255,.6),rgba(90,120,245,.45));box-shadow:0 0 28px rgba(130,160,255,.65),0 1px 0 rgba(255,255,255,.4) inset">{{ nextLabel }}</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  </div>
+  </sc-if>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;startAt&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;boot&quot;,&quot;wizard&quot;],&quot;default&quot;:&quot;boot&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Startup&quot;},&quot;bootStepMs&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;min&quot;:200,&quot;max&quot;:1600,&quot;step&quot;:100,&quot;default&quot;:700,&quot;unit&quot;:&quot;ms&quot;,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Startup&quot;}}">
+const BOOT = [
+  "install media · signature checked against the trusted key",
+  "storage · write-once bucket ready, versioning on",
+  "database · Postgres 16.14 · vector, graph and text search present",
+  "vault · unsealed with 3 of 5 shares",
+  "graphics · 2× RTX PRO 6000 · 191 GB video memory",
+  "models · embedder and extractor resident on the GPUs",
+  "serving door · read-only connection warmed, unknown callers refused",
+  "eleven checks · all green — the stack is go"
+];
+
+const PHASES = [
+  ["Verify the install media", "hashes and signature, file by file"],
+  ["Start the services", "database, object store and vault"],
+  ["Apply the schema", "baseline plus nine migrations"],
+  ["Initialise the vault", "production mode, then the key ceremony"],
+  ["Place the models", "copied from the drive — nothing downloaded"],
+  ["Install the software", "offline, from the wheels on the drive"],
+  ["Create the organizations", "ops and finance, kept apart"],
+  ["Start the serving door", "read-only, refuses unknown callers"],
+  ["Prove every claim", "eleven checks against the running system"]
+];
+
+const LOGS = [
+  "manifest · 214 files, every one accounted for",
+  "compose · 3 containers up",
+  "schema · 009_retraction.sql applied",
+  "vault · initialised, 5 shares, threshold 3",
+  "models · 2 model stores copied, hashes match",
+  "package · installed from the carried wheels",
+  "tenants · ops and finance provisioned",
+  "serving · health endpoint answering on 8080",
+  "checks · 11 of 11 green"
+];
+
+class Component extends DCLogic {
+  state = { phase: "boot", boot: 0, step: 1, adoption: "ours", custody: "operator", apply: 0, dry: false };
+
+  componentDidMount() {
+    if (this.props.startAt === "wizard") {
+      this.setState({ phase: "wizard", boot: BOOT.length });
+      return;
+    }
+    this.bootTimer = setInterval(() => {
+      this.setState((s) => {
+        if (s.boot >= BOOT.length) {
+          clearInterval(this.bootTimer);
+          setTimeout(() => this.setState({ phase: "wizard" }), 900);
+          return { boot: s.boot };
+        }
+        return { boot: s.boot + 1 };
+      });
+    }, this.props.bootStepMs || 700);
+  }
+
+  componentWillUnmount() {
+    clearInterval(this.bootTimer);
+    clearInterval(this.applyTimer);
+  }
+
+  startApply(dry) {
+    clearInterval(this.applyTimer);
+    this.setState({ step: 4, apply: 0, dry: !!dry });
+    this.applyTimer = setInterval(() => {
+      this.setState((s) => {
+        if (s.apply >= PHASES.length) {
+          clearInterval(this.applyTimer);
+          return { apply: s.apply };
+        }
+        return { apply: s.apply + 1 };
+      });
+    }, 850);
+  }
+
+  go(n) {
+    if (n < 1 || n > 6) return;
+    if (n === 4) return this.startApply(false);
+    this.setState({ step: n });
+  }
+
+  renderVals() {
+    const st = this.state;
+    const bootLines = BOOT.slice(0, st.boot);
+    const done = st.apply >= PHASES.length;
+    const phases = PHASES.map((p, i) => {
+      const state = i < st.apply ? "done" : i === st.apply ? "now" : "wait";
+      return {
+        name: p[0],
+        note: state === "now" ? "working…" : p[1],
+        bg: state === "done" ? "rgba(123,224,200,.07)" : state === "now" ? "rgba(120,150,255,.12)" : "rgba(255,255,255,.03)",
+        dot: state === "done" ? "#7be0c8" : state === "now" ? "#9fc0ff" : "rgba(255,255,255,.2)",
+        glow: state === "done" ? "0 0 8px rgba(110,230,200,.7)" : state === "now" ? "0 0 10px rgba(140,170,255,.9)" : "none"
+      };
+    });
+    const log = [];
+    for (let i = st.apply - 1; i >= 0 && log.length < 3; i--) {
+      log.push({ t: "phase " + (i + 1), text: LOGS[i] });
+    }
+    const sel = "1px solid rgba(160,190,255,.65)";
+    const unsel = "1px solid rgba(255,255,255,.14)";
+    const selBg = "rgba(120,150,255,.14)";
+    const unselBg = "rgba(255,255,255,.05)";
+    const selGlow = "0 0 22px rgba(110,140,255,.35)";
+    const navBg = (n) => (st.step === n ? "linear-gradient(180deg,rgba(255,255,255,.2),rgba(255,255,255,.08))" : st.step > n ? "rgba(255,255,255,.06)" : "rgba(255,255,255,.02)");
+    const navB = (n) => (st.step === n ? "1px solid rgba(160,190,255,.6)" : "1px solid rgba(255,255,255,.12)");
+    const nextLabels = { 1: "Next", 2: "Next", 3: "Next", 4: "Next", 5: "Next", 6: "Finish" };
+    const footers = {
+      1: "Nothing on this machine has been modified.",
+      2: "Your choice is written into the record for this site.",
+      3: "Last chance to stop before anything is written.",
+      4: st.dry ? "A rehearsal. No file, container or database was touched." : "Each step stops the install if it fails, rather than carrying on.",
+      5: "Recorded in the deployment record, whichever you choose.",
+      6: "You can add more sources any time from the console."
+    };
+    return {
+      isBoot: st.phase === "boot",
+      isWizard: st.phase === "wizard",
+      bootLines: bootLines,
+      bootNow: st.boot >= BOOT.length ? "handing over to setup…" : "checking " + BOOT[st.boot].split(" · ")[0] + "…",
+      bootPct: Math.round((st.boot / BOOT.length) * 100) + "%",
+      skipBoot: () => {
+        clearInterval(this.bootTimer);
+        this.setState({ phase: "wizard", boot: BOOT.length });
+      },
+      isStep1: st.step === 1,
+      isStep2: st.step === 2,
+      isStep3: st.step === 3,
+      isStep4: st.step === 4,
+      isStep5: st.step === 5,
+      isStep6: st.step === 6,
+      nav1: navBg(1), nav2: navBg(2), nav3: navBg(3), nav4: navBg(4), nav5: navBg(5), nav6: navBg(6),
+      nav1b: navB(1), nav2b: navB(2), nav3b: navB(3), nav4b: navB(4), nav5b: navB(5), nav6b: navB(6),
+      stepLabel: "step " + st.step + " of 6",
+      wizPct: Math.round((st.step / 6) * 100) + "%",
+      back: () => this.go(st.step - 1),
+      next: () => this.go(st.step + 1),
+      nextLabel: nextLabels[st.step],
+      footerNote: footers[st.step],
+      pickOurs: () => this.setState({ adoption: "ours" }),
+      pickTheirs: () => this.setState({ adoption: "theirs" }),
+      oursBorder: st.adoption === "ours" ? sel : unsel,
+      oursBg: st.adoption === "ours" ? selBg : unselBg,
+      oursGlow: st.adoption === "ours" ? selGlow : "none",
+      theirsBorder: st.adoption === "theirs" ? sel : unsel,
+      theirsBg: st.adoption === "theirs" ? selBg : unselBg,
+      theirsGlow: st.adoption === "theirs" ? selGlow : "none",
+      adoptionNote:
+        st.adoption === "ours"
+          ? "Recorded: the database we found stays exactly as it is. We will not connect to it, migrate it or back it up."
+          : "Recorded as a deliberate override: we will write our schema into your database. You will be asked to type its endpoint before anything runs, and the checks still have to pass against it.",
+      planDb:
+        st.adoption === "ours"
+          ? "Ours · yours detected and left untouched"
+          : "Yours · adopted at localhost:5432 (operator override)",
+      deploy: () => this.startApply(false),
+      rehearse: () => this.startApply(true),
+      applyTitle: done
+        ? st.dry ? "Rehearsal finished — nothing was written" : "The system is installed"
+        : st.dry ? "Rehearsing the install" : "Installing",
+      applySub: done
+        ? st.dry
+          ? "Every step resolved with real values, and stopped short of doing anything. Run it for real when you are ready."
+          : "You can watch the same nine steps again any time; they are safe to re-run and will skip what is already done."
+        : "Nine steps, in order. If one fails the install stops there — a half-installed system is worse than an honest failure.",
+      applyPct: Math.round((st.apply / PHASES.length) * 100) + "%",
+      phases: phases,
+      applyLog: log,
+      applyDone: done && !st.dry,
+      pickOperator: () => this.setState({ custody: "operator" }),
+      pickClient: () => this.setState({ custody: "client" }),
+      opBorder: st.custody === "operator" ? sel : unsel,
+      opBg: st.custody === "operator" ? selBg : unselBg,
+      opGlow: st.custody === "operator" ? selGlow : "none",
+      clBorder: st.custody === "client" ? sel : unsel,
+      clBg: st.custody === "client" ? selBg : unselBg,
+      clGlow: st.custody === "client" ? selGlow : "none",
+      custodyNote:
+        st.custody === "operator"
+          ? "Recorded: custody sits with us. A restart means a call to us — usually a remote unseal within minutes."
+          : "Recorded: custody sits with you. The shares are printed once, sealed, and handed over. We keep none, so we cannot unseal it for you."
+    };
+  }
+}
+
+</script>
+</body>
+</html>

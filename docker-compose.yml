@@ -1,0 +1,80 @@
+# Knowledge Hub — pilot infrastructure.
+# The deploy kit ships a DERIVED copy of this file: khctl make-kit strips the
+# `build:` keys (on site every image arrives via `docker load`; the kit ships
+# no build contexts — BP28 #10). Keep `build:` one-line or the build refuses.
+name: knowledge-hub
+
+services:
+  # ---------------------------------------------------------------------------
+  # PostgreSQL 16 + pgvector + Apache AGE + pg_trgm  (the foundation)
+  # ---------------------------------------------------------------------------
+  postgres:
+    build: ./postgres
+    image: knowledge-hub/postgres:16-age-pgvector
+    container_name: kh-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    # shared_preload_libraries=age loads the AGE library at server start, so we
+    # never need `LOAD 'age';` in each session.
+    command: postgres -c shared_preload_libraries=age
+    ports:
+      # Loopback-only (BP28 #21): every client on the box reads localhost,
+      # and remote access rides the SSH tunnel — nothing needs LAN exposure.
+      # Host side is plan data (BP34): a co-resident client Postgres may
+      # already hold 5432 — OURS moves to the plan's POSTGRES_PORT; the
+      # existing service is never contested. In-container stays 5432.
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"   # lets Python on the host reach the DB
+    volumes:
+      - kh_pgdata:/var/lib/postgresql/data                 # data survives restarts
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro     # first-run init scripts
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # ---------------------------------------------------------------------------
+  # SeaweedFS — S3-compatible object store (raw landing zone for original bytes)
+  # `server -s3` runs master + volume + filer + S3 gateway in one process (fine
+  # for a pilot). Object-lock/WORM is enabled per-bucket at creation time.
+  # ---------------------------------------------------------------------------
+  seaweedfs:
+    image: chrislusf/seaweedfs:latest
+    container_name: kh-seaweedfs
+    restart: unless-stopped
+    command: >
+      server -dir=/data -s3
+      -s3.port=8333
+      -s3.config=/etc/seaweedfs/s3config.json
+      -master.volumeSizeLimitMB=1024
+    ports:
+      - "127.0.0.1:8333:8333"   # S3 API  (boto3 / aws-cli talk here)
+      - "127.0.0.1:9333:9333"   # master UI (browser status page, handy)
+      - "127.0.0.1:8888:8888"   # filer   (optional)
+    volumes:
+      - kh_seaweed:/data
+      - ./seaweedfs/s3config.json:/etc/seaweedfs/s3config.json:ro
+
+  # ---------------------------------------------------------------------------
+  # OpenBao — secrets manager (Vault fork). DEV MODE: in-memory, auto-unsealed,
+  # single root token. Great for the pilot; harden to production mode later.
+  # ---------------------------------------------------------------------------
+  openbao:
+    image: openbao/openbao:latest
+    container_name: kh-openbao
+    restart: unless-stopped
+    cap_add:
+      - IPC_LOCK            # lets it lock memory so secrets don't swap to disk
+    environment:
+      BAO_DEV_ROOT_TOKEN_ID: ${BAO_ROOT_TOKEN}
+      BAO_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+    command: server -dev
+    ports:
+      - "127.0.0.1:8200:8200"   # API + web UI
+
+volumes:
+  kh_pgdata:
+  kh_seaweed:

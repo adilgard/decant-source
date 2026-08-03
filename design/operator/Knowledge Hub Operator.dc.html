@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+@keyframes khDrift{from{transform:translate3d(-6%,0,0)}to{transform:translate3d(6%,0,0)}}
+@keyframes khDrift2{from{transform:translate3d(5%,0,0)}to{transform:translate3d(-5%,0,0)}}
+@keyframes khSweep{from{background-position:0 0}to{background-position:24px 0}}
+@keyframes khShine{0%{transform:translateX(-120%) skewX(-18deg)}60%{transform:translateX(420%) skewX(-18deg)}100%{transform:translateX(420%) skewX(-18deg)}}
+@keyframes khBreathe{0%,100%{transform:scale(1);opacity:.82}50%{transform:scale(1.09);opacity:1}}
+@keyframes khRise{0%{transform:translateY(40px) scale(.85);opacity:0}20%{opacity:.55}100%{transform:translateY(-420px) scale(1.2);opacity:0}}
+@keyframes khBlink{0%,100%{opacity:1}50%{opacity:.3}}
+@keyframes khGlow{0%,100%{box-shadow:0 0 0 rgba(120,220,140,0)}50%{box-shadow:0 0 14px rgba(120,220,140,.85)}}
+body{margin:0;background:#bfe2f5;font-family:"Segoe UI",Tahoma,Geneva,Verdana,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:#1a6aa8;text-decoration:none}
+a:hover{color:#0d4d80;text-decoration:underline}
+</style>
+</helmet>
+<div style="position:relative;min-height:100vh;overflow:hidden;padding:26px 26px 34px;box-sizing:border-box;background:linear-gradient(180deg,#5aa7dd 0%,#8fcbec 22%,#c3e6f8 52%,#e8f6fd 74%,#f2fbff 100%)">
+
+  <div style="position:absolute;inset:-10% -20% 40%;pointer-events:none;background:radial-gradient(48% 34% at 22% 42%,rgba(255,255,255,.92),rgba(255,255,255,0) 70%),radial-gradient(38% 26% at 62% 26%,rgba(255,255,255,.75),rgba(255,255,255,0) 72%),radial-gradient(52% 30% at 88% 56%,rgba(255,255,255,.8),rgba(255,255,255,0) 70%);animation:khDrift 46s ease-in-out infinite alternate"></div>
+  <div style="position:absolute;inset:10% -25% 20%;pointer-events:none;opacity:.7;background:radial-gradient(40% 22% at 34% 70%,rgba(255,255,255,.85),rgba(255,255,255,0) 70%),radial-gradient(44% 20% at 74% 84%,rgba(255,255,255,.7),rgba(255,255,255,0) 72%);animation:khDrift2 64s ease-in-out infinite alternate"></div>
+  <div style="position:absolute;left:8%;bottom:-60px;width:26px;height:26px;border-radius:50%;pointer-events:none;background:radial-gradient(circle at 32% 28%,rgba(255,255,255,.95),rgba(190,230,255,.45) 55%,rgba(120,190,235,.25));animation:khRise 17s linear infinite"></div>
+  <div style="position:absolute;left:74%;bottom:-60px;width:16px;height:16px;border-radius:50%;pointer-events:none;background:radial-gradient(circle at 32% 28%,rgba(255,255,255,.95),rgba(190,230,255,.45) 55%,rgba(120,190,235,.25));animation:khRise 23s linear 4s infinite"></div>
+  <div style="position:absolute;left:46%;bottom:-60px;width:36px;height:36px;border-radius:50%;pointer-events:none;background:radial-gradient(circle at 32% 28%,rgba(255,255,255,.9),rgba(190,230,255,.35) 55%,rgba(120,190,235,.2));animation:khRise 29s linear 9s infinite"></div>
+
+  <div style="position:relative;max-width:1420px;margin:0 auto;border-radius:12px;overflow:hidden;border:1px solid rgba(255,255,255,.85);box-shadow:0 26px 70px rgba(16,60,100,.38),0 2px 0 rgba(255,255,255,.7) inset;background:rgba(226,243,253,.72);backdrop-filter:blur(14px)">
+
+    <div style="display:flex;align-items:center;gap:12px;padding:9px 12px;background:linear-gradient(180deg,rgba(255,255,255,.92),rgba(214,238,252,.78) 52%,rgba(178,218,242,.72));border-bottom:1px solid rgba(255,255,255,.75)">
+      <div style="width:22px;height:22px;border-radius:5px;background:radial-gradient(circle at 30% 24%,#ffffff,#8fd0f5 52%,#2f8fd0);box-shadow:0 1px 2px rgba(20,70,110,.4),0 0 0 1px rgba(255,255,255,.7) inset"></div>
+      <div style="font-size:13px;color:#134a70;text-shadow:0 1px 0 rgba(255,255,255,.9)">decant.Source — Operator Console</div>
+      <div style="flex:1"></div>
+      <div style="display:flex;gap:6px">
+        <div style="width:30px;height:19px;border-radius:4px;background:linear-gradient(180deg,#fdfeff,#d7ecf9 50%,#b8dcf1);border:1px solid #8fb9d6;box-shadow:0 1px 0 rgba(255,255,255,.9) inset"></div>
+        <div style="width:30px;height:19px;border-radius:4px;background:linear-gradient(180deg,#fdfeff,#d7ecf9 50%,#b8dcf1);border:1px solid #8fb9d6;box-shadow:0 1px 0 rgba(255,255,255,.9) inset"></div>
+        <div style="width:38px;height:19px;border-radius:4px;background:linear-gradient(180deg,#ffb2a4,#e5644f 48%,#c53823 52%,#e07a68);border:1px solid #a33520;box-shadow:0 1px 0 rgba(255,255,255,.5) inset"></div>
+      </div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:14px;padding:12px 16px;background:linear-gradient(180deg,rgba(255,255,255,.7),rgba(220,240,252,.5));border-bottom:1px solid rgba(255,255,255,.6)">
+      <div style="display:flex;gap:8px">
+        <div style="width:36px;height:36px;border-radius:50%;background:radial-gradient(circle at 34% 26%,#ffffff,#bfe4fa 46%,#5fa8dc 70%,#2b6f9f);box-shadow:0 2px 5px rgba(20,70,110,.35),0 0 0 1px rgba(255,255,255,.65) inset"></div>
+        <div style="width:36px;height:36px;border-radius:50%;background:radial-gradient(circle at 34% 26%,#ffffff,#d9ecf7 46%,#9dc4da 70%,#6d97b0);box-shadow:0 2px 5px rgba(20,70,110,.25),0 0 0 1px rgba(255,255,255,.6) inset"></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;padding:7px 14px;border-radius:18px;border:1px solid #7fb4d6;background:linear-gradient(180deg,#ffffff,#e4f3fd 48%,#cbe8fa 52%,#f2fbff);box-shadow:0 1px 0 rgba(255,255,255,.95) inset,0 2px 5px rgba(30,90,130,.18)">
+        <div style="width:13px;height:13px;border-radius:50%;background:radial-gradient(circle at 32% 28%,#ffffff,#9de88a 48%,#3ba024);box-shadow:0 0 8px rgba(90,200,110,.8)"></div>
+        <div style="font-size:12px;color:#0f4b70">Tenant</div>
+        <div style="font-size:13px;font-weight:700;color:#0c3d5c">ops</div>
+        <div style="font-size:11px;color:#5a89a5">isolated · read + act</div>
+        <div style="font-size:9px;color:#3d7ba3">▼</div>
+      </div>
+      <div style="flex:1;display:flex;align-items:center;gap:8px;padding:7px 12px;border-radius:16px;border:1px solid #9cc4dd;background:linear-gradient(180deg,#ffffff,#f4fbff);box-shadow:0 1px 3px rgba(30,90,130,.12) inset">
+        <div style="width:11px;height:11px;border-radius:50%;border:2px solid #6ea9cd"></div>
+        <div style="font-size:12px;color:#7fa2b6">Look up an entity, a document, a source…</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:9px">
+        <div style="font-size:11px;color:#2c688c">uptime</div>
+        <div style="font-family:Consolas,'Lucida Console',monospace;font-size:12px;color:#0c3d5c;padding:4px 9px;border-radius:10px;background:rgba(255,255,255,.7);border:1px solid rgba(255,255,255,.9)">{{ uptime }}</div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:3px;padding:9px 14px 0;background:linear-gradient(180deg,rgba(160,208,236,.45),rgba(196,228,247,.3))">
+      <div onClick="{{ goMonitor }}" style="cursor:pointer;padding:8px 15px 9px;border-radius:8px 8px 0 0;border:1px solid rgba(255,255,255,.75);border-bottom:none;font-size:12px;color:#0e4a70;text-shadow:0 1px 0 rgba(255,255,255,.85);background:{{ tabMonitor }}">Ingestion monitor</div>
+      <div onClick="{{ goSources }}" style="cursor:pointer;padding:8px 15px 9px;border-radius:8px 8px 0 0;border:1px solid rgba(255,255,255,.75);border-bottom:none;font-size:12px;color:#0e4a70;text-shadow:0 1px 0 rgba(255,255,255,.85);background:{{ tabSources }}">Sources &amp; access</div>
+      <div onClick="{{ goReview }}" style="cursor:pointer;display:flex;align-items:center;gap:7px;padding:8px 15px 9px;border-radius:8px 8px 0 0;border:1px solid rgba(255,255,255,.75);border-bottom:none;font-size:12px;color:#0e4a70;text-shadow:0 1px 0 rgba(255,255,255,.85);background:{{ tabReview }}">Review queue<span style="font-size:10px;font-weight:700;color:#8a4b00;padding:1px 7px;border-radius:8px;background:linear-gradient(180deg,#ffe6a8,#ffc95e);border:1px solid #d9a13c">1,204</span></div>
+      <div onClick="{{ goHealth }}" style="cursor:pointer;display:flex;align-items:center;gap:7px;padding:8px 15px 9px;border-radius:8px 8px 0 0;border:1px solid rgba(255,255,255,.75);border-bottom:none;font-size:12px;color:#0e4a70;text-shadow:0 1px 0 rgba(255,255,255,.85);background:{{ tabHealth }}">Errors &amp; health<span style="font-size:10px;font-weight:700;color:#7d1c10;padding:1px 7px;border-radius:8px;background:linear-gradient(180deg,#ffc4b8,#f08d78);border:1px solid #cf6a54">4</span></div>
+      <div onClick="{{ goTopology }}" style="cursor:pointer;padding:8px 15px 9px;border-radius:8px 8px 0 0;border:1px solid rgba(255,255,255,.75);border-bottom:none;font-size:12px;color:#0e4a70;text-shadow:0 1px 0 rgba(255,255,255,.85);background:{{ tabTopology }}">System connections</div>
+      <div onClick="{{ goLanding }}" style="cursor:pointer;padding:8px 15px 9px;border-radius:8px 8px 0 0;border:1px solid rgba(255,255,255,.75);border-bottom:none;font-size:12px;color:#0e4a70;text-shadow:0 1px 0 rgba(255,255,255,.85);background:{{ tabLanding }}">Data landing</div>
+      <div onClick="{{ goInference }}" style="cursor:pointer;padding:8px 15px 9px;border-radius:8px 8px 0 0;border:1px solid rgba(255,255,255,.75);border-bottom:none;font-size:12px;color:#0e4a70;text-shadow:0 1px 0 rgba(255,255,255,.85);background:{{ tabInference }}">Inference</div>
+      <div onClick="{{ goFacts }}" style="cursor:pointer;padding:8px 15px 9px;border-radius:8px 8px 0 0;border:1px solid rgba(255,255,255,.75);border-bottom:none;font-size:12px;color:#0e4a70;text-shadow:0 1px 0 rgba(255,255,255,.85);background:{{ tabFacts }}">Facts &amp; entities</div>
+    </div>
+
+    <div style="padding:18px;background:linear-gradient(180deg,rgba(255,255,255,.88),rgba(240,250,255,.82));min-height:820px;box-sizing:border-box">
+
+      <sc-if value="{{ isMonitor }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;flex-direction:column;gap:16px">
+
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
+          <div style="display:flex;align-items:center;gap:12px;padding:13px 15px;border-radius:10px;border:1px solid rgba(255,255,255,.95);background:linear-gradient(180deg,rgba(255,255,255,.95),rgba(226,244,255,.7));box-shadow:0 6px 16px rgba(24,74,116,.12)">
+            <div style="width:34px;height:34px;border-radius:50%;background:radial-gradient(circle at 32% 26%,#ffffff,#a9ef92 45%,#39a022);box-shadow:0 0 12px rgba(90,200,110,.6);animation:khBreathe 3.6s ease-in-out infinite"></div>
+            <div>
+              <div style="font-size:11px;color:#4b7b96;letter-spacing:.04em;text-transform:uppercase">Stack health</div>
+              <div style="font-size:16px;color:#12506f;font-weight:600">11 of 11 checks green</div>
+              <div style="font-size:11px;color:#5f8ba3">khctl verify · 3 minutes ago</div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;padding:13px 15px;border-radius:10px;border:1px solid rgba(255,255,255,.95);background:linear-gradient(180deg,rgba(255,255,255,.95),rgba(226,244,255,.7));box-shadow:0 6px 16px rgba(24,74,116,.12)">
+            <div style="width:34px;height:34px;border-radius:50%;background:radial-gradient(circle at 32% 26%,#ffffff,#bfe4fa 45%,#2f8fd0);box-shadow:0 0 12px rgba(90,170,230,.55);animation:khBreathe 4.4s ease-in-out infinite"></div>
+            <div>
+              <div style="font-size:11px;color:#4b7b96;letter-spacing:.04em;text-transform:uppercase">Documents landed</div>
+              <div style="font-size:16px;color:#12506f;font-weight:600">{{ landed }} <span style="font-size:12px;font-weight:400;color:#5f8ba3">of 4,376</span></div>
+              <div style="font-size:11px;color:#5f8ba3">3 sources sweeping</div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;padding:13px 15px;border-radius:10px;border:1px solid rgba(255,255,255,.95);background:linear-gradient(180deg,rgba(255,255,255,.95),rgba(255,247,225,.75));box-shadow:0 6px 16px rgba(24,74,116,.12)">
+            <div style="width:34px;height:34px;border-radius:50%;background:radial-gradient(circle at 32% 26%,#ffffff,#ffd98a 45%,#e39b1c);box-shadow:0 0 12px rgba(230,175,60,.6);animation:khBreathe 5s ease-in-out infinite"></div>
+            <div>
+              <div style="font-size:11px;color:#7d6633;letter-spacing:.04em;text-transform:uppercase">Waiting on a human</div>
+              <div style="font-size:16px;color:#6b4c0d;font-weight:600">1,204 items</div>
+              <div style="font-size:11px;color:#8a7442">1,172 merges · 29 quarantined · 3 flagged</div>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;padding:13px 15px;border-radius:10px;border:1px solid rgba(255,255,255,.95);background:linear-gradient(180deg,rgba(255,255,255,.95),rgba(226,244,255,.7));box-shadow:0 6px 16px rgba(24,74,116,.12)">
+            <div style="width:34px;height:34px;border-radius:50%;background:radial-gradient(circle at 32% 26%,#ffffff,#c9c6ff 45%,#6b5fd0);box-shadow:0 0 12px rgba(130,120,220,.5);animation:khBreathe 4s ease-in-out infinite"></div>
+            <div>
+              <div style="font-size:11px;color:#4b7b96;letter-spacing:.04em;text-transform:uppercase">Serving layer</div>
+              <div style="font-size:16px;color:#12506f;font-weight:600">p95 {{ p95 }} ms</div>
+              <div style="font-size:11px;color:#5f8ba3">budget 300 ms · read-only channel</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="padding:16px 18px 18px;border-radius:12px;border:1px solid rgba(255,255,255,.95);background:linear-gradient(180deg,rgba(255,255,255,.92),rgba(222,242,254,.72));box-shadow:0 10px 26px rgba(24,74,116,.14)">
+          <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:4px">
+            <div style="font-size:13px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#1c5678">The pipeline</div>
+            <div style="font-size:12px;color:#5f8ba3">near-real-time · refreshed every {{ refreshLabel }}</div>
+          </div>
+          <div style="font-size:12px;color:#4a7c96;margin-bottom:16px">{{ pipelineStatus }}</div>
+
+          <div style="display:grid;grid-template-columns:1fr 34px 1fr 34px 1fr 34px 1fr 34px 1fr;align-items:stretch;gap:0">
+
+            <div style="padding:14px;border-radius:10px;border:1px solid rgba(255,255,255,.95);background:linear-gradient(180deg,#ffffff,#eaf7ff);box-shadow:0 4px 12px rgba(24,74,116,.1)">
+              <div style="display:flex;align-items:center;gap:9px;margin-bottom:9px">
+                <div style="width:22px;height:22px;border-radius:50%;background:radial-gradient(circle at 32% 26%,#ffffff,#bfe4fa 46%,#2f8fd0);box-shadow:0 0 9px rgba(90,170,230,.7)"></div>
+                <div style="font-size:13px;font-weight:700;color:#12506f">Capture</div>
+              </div>
+              <div style="font-size:26px;font-weight:300;color:#0d4667;line-height:1">1,318</div>
+              <div style="font-size:11px;color:#5f8ba3;margin-bottom:9px">documents landed, WORM</div>
+              <div style="position:relative;height:14px;border-radius:7px;overflow:hidden;border:1px solid #8fb6cf;background:linear-gradient(180deg,#e6f1f7,#fbfdff)">
+                <div style="position:absolute;inset:0 26% 0 0;background:linear-gradient(180deg,#9ff07f,#4cae2e 46%,#3d9a24 54%,#86e065)"></div>
+                <div style="position:absolute;top:0;bottom:0;left:0;width:22%;background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.85),rgba(255,255,255,0));animation:khShine 2.6s ease-in-out infinite"></div>
+              </div>
+              <div style="font-size:11px;color:#3e7f52;margin-top:7px">in flight: 22 items · page 14 of 22</div>
+            </div>
+            <div style="align-self:center;height:7px;margin:0 3px;border-radius:4px;background-image:repeating-linear-gradient(90deg,rgba(255,255,255,.95) 0 8px,rgba(112,182,224,.4) 8px 24px);background-size:24px 100%;animation:khSweep 1.1s linear infinite"></div>
+
+            <div style="padding:14px;border-radius:10px;border:1px solid rgba(255,255,255,.95);background:linear-gradient(180deg,#ffffff,#eaf7ff);box-shadow:0 4px 12px rgba(24,74,116,.1)">
+              <div style="display:flex;align-items:center;gap:9px;margin-bottom:9px">
+                <div style="width:22px;height:22px;border-radius:50%;background:radial-gradient(circle at 32% 26%,#ffffff,#bfe4fa 46%,#2f8fd0);box-shadow:0 0 9px rgba(90,170,230,.7)"></div>
+                <div style="font-size:13px;font-weight:700;color:#12506f">Process</div>
+              </div>
+              <div style="font-size:26px;font-weight:300;color:#0d4667;line-height:1">1,244</div>
+              <div style="font-size:11px;color:#5f8ba3;margin-bottom:9px">parsed · chunked · embedded</div>
+              <div style="position:relative;height:14px;border-radius:7px;overflow:hidden;border:1px solid #8fb6cf;background:linear-gradient(180deg,#e6f1f7,#fbfdff)">
+                <div style="position:absolute;inset:0 32% 0 0;background:linear-gradient(180deg,#9ff07f,#4cae2e 46%,#3d9a24 54%,#86e065)"></div>
+                <div style="position:absolute;top:0;bottom:0;left:0;width:22%;background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.85),rgba(255,255,255,0));animation:khShine 2.6s ease-in-out .3s infinite"></div>
+              </div>
+              <div style="font-size:11px;color:#3e7f52;margin-top:7px">queue depth 74 · bge-m3 1024-dim</div>
+            </div>
+            <div style="align-self:center;height:7px;margin:0 3px;border-radius:4px;background-image:repeating-linear-gradient(90deg,rgba(255,255,255,.95) 0 8px,rgba(112,182,224,.4) 8px 24px);background-size:24px 100%;animation:khSweep 1.1s linear .2s infinite"></div>
+
+            <div style="padding:14px;border-radius:10px;border:1px solid rgba(255,255,255,.95);background:linear-gradient(180deg,#ffffff,#eaf7ff);box-shadow:0 4px 12px rgba(24,74,116,.1)">
+              <div style="display:flex;align-items:center;gap:9px;margin-bottom:9px">
+                <div style="width:22px;height:22px;border-radius:50%;background:radial-gradient(circle at 32% 26%,#ffffff,#bfe4fa 46%,#2f8fd0);box-shadow:0 0 9px rgba(90,170,230,.7)"></div>
+                <div style="font-size:13px;font-weight:700;color:#12506f">Extract</div>
+              </div>
+              <div style="font-size:26px;font-weight:300;color:#0d4667;line-height:1">1,109</div>
+              <div style="font-size:11px;color:#5f8ba3;margin-bottom:9px">documents · 9,842 facts staged</div>
+              <div style="position:relative;height:14px;border-radius:7px;overflow:hidden;border:1px solid #8fb6cf;background:linear-gradient(180deg,#e6f1f7,#fbfdff)">
+                <div style="position:absolute;inset:0 42% 0 0;background:linear-gradient(180deg,#9ff07f,#4cae2e 46%,#3d9a24 54%,#86e065)"></div>
+                <div style="position:absolute;top:0;bottom:0;left:0;width:22%;background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.85),rgba(255,255,255,0));animation:khShine 2.6s ease-in-out .6s infinite"></div>
+              </div>
+              <div style="font-size:11px;color:#a5761b;margin-top:7px">29 quarantined · qwen3.6 fp16</div>
+            </div>
+            <div style="align-self:center;height:7px;margin:0 3px;border-radius:4px;background-image:repeating-linear-gradient(90deg,rgba(255,255,255,.95) 0 8px,rgba(112,182,224,.4) 8px 24px);background-size:24px 100%;animation:khSweep 1.1s linear .4s infinite"></div>
+
+            <div style="padding:14px;border-radius:10px;border:1px solid rgba(255,214,120,.9);background:linear-gradient(180deg,#fffdf6,#fff2d8);box-shadow:0 4px 12px rgba(24,74,116,.1)">
+              <div style="display:flex;align-items:center;gap:9px;margin-bottom:9px">
+                <div style="width:22px;height:22px;border-radius:50%;background:radial-gradient(circle at 32% 26%,#ffffff,#ffd98a 46%,#e39b1c);box-shadow:0 0 9px rgba(230,175,60,.75);animation:khBreathe 2.8s ease-in-out infinite"></div>
+                <div style="font-size:13px;font-weight:700;color:#6b4c0d">Resolve</div>
+              </div>
+              <div style="font-size:26px;font-weight:300;color:#6b4c0d;line-height:1">1,038</div>
+              <div style="font-size:11px;color:#8a7442;margin-bottom:9px">mentions swept this hour</div>
+              <div style="position:relative;height:14px;border-radius:7px;overflow:hidden;border:1px solid #d3ab5c;background:linear-gradient(180deg,#fdf3dd,#fffdf7)">
+                <div style="position:absolute;inset:0 55% 0 0;background:linear-gradient(180deg,#ffd98a,#e8a92a 46%,#d1951a 54%,#ffce6d)"></div>
+                <div style="position:absolute;top:0;bottom:0;left:0;width:22%;background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.85),rgba(255,255,255,0));animation:khShine 2.6s ease-in-out .9s infinite"></div>
+              </div>
+              <div style="font-size:11px;color:#a5761b;margin-top:7px">1,172 held for review — not merged</div>
+            </div>
+            <div style="align-self:center;height:7px;margin:0 3px;border-radius:4px;background-image:repeating-linear-gradient(90deg,rgba(255,255,255,.95) 0 8px,rgba(112,182,224,.4) 8px 24px);background-size:24px 100%;animation:khSweep 1.1s linear .6s infinite"></div>
+
+            <div style="padding:14px;border-radius:10px;border:1px solid rgba(255,255,255,.95);background:linear-gradient(180deg,#f6fffa,#e2f8ec);box-shadow:0 4px 12px rgba(24,74,116,.1)">
+              <div style="display:flex;align-items:center;gap:9px;margin-bottom:9px">
+                <div style="width:22px;height:22px;border-radius:50%;background:radial-gradient(circle at 32% 26%,#ffffff,#a9ef92 46%,#39a022);box-shadow:0 0 9px rgba(90,200,110,.75)"></div>
+                <div style="font-size:13px;font-weight:700;color:#186344">Facts</div>
+              </div>
+              <div style="font-size:26px;font-weight:300;color:#186344;line-height:1">{{ facts }}</div>
+              <div style="font-size:11px;color:#4b8a6d;margin-bottom:9px">promoted &amp; servable</div>
+              <div style="position:relative;height:14px;border-radius:7px;overflow:hidden;border:1px solid #7fbf9a;background:linear-gradient(180deg,#e6f7ee,#fbfffd)">
+                <div style="position:absolute;inset:0 18% 0 0;background:linear-gradient(180deg,#9ff07f,#4cae2e 46%,#3d9a24 54%,#86e065)"></div>
+                <div style="position:absolute;top:0;bottom:0;left:0;width:22%;background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.85),rgba(255,255,255,0));animation:khShine 2.6s ease-in-out 1.2s infinite"></div>
+              </div>
+              <div style="font-size:11px;color:#3e7f52;margin-top:7px">7,105 confident · 2,190 low-confidence</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1.15fr .85fr;gap:16px">
+
+          <div style="padding:16px 18px;border-radius:12px;border:1px solid rgba(255,255,255,.95);background:linear-gradient(180deg,rgba(255,255,255,.94),rgba(230,246,255,.7));box-shadow:0 10px 26px rgba(24,74,116,.12)">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+              <div style="font-size:13px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#1c5678">Per-source progress</div>
+              <div style="font-size:11px;color:#5f8ba3">pause / resume are operator actions</div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:14px">
+              <div>
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:7px">
+                  <div style="width:16px;height:16px;border-radius:4px;background:radial-gradient(circle at 30% 26%,#ffffff,#9fd8f7 50%,#2b7fbd)"></div>
+                  <div style="font-size:13px;color:#12506f;font-weight:600">msgraph-files · SharePoint “Quality &amp; Regulatory”</div>
+                  <div style="font-size:11px;color:#3e7f52;padding:2px 8px;border-radius:8px;background:linear-gradient(180deg,#e8ffe6,#c8f2c0);border:1px solid #8fce87">pull &amp; watch</div>
+                  <div style="flex:1"></div>
+                  <div style="font-size:12px;color:#0d4667;font-family:Consolas,'Lucida Console',monospace">1,240 / 3,000</div>
+                </div>
+                <div style="position:relative;height:20px;border-radius:10px;overflow:hidden;border:1px solid #8fb6cf;background:linear-gradient(180deg,#e6f1f7,#fbfdff);box-shadow:0 1px 3px rgba(30,90,130,.18) inset">
+                  <div style="position:absolute;inset:0 59% 0 0;background:linear-gradient(180deg,#9ff07f,#4cae2e 46%,#3d9a24 54%,#86e065);box-shadow:0 1px 0 rgba(255,255,255,.7) inset"></div>
+                  <div style="position:absolute;top:0;bottom:0;left:0;width:18%;background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.9),rgba(255,255,255,0));animation:khShine 2.2s ease-in-out infinite"></div>
+                </div>
+                <div style="display:flex;align-items:center;gap:10px;margin-top:7px">
+                  <div style="font-size:11px;color:#4a7c96">delta cursor advancing · last page 41s ago · 0 errors</div>
+                  <div style="flex:1"></div>
+                  <div style="cursor:pointer;font-size:11px;color:#0f4b70;padding:4px 12px;border-radius:11px;border:1px solid #8ab6d6;background:linear-gradient(180deg,#ffffff,#e4f3fd 48%,#cbe8fa 52%,#f2fbff)" style-hover="background:linear-gradient(180deg,#ffffff,#f0f9ff 48%,#ddf0fd 52%,#ffffff)">Pause</div>
+                  <div style="cursor:pointer;font-size:11px;color:#0f4b70;padding:4px 12px;border-radius:11px;border:1px solid #8ab6d6;background:linear-gradient(180deg,#ffffff,#e4f3fd 48%,#cbe8fa 52%,#f2fbff)" style-hover="background:linear-gradient(180deg,#ffffff,#f0f9ff 48%,#ddf0fd 52%,#ffffff)">Open stage detail</div>
+                </div>
+              </div>
+
+              <div>
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:7px">
+                  <div style="width:16px;height:16px;border-radius:4px;background:radial-gradient(circle at 30% 26%,#ffffff,#9fd8f7 50%,#2b7fbd)"></div>
+                  <div style="font-size:13px;color:#12506f;font-weight:600">fs-watch · /srv/pilot_sops</div>
+                  <div style="font-size:11px;color:#3e7f52;padding:2px 8px;border-radius:8px;background:linear-gradient(180deg,#e8ffe6,#c8f2c0);border:1px solid #8fce87">watch folder</div>
+                  <div style="flex:1"></div>
+                  <div style="font-size:12px;color:#0d4667;font-family:Consolas,'Lucida Console',monospace">78 / 78</div>
+                </div>
+                <div style="position:relative;height:20px;border-radius:10px;overflow:hidden;border:1px solid #8fb6cf;background:linear-gradient(180deg,#e6f1f7,#fbfdff);box-shadow:0 1px 3px rgba(30,90,130,.18) inset">
+                  <div style="position:absolute;inset:0;background:linear-gradient(180deg,#9ff07f,#4cae2e 46%,#3d9a24 54%,#86e065)"></div>
+                </div>
+                <div style="font-size:11px;color:#4a7c96;margin-top:7px">idle · re-sweep every 5 min · last sweep was a no-op (idempotent)</div>
+              </div>
+
+              <div>
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:7px">
+                  <div style="width:16px;height:16px;border-radius:4px;background:radial-gradient(circle at 30% 26%,#ffffff,#ffd08a 50%,#d98c17)"></div>
+                  <div style="font-size:13px;color:#6b4c0d;font-weight:600">msgraph-files · SharePoint “Manufacturing Ops”</div>
+                  <div style="font-size:11px;color:#8a4b00;padding:2px 8px;border-radius:8px;background:linear-gradient(180deg,#ffeec2,#ffd98a);border:1px solid #d9a13c">degraded</div>
+                  <div style="flex:1"></div>
+                  <div style="font-size:12px;color:#6b4c0d;font-family:Consolas,'Lucida Console',monospace">412 / 1,298</div>
+                </div>
+                <div style="position:relative;height:20px;border-radius:10px;overflow:hidden;border:1px solid #d3ab5c;background:linear-gradient(180deg,#fdf3dd,#fffdf7);box-shadow:0 1px 3px rgba(120,90,20,.16) inset">
+                  <div style="position:absolute;inset:0 68% 0 0;background:linear-gradient(180deg,#ffd98a,#e8a92a 46%,#d1951a 54%,#ffce6d)"></div>
+                  <div style="position:absolute;top:0;bottom:0;left:32%;width:6px;background:rgba(210,150,30,.5);animation:khBlink 1.4s ease-in-out infinite"></div>
+                </div>
+                <div style="display:flex;align-items:center;gap:10px;margin-top:7px">
+                  <div style="font-size:11px;color:#a5761b">stalled — Graph returned 429, honoring Retry-After (12s) · 3 retries endured</div>
+                  <div style="flex:1"></div>
+                  <div style="cursor:pointer;font-size:11px;color:#7d3d00;padding:4px 12px;border-radius:11px;border:1px solid #d9a13c;background:linear-gradient(180deg,#fffaf0,#ffeec2 48%,#ffe0a0 52%,#fff6e2)">Retry now</div>
+                </div>
+              </div>
+            </div>
+
+            <div style="margin-top:16px;display:flex;align-items:flex-end;gap:3px;height:56px;padding:10px 12px;border-radius:9px;background:linear-gradient(180deg,rgba(233,247,255,.9),rgba(255,255,255,.8));border:1px solid rgba(255,255,255,.95)">
+              <sc-for list="{{ bars }}" as="b" hint-placeholder-count="28">
+                <div style="flex:1;border-radius:2px 2px 0 0;background:linear-gradient(180deg,#8fd8ff,#2f8fd0);opacity:.85;height:{{ b }}"></div>
+              </sc-for>
+            </div>
+            <div style="font-size:11px;color:#5f8ba3;margin-top:6px">throughput, documents/min · last 28 minutes · now {{ perMin }}/min</div>
+          </div>
+
+          <div style="padding:16px 18px;border-radius:12px;border:1px solid rgba(255,255,255,.95);background:linear-gradient(180deg,rgba(255,255,255,.94),rgba(230,246,255,.7));box-shadow:0 10px 26px rgba(24,74,116,.12);display:flex;flex-direction:column">
+            <div style="display:flex;align-items:center;gap:9px;margin-bottom:12px">
+              <div style="width:10px;height:10px;border-radius:50%;background:radial-gradient(circle at 32% 28%,#ffffff,#9de88a 48%,#3ba024);animation:khBlink 1.6s ease-in-out infinite"></div>
+              <div style="font-size:13px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#1c5678">Activity</div>
+              <div style="font-size:11px;color:#5f8ba3">what the system is doing right now</div>
+            </div>
+            <div style="flex:1;display:flex;flex-direction:column;gap:6px;font-family:Consolas,'Lucida Console',monospace;font-size:11.5px">
+              <sc-for list="{{ feed }}" as="line" hint-placeholder-count="9">
+                <div style="display:flex;gap:9px;padding:7px 9px;border-radius:7px;background:rgba(255,255,255,.72);border:1px solid rgba(190,225,245,.7)">
+                  <div style="color:#7fa2b6;flex:none">{{ line.time }}</div>
+                  <div style="color:#0d4667">{{ line.text }}</div>
+                </div>
+              </sc-for>
+            </div>
+            <div style="margin-top:12px;padding-top:11px;border-top:1px solid rgba(160,205,235,.55);font-size:11px;color:#4a7c96">Reads come from the read-only serving layer. Pause, retry and review decisions travel the separate operator channel.</div>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ isSources }}" hint-placeholder-val="{{ false }}">
+      <div style="display:grid;grid-template-columns:1.1fr .9fr;gap:16px">
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div style="padding:16px 18px;border-radius:12px;border:1px solid rgba(255,255,255,.95);background:linear-gradient(180deg,rgba(255,255,255,.94),rgba(230,246,255,.7));box-shadow:0 10px 26px rgba(24,74,116,.12)">
+            <div style="font-size:13px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#1c5678;margin-bottom:14px">Connected sources</div>
+
+            <div style="display:flex;flex-direction:column;gap:11px">
+              <div style="padding:13px 15px;border-radius:10px;border:1px solid rgba(150,215,160,.8);background:linear-gradient(180deg,#fbfffc,#e9f9ee)">
+                <div style="display:flex;align-items:center;gap:10px">
+                  <div style="width:26px;height:26px;border-radius:6px;background:radial-gradient(circle at 30% 26%,#ffffff,#9fd8f7 50%,#2b7fbd);box-shadow:0 1px 3px rgba(20,70,110,.3)"></div>
+                  <div style="font-size:14px;color:#12506f;font-weight:600">msgraph-files</div>
+                  <div style="font-size:11px;color:#5f8ba3">SharePoint &amp; OneDrive · pull-and-watch</div>
+                  <div style="flex:1"></div>
+                  <div style="display:flex;align-items:center;gap:7px;font-size:12px;color:#1c6b3f;padding:3px 11px;border-radius:11px;background:linear-gradient(180deg,#e8ffe6,#c8f2c0);border:1px solid #8fce87">Authorized</div>
+                </div>
+                <div style="margin-top:10px;display:grid;grid-template-columns:repeat(3,1fr);gap:10px;font-size:11.5px;color:#4a7c96">
+                  <div>Admin consent granted<br /><span style="color:#12506f">24 Jul 2026 · by IT admin</span></div>
+                  <div>Credential<br /><span style="color:#12506f">held in vault · never shown here</span></div>
+                  <div>Scope<br /><span style="color:#12506f">3 of 14 SharePoint sites</span></div>
+                </div>
+                <div style="margin-top:11px;display:flex;gap:8px">
+                  <div style="cursor:pointer;font-size:11px;color:#0f4b70;padding:5px 13px;border-radius:12px;border:1px solid #8ab6d6;background:linear-gradient(180deg,#ffffff,#e4f3fd 48%,#cbe8fa 52%,#f2fbff)">Edit site scope</div>
+                  <div style="cursor:pointer;font-size:11px;color:#0f4b70;padding:5px 13px;border-radius:12px;border:1px solid #8ab6d6;background:linear-gradient(180deg,#ffffff,#e4f3fd 48%,#cbe8fa 52%,#f2fbff)">Re-run authorization</div>
+                  <div style="cursor:pointer;font-size:11px;color:#0f4b70;padding:5px 13px;border-radius:12px;border:1px solid #8ab6d6;background:linear-gradient(180deg,#ffffff,#e4f3fd 48%,#cbe8fa 52%,#f2fbff)">Pause ingestion</div>
+                </div>
+              </div>
+
+              <div style="padding:13px 15px;border-radius:10px;border:1px solid rgba(150,215,160,.8);background:linear-gradient(180deg,#fbfffc,#e9f9ee)">
+                <div style="display:flex;align-items:center;gap:10px">
+                  <div style="width:26px;height:26px;border-radius:6px;background:radial-gradient(circle at 30% 26%,#ffffff,#c9e9a8 50%,#5ca02b);box-shadow:0 1px 3px rgba(20,70,110,.3)"></div>
+                  <div style="font-size:14px;color:#12506f;font-weight:600">fs-watch</div>
+                  <div style="font-size:11px;color:#5f8ba3">/srv/pilot_sops · local folder</div>
+                  <div style="flex:1"></div>
+                  <div style="font-size:12px;color:#1c6b3f;padding:3px 11px;border-radius:11px;background:linear-gradient(180deg,#e8ffe6,#c8f2c0);border:1px solid #8fce87">Healthy</div>
+                </div>
+                <div style="margin-top:9px;font-size:11.5px;color:#4a7c96">No credential required. 78 documents landed, POSIX ACLs normalized.</div>
+              </div>
+
+              <div style="padding:13px 15px;border-radius:10px;border:1px solid rgba(215,175,90,.8);background:linear-gradient(180deg,#fffdf6,#fff3da)">
+                <div style="display:flex;align-items:center;gap:10px">
+                  <div style="width:26px;height:26px;border-radius:6px;background:radial-gradient(circle at 30% 26%,#ffffff,#ffd08a 50%,#d98c17);box-shadow:0 1px 3px rgba(20,70,110,.3)"></div>
+                  <div style="font-size:14px;color:#6b4c0d;font-weight:600">msgraph-mail</div>
+                  <div style="font-size:11px;color:#8a7442">Exchange Online · same Entra app family</div>
+                  <div style="flex:1"></div>
+                  <div style="font-size:12px;color:#8a4b00;padding:3px 11px;border-radius:11px;background:linear-gradient(180deg,#ffeec2,#ffd98a);border:1px solid #d9a13c">Consent pending</div>
+                </div>
+                <div style="margin-top:9px;font-size:11.5px;color:#8a7442">Waiting on a tenant admin to grant consent. Nothing will be pulled until they do.</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="padding:16px 18px;border-radius:12px;border:1px solid rgba(255,255,255,.95);background:linear-gradient(180deg,rgba(255,255,255,.94),rgba(230,246,255,.7));box-shadow:0 10px 26px rgba(24,74,116,.12)">
+            <div style="font-size:13px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#1c5678;margin-bottom:6px">Add a source</div>
+            <div style="font-size:12px;color:#4a7c96;margin-bottom:15px">{{ addStatus }}</div>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+              <div style="padding:13px;border-radius:10px;border:1px solid rgba(150,215,160,.85);background:linear-gradient(180deg,#fbfffc,#e9f9ee)">
+                <div style="font-size:11px;color:#1c6b3f;letter-spacing:.04em">STEP 1 · DONE</div>
+                <div style="font-size:13px;color:#12506f;font-weight:600;margin-top:5px">Choose the type</div>
+                <div style="font-size:11px;color:#4a7c96;margin-top:5px">SharePoint (pull-and-watch)</div>
+              </div>
+              <div style="padding:13px;border-radius:10px;border:1px solid rgba(150,215,160,.85);background:linear-gradient(180deg,#fbfffc,#e9f9ee)">
+                <div style="font-size:11px;color:#1c6b3f;letter-spacing:.04em">STEP 2 · DONE</div>
+                <div style="font-size:13px;color:#12506f;font-weight:600;margin-top:5px">Sign in with Microsoft</div>
+                <div style="font-size:11px;color:#4a7c96;margin-top:5px">Admin consent granted, hand-off complete</div>
+              </div>
+              <div style="padding:13px;border-radius:10px;border:1px solid #7fb4d6;background:linear-gradient(180deg,#ffffff,#e2f2fd);box-shadow:0 0 0 3px rgba(120,190,235,.35)">
+                <div style="font-size:11px;color:#0f4b70;letter-spacing:.04em">STEP 3 · NOW</div>
+                <div style="font-size:13px;color:#12506f;font-weight:600;margin-top:5px">Scope what gets ingested</div>
+                <div style="font-size:11px;color:#4a7c96;margin-top:5px">Pick specific sites — never “everything”</div>
+              </div>
+              <div style="padding:13px;border-radius:10px;border:1px solid rgba(180,205,220,.8);background:linear-gradient(180deg,#fbfdff,#eef5fa);opacity:.75">
+                <div style="font-size:11px;color:#5f8ba3;letter-spacing:.04em">STEP 4</div>
+                <div style="font-size:13px;color:#3d6d88;font-weight:600;margin-top:5px">Start the initial pull</div>
+                <div style="font-size:11px;color:#5f8ba3;margin-top:5px">Backfill then ride the delta</div>
+              </div>
+            </div>
+
+            <div style="margin-top:14px;padding:14px;border-radius:10px;border:1px solid rgba(190,225,245,.9);background:rgba(255,255,255,.8)">
+              <div style="font-size:12px;color:#12506f;font-weight:600;margin-bottom:9px">SharePoint sites in this tenant</div>
+              <div style="display:flex;flex-direction:column;gap:6px;font-size:12px;color:#2c688c">
+                <div style="display:flex;align-items:center;gap:9px;padding:6px 9px;border-radius:7px;background:linear-gradient(180deg,#f4fcff,#e6f5ff);border:1px solid #b9dcf1"><div style="width:14px;height:14px;border-radius:3px;background:radial-gradient(circle at 30% 26%,#ffffff,#9de88a 48%,#3ba024)"></div>Quality &amp; Regulatory<div style="flex:1"></div><span style="color:#5f8ba3">3,000 files</span></div>
+                <div style="display:flex;align-items:center;gap:9px;padding:6px 9px;border-radius:7px;background:linear-gradient(180deg,#f4fcff,#e6f5ff);border:1px solid #b9dcf1"><div style="width:14px;height:14px;border-radius:3px;background:radial-gradient(circle at 30% 26%,#ffffff,#9de88a 48%,#3ba024)"></div>Manufacturing Ops<div style="flex:1"></div><span style="color:#5f8ba3">1,298 files</span></div>
+                <div style="display:flex;align-items:center;gap:9px;padding:6px 9px;border-radius:7px;background:linear-gradient(180deg,#f4fcff,#e6f5ff);border:1px solid #b9dcf1"><div style="width:14px;height:14px;border-radius:3px;background:radial-gradient(circle at 30% 26%,#ffffff,#9de88a 48%,#3ba024)"></div>Supplier Documentation<div style="flex:1"></div><span style="color:#5f8ba3">704 files</span></div>
+                <div style="display:flex;align-items:center;gap:9px;padding:6px 9px;border-radius:7px;background:rgba(255,255,255,.7);border:1px solid #d6e6f0;color:#7fa2b6"><div style="width:14px;height:14px;border-radius:3px;border:1px solid #a9c9dd;background:#ffffff"></div>HR — Confidential<div style="flex:1"></div><span>excluded</span></div>
+                <div style="display:flex;align-items:center;gap:9px;padding:6px 9px;border-radius:7px;background:rgba(255,255,255,.7);border:1px solid #d6e6f0;color:#7fa2b6"><div style="width:14px;height:14px;border-radius:3px;border:1px solid #a9c9dd;background:#ffffff"></div>+ 10 more sites<div style="flex:1"></div><span>excluded</span></div>
+              </div>
+              <div style="margin-top:12px;display:flex;gap:9px;align-items:center">
+                <div onClick="{{ startPull }}" style="cursor:pointer;font-size:12.5px;font-weight:600;color:#14532a;padding:8px 20px;border-radius:15px;border:1px solid #62a850;background:linear-gradient(180deg,#f2ffee,#c9f2ba 48%,#9fdf8a 52%,#e2ffd9);box-shadow:0 1px 0 rgba(255,255,255,.9) inset,0 3px 8px rgba(40,120,60,.25)">Start initial pull</div>
+                <div style="cursor:pointer;font-size:12.5px;color:#0f4b70;padding:8px 18px;border-radius:15px;border:1px solid #8ab6d6;background:linear-gradient(180deg,#ffffff,#e4f3fd 48%,#cbe8fa 52%,#f2fbff)">Save scope only</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div style="padding:16px 18px;border-radius:12px;border:1px solid rgba(255,255,255,.95);background:linear-gradient(180deg,rgba(255,255,255,.94),rgba(226,240,255,.7));box-shadow:0 10px 26px rgba(24,74,116,.12)">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:11px">
+              <div style="width:26px;height:26px;border-radius:50%;background:radial-gradient(circle at 32% 26%,#ffffff,#c9c6ff 45%,#6b5fd0);box-shadow:0 0 10px rgba(130,120,220,.5)"></div>
+              <div style="font-size:13px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#1c5678">The credential never lands here</div>
+            </div>
+            <div style="font-size:12.5px;color:#3d6d88;line-height:1.6">This console starts the sign-in, and Microsoft hands the result straight to the vault. There is no field on this screen that can hold a secret, and no screen that can read one back.</div>
+            <div style="margin-top:13px;display:flex;align-items:center;gap:9px;font-family:Consolas,'Lucida Console',monospace;font-size:11px;color:#0d4667;padding:9px 11px;border-radius:8px;background:rgba(255,255,255,.8);border:1px solid rgba(190,225,245,.9)">
+              <div style="width:9px;height:9px;border-radius:50%;background:radial-gradient(circle at 32% 28%,#ffffff,#9de88a 48%,#3ba024)"></div>
+              vault: tenants/ops/sources/msgraph-files
+            </div>
+            <div style="margin-top:7px;font-size:11px;color:#5f8ba3">Reference only. Rotation happens in the vault; this source picks up the new secret on its next sweep.</div>
+          </div>
+
+          <div style="padding:16px 18px;border-radius:12px;border:1px solid rgba(255,255,255,.95);background:linear-gradient(180deg,rgba(255,255,255,.94),rgba(230,246,255,.7));box-shadow:0 10px 26px rgba(24,74,116,.12)">
+            <div style="font-size:13px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#1c5678;margin-bottom:12px">Access health</div>
+            <div style="display:flex;flex-direction:column;gap:9px;font-size:12px">
+              <div style="display:flex;align-items:center;gap:10px;color:#2c688c"><div style="width:11px;height:11px;border-radius:50%;background:radial-gradient(circle at 32% 28%,#ffffff,#9de88a 48%,#3ba024)"></div>Token mint · succeeding, cached in memory only</div>
+              <div style="display:flex;align-items:center;gap:10px;color:#2c688c"><div style="width:11px;height:11px;border-radius:50%;background:radial-gradient(circle at 32% 28%,#ffffff,#9de88a 48%,#3ba024)"></div>Permissions · Files.Read.All, Sites.Read.All</div>
+              <div style="display:flex;align-items:center;gap:10px;color:#8a4b00"><div style="width:11px;height:11px;border-radius:50%;background:radial-gradient(circle at 32% 28%,#ffffff,#ffd98a 48%,#e39b1c);animation:khBlink 1.8s ease-in-out infinite"></div>Client secret expires in 68 days — plan the rotation</div>
+              <div style="display:flex;align-items:center;gap:10px;color:#2c688c"><div style="width:11px;height:11px;border-radius:50%;background:radial-gradient(circle at 32% 28%,#ffffff,#9de88a 48%,#3ba024)"></div>Delta cursors · 2 drives current, 1 resyncing</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ isReview }}" hint-placeholder-val="{{ false }}">
+      <div style="display:grid;grid-template-columns:250px 1fr 260px;gap:14px">
+
+        <div style="padding:14px;border-radius:12px;border:1px solid rgba(255,255,255,.95);background:linear-gradient(180deg,rgba(255,255,255,.94),rgba(230,246,255,.7));box-shadow:0 10px 26px rgba(24,74,116,.12)">
+          <div style="font-size:13px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#1c5678;margin-bottom:11px">Queue</div>
+          <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:13px;font-size:12px">
+            <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:9px;border:1px solid #7fb4d6;background:linear-gradient(180deg,#ffffff,#dff0fc);color:#0f4b70;font-weight:600">Ambiguous merges<div style="flex:1"></div>1,172</div>
+            <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:9px;border:1px solid #cfe3f0;background:rgba(255,255,255,.7);color:#3d6d88">Quarantined extractions<div style="flex:1"></div>29</div>
+            <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:9px;border:1px solid #cfe3f0;background:rgba(255,255,255,.7);color:#3d6d88">Flagged documents<div style="flex:1"></div>3</div>
+          </div>
+          <div style="font-size:11px;color:#5f8ba3;margin-bottom:8px">sorted by confidence — least certain first</div>
+          <div style="display:flex;flex-direction:column;gap:5px">
+            <div style="padding:9px 10px;border-radius:9px;border:1px solid #7fb4d6;background:linear-gradient(180deg,#ffffff,#e6f4fe);box-shadow:0 2px 6px rgba(30,90,130,.14)">
+              <div style="font-size:12px;color:#0d4667;font-weight:600">Zenith Widgets</div>
+              <div style="font-size:11px;color:#5f8ba3">merge · 0.62 gray band</div>
+            </div>
+            <div style="padding:9px 10px;border-radius:9px;border:1px solid #dbe9f2;background:rgba(255,255,255,.65)">
+              <div style="font-size:12px;color:#2c688c">Northvale Labs</div>
+              <div style="font-size:11px;color:#7fa2b6">merge · 0.64 gray band</div>
+            </div>
+            <div style="padding:9px 10px;border-radius:9px;border:1px solid #dbe9f2;background:rgba(255,255,255,.65)">
+              <div style="font-size:12px;color:#2c688c">predicate “retained_for”</div>
+              <div style="font-size:11px;color:#7fa2b6">quarantine · 3 occurrences</div>
+            </div>
+            <div style="padding:9px 10px;border-radius:9px;border:1px solid #dbe9f2;background:rgba(255,255,255,.65)">
+              <div style="font-size:12px;color:#2c688c">A. Okafor / A. Okafor-Reid</div>
+              <div style="font-size:11px;color:#7fa2b6">merge · 0.66 gray band</div>
+            </div>
+            <div style="padding:9px 10px;border-radius:9px;border:1px solid #dbe9f2;background:rgba(255,255,255,.65)">
+              <div style="font-size:12px;color:#2c688c">SOP-231 rev C</div>
+              <div style="font-size:11px;color:#7fa2b6">flagged at capture</div>
+            </div>
+          </div>
+          <div style="margin-top:12px;padding-top:11px;border-top:1px solid rgba(160,205,235,.55);font-size:11px;color:#4a7c96">Select several with Shift to decide them as a batch.</div>
+        </div>
+
+        <div style="padding:16px 18px;border-radius:12px;border:1px solid rgba(255,255,255,.95);background:linear-gradient(180deg,rgba(255,255,255,.95),rgba(232,247,255,.75));box-shadow:0 10px 26px rgba(24,74,116,.12)">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:4px">
+            <div style="font-size:16px;color:#0d4667;font-weight:600">Are these the same organization?</div>
+            <div style="flex:1"></div>
+            <div style="font-size:11px;color:#5f8ba3">item 1 of 1,204</div>
+          </div>
+          <div style="font-size:12px;color:#4a7c96;margin-bottom:14px">The resolver stopped here on purpose: the score fell in the gray band and no identifier agreed.</div>
+
+          <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-radius:10px;background:linear-gradient(180deg,#fffdf4,#fff2d4);border:1px solid #e3c383;margin-bottom:14px">
+            <div style="font-size:12px;color:#6b4c0d;font-weight:600">Confidence 0.62</div>
+            <div style="position:relative;flex:1;height:14px;border-radius:7px;overflow:hidden;border:1px solid #d3ab5c;background:linear-gradient(90deg,#ffd9d0 0%,#ffe9b8 42%,#ffe9b8 72%,#d8f2c8 100%)">
+              <div style="position:absolute;top:-2px;bottom:-2px;left:62%;width:3px;background:#6b4c0d;box-shadow:0 0 6px rgba(107,76,13,.6)"></div>
+            </div>
+            <div style="font-size:11px;color:#8a7442">auto-merge needs 0.86 + a corroborating identifier or graph edge</div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+            <div style="padding:14px;border-radius:10px;border:1px solid rgba(190,225,245,.95);background:linear-gradient(180deg,#ffffff,#f2faff)">
+              <div style="font-size:11px;color:#5f8ba3;letter-spacing:.04em;text-transform:uppercase;margin-bottom:6px">Candidate A · existing entity</div>
+              <div style="font-size:15px;color:#0d4667;font-weight:600">Zenith Widgets</div>
+              <div style="font-size:11.5px;color:#4a7c96;margin-top:3px">Organization · 41 facts · first seen 12 Mar 2025</div>
+              <div style="margin-top:11px;display:flex;flex-direction:column;gap:5px;font-size:11.5px;color:#2c688c">
+                <div>domain · zenithwidgets.com</div>
+                <div>tax_id · <span style="color:#7fa2b6">none recorded</span></div>
+                <div>aliases · Zenith, Zenith Widgets Co.</div>
+                <div>appears in · 14 documents</div>
+              </div>
+            </div>
+            <div style="padding:14px;border-radius:10px;border:1px solid rgba(190,225,245,.95);background:linear-gradient(180deg,#ffffff,#f2faff)">
+              <div style="font-size:11px;color:#5f8ba3;letter-spacing:.04em;text-transform:uppercase;margin-bottom:6px">Candidate B · new mention</div>
+              <div style="font-size:15px;color:#0d4667;font-weight:600">Zenith Widgets LLC</div>
+              <div style="font-size:11.5px;color:#4a7c96;margin-top:3px">Organization · 1 mention · seen 24 Jul 2026</div>
+              <div style="margin-top:11px;display:flex;flex-direction:column;gap:5px;font-size:11.5px;color:#2c688c">
+                <div>domain · <span style="color:#7fa2b6">none extracted</span></div>
+                <div>tax_id · 88-2019447</div>
+                <div>aliases · —</div>
+                <div>appears in · SOP-014 v2 §5</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px">
+            <div style="padding:13px 14px;border-radius:10px;border:1px solid #a8d9b4;background:linear-gradient(180deg,#fbfffc,#eafaef)">
+              <div style="font-size:12px;font-weight:700;color:#1c6b3f;margin-bottom:8px">Evidence for the same thing</div>
+              <div style="display:flex;flex-direction:column;gap:7px;font-size:11.5px;color:#2f6b4a">
+                <div>Names agree after normalization (difflib 0.94)</div>
+                <div>Both appear in supplier-qualification documents from the same site</div>
+                <div>One shared neighbour in the graph: <span style="color:#12506f">supplies → Botanical Extract Batch</span></div>
+              </div>
+            </div>
+            <div style="padding:13px 14px;border-radius:10px;border:1px solid #e6b6ac;background:linear-gradient(180deg,#fffcfb,#fdeee9)">
+              <div style="font-size:12px;font-weight:700;color:#8c3520;margin-bottom:8px">Evidence against</div>
+              <div style="display:flex;flex-direction:column;gap:7px;font-size:11.5px;color:#8c503f">
+                <div>No identifier overlap — B carries a tax_id A has never had</div>
+                <div>“LLC” suffix could be a distinct legal entity of the same group</div>
+                <div>Adjudicator (qwen3.6) returned same_entity = unsure, 0.58</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top:14px;padding:14px;border-radius:10px;border:1px solid rgba(190,225,245,.95);background:rgba(255,255,255,.85)">
+            <div style="font-size:12px;font-weight:700;color:#1c5678;margin-bottom:9px">The passage that produced candidate B</div>
+            <div style="font-size:13px;color:#1e3f52;line-height:1.65;font-family:Georgia,'Times New Roman',serif">“Finished batches are released only against the certificate of analysis supplied by <span style="background:linear-gradient(180deg,#fff6c9,#ffe98d);padding:1px 4px;border-radius:3px;box-shadow:0 0 0 1px rgba(220,180,60,.6)">Zenith Widgets LLC</span> (tax ID 88-2019447), whose qualification record is retained for seven years.”</div>
+            <div style="margin-top:9px;font-size:11px;color:#5f8ba3">SOP-014 Botanical Extract Batch Release · version 2 · §5 Records · chunk 7 of 13 · <a href="#">open the immutable original</a></div>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div style="padding:15px;border-radius:12px;border:1px solid rgba(255,255,255,.95);background:linear-gradient(180deg,rgba(255,255,255,.95),rgba(230,246,255,.75));box-shadow:0 10px 26px rgba(24,74,116,.12)">
+            <div style="font-size:13px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#1c5678;margin-bottom:12px">Decide</div>
+            <div style="display:flex;flex-direction:column;gap:9px">
+              <div onClick="{{ accept }}" style="cursor:pointer;text-align:center;font-size:13px;font-weight:600;color:#14532a;padding:11px;border-radius:16px;border:1px solid #62a850;background:linear-gradient(180deg,#f2ffee,#c9f2ba 48%,#9fdf8a 52%,#e2ffd9);box-shadow:0 1px 0 rgba(255,255,255,.9) inset,0 3px 8px rgba(40,120,60,.22)">Merge them <span style="font-weight:400;opacity:.7">(A)</span></div>
+              <div onClick="{{ reject }}" style="cursor:pointer;text-align:center;font-size:13px;font-weight:600;color:#0f4b70;padding:11px;border-radius:16px;border:1px solid #8ab6d6;background:linear-gradient(180deg,#ffffff,#e4f3fd 48%,#cbe8fa 52%,#f2fbff);box-shadow:0 1px 0 rgba(255,255,255,.95) inset,0 3px 8px rgba(30,90,130,.16)">Keep separate <span style="font-weight:400;opacity:.7">(R)</span></div>
+              <div onClick="{{ split }}" style="cursor:pointer;text-align:center;font-size:13px;font-weight:600;color:#7d3d00;padding:11px;border-radius:16px;border:1px solid #d9a13c;background:linear-gradient(180deg,#fffaf0,#ffeec2 48%,#ffe0a0 52%,#fff6e2);box-shadow:0 1px 0 rgba(255,255,255,.9) inset,0 3px 8px rgba(150,110,20,.18)">Split an earlier merge <span style="font-weight:400;opacity:.7">(S)</span></div>
+              <div onClick="{{ skip }}" style="cursor:pointer;text-align:center;font-size:12px;color:#3d6d88;padding:9px;border-radius:14px;border:1px solid #cfe3f0;background:rgba(255,255,255,.7)">Skip for now <span style="opacity:.7">(space)</span></div>
+            </div>
+            <div style="margin-top:12px;font-size:11.5px;color:#4a7c96;line-height:1.55">Every merge is reversible. Splitting restores both records and re-resolves the facts that hung off them — nothing is silently joined forever.</div>
+          </div>
+
+          <sc-if value="{{ hasDecision }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:13px 15px;border-radius:12px;border:1px solid #8fce87;background:linear-gradient(180deg,#f4fff0,#dff7d6);box-shadow:0 6px 16px rgba(40,120,60,.15);animation:khGlow 2.4s ease-in-out infinite">
+            <div style="font-size:12px;color:#1c6b3f;font-weight:700;margin-bottom:5px">Recorded</div>
+            <div style="font-size:11.5px;color:#2f6b4a;line-height:1.55">{{ decisionText }}</div>
+          </div>
+          </sc-if>
+
+          <div style="padding:15px;border-radius:12px;border:1px solid rgba(255,255,255,.95);background:linear-gradient(180deg,rgba(255,255,255,.94),rgba(230,246,255,.7));box-shadow:0 10px 26px rgba(24,74,116,.12)">
+            <div style="font-size:13px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#1c5678;margin-bottom:11px">Your session</div>
+            <div style="font-size:26px;font-weight:300;color:#0d4667;line-height:1">{{ cleared }}</div>
+            <div style="font-size:11.5px;color:#5f8ba3;margin-bottom:11px">items cleared today · median 14s each</div>
+            <div style="position:relative;height:14px;border-radius:7px;overflow:hidden;border:1px solid #8fb6cf;background:linear-gradient(180deg,#e6f1f7,#fbfdff)">
+              <div style="position:absolute;inset:0 88% 0 0;background:linear-gradient(180deg,#9ff07f,#4cae2e 46%,#3d9a24 54%,#86e065)"></div>
+              <div style="position:absolute;top:0;bottom:0;left:0;width:20%;background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.85),rgba(255,255,255,0));animation:khShine 3s ease-in-out infinite"></div>
+            </div>
+            <div style="font-size:11px;color:#4a7c96;margin-top:9px">Keyboard only: A merge · R keep separate · S split · space skip. Your hands never need to leave the keys.</div>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ isHealth }}" hint-placeholder-val="{{ false }}">
+      <div style="display:grid;grid-template-columns:1fr 320px;gap:16px">
+        <div style="padding:16px 18px;border-radius:12px;border:1px solid rgba(255,255,255,.95);background:linear-gradient(180deg,rgba(255,255,255,.94),rgba(230,246,255,.7));box-shadow:0 10px 26px rgba(24,74,116,.12)">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+            <div style="font-size:13px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#1c5678">Things that need attention</div>
+            <div style="flex:1"></div>
+            <div style="cursor:pointer;font-size:11px;color:#0f4b70;padding:5px 13px;border-radius:12px;border:1px solid #8ab6d6;background:linear-gradient(180deg,#ffffff,#e4f3fd 48%,#cbe8fa 52%,#f2fbff)">Acknowledge all</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:10px">
+
+            <div style="padding:13px 15px;border-radius:10px;border:1px solid #e0a596;background:linear-gradient(180deg,#fffcfb,#fdece7)">
+              <div style="display:flex;align-items:center;gap:10px">
+                <div style="width:12px;height:12px;border-radius:50%;background:radial-gradient(circle at 32% 28%,#ffffff,#ff9b83 48%,#c53823);box-shadow:0 0 9px rgba(210,70,45,.55);animation:khBlink 1.5s ease-in-out infinite"></div>
+                <div style="font-size:13px;color:#8c3520;font-weight:600">Delta cursor rejected — HTTP 410 resyncRequired</div>
+                <div style="flex:1"></div>
+                <div style="font-size:11px;color:#a4675a;font-family:Consolas,'Lucida Console',monospace">14:02:11</div>
+              </div>
+              <div style="margin-top:7px;font-size:11.5px;color:#8c503f">msgraph-files · drive b!Xk2… · the cursor was reset and the sweep re-ran as a backfill. Landing is content-hashed, so nothing duplicated. No action needed unless it repeats.</div>
+              <div style="margin-top:9px;display:flex;gap:8px">
+                <div style="cursor:pointer;font-size:11px;color:#8c3520;padding:4px 12px;border-radius:11px;border:1px solid #d9a396;background:linear-gradient(180deg,#fffdfc,#fbe3dc)">Acknowledge</div>
+                <div style="cursor:pointer;font-size:11px;color:#0f4b70;padding:4px 12px;border-radius:11px;border:1px solid #8ab6d6;background:linear-gradient(180deg,#ffffff,#e4f3fd 48%,#cbe8fa 52%,#f2fbff)">Open the source</div>
+              </div>
+            </div>
+
+            <div style="padding:13px 15px;border-radius:10px;border:1px solid #e3c383;background:linear-gradient(180deg,#fffdf6,#fff2d8)">
+              <div style="display:flex;align-items:center;gap:10px">
+                <div style="width:12px;height:12px;border-radius:50%;background:radial-gradient(circle at 32% 28%,#ffffff,#ffd98a 48%,#e39b1c)"></div>
+                <div style="font-size:13px;color:#6b4c0d;font-weight:600">Quarantine spike — predicate “retained_for” seen 3× in an hour</div>
+                <div style="flex:1"></div>
+                <div style="font-size:11px;color:#a5761b;font-family:Consolas,'Lucida Console',monospace">13:47:02</div>
+              </div>
+              <div style="margin-top:7px;font-size:11.5px;color:#8a7442">The extractor keeps trying to say something the ontology has no word for (retention periods). This is a modelling gap, not a bug — review it, then decide whether the ontology should grow.</div>
+              <div style="margin-top:9px;display:flex;gap:8px">
+                <div style="cursor:pointer;font-size:11px;color:#7d3d00;padding:4px 12px;border-radius:11px;border:1px solid #d9a13c;background:linear-gradient(180deg,#fffaf0,#ffeec2 48%,#ffe0a0 52%,#fff6e2)">Open in review queue</div>
+              </div>
+            </div>
+
+            <div style="padding:13px 15px;border-radius:10px;border:1px solid #e3c383;background:linear-gradient(180deg,#fffdf6,#fff2d8)">
+              <div style="display:flex;align-items:center;gap:10px">
+                <div style="width:12px;height:12px;border-radius:50%;background:radial-gradient(circle at 32% 28%,#ffffff,#ffd98a 48%,#e39b1c)"></div>
+                <div style="font-size:13px;color:#6b4c0d;font-weight:600">Throttled by Microsoft Graph — 429, Retry-After 12s</div>
+                <div style="flex:1"></div>
+                <div style="font-size:11px;color:#a5761b;font-family:Consolas,'Lucida Console',monospace">13:31:55</div>
+              </div>
+              <div style="margin-top:7px;font-size:11.5px;color:#8a7442">Manufacturing Ops is crawling rather than stalled. 3 retries endured this hour; the sweep will finish, just slower.</div>
+            </div>
+
+            <div style="padding:13px 15px;border-radius:10px;border:1px solid #cfe3f0;background:linear-gradient(180deg,#ffffff,#f2faff)">
+              <div style="display:flex;align-items:center;gap:10px">
+                <div style="width:12px;height:12px;border-radius:50%;background:radial-gradient(circle at 32% 28%,#ffffff,#bfe4fa 48%,#2f8fd0)"></div>
+                <div style="font-size:13px;color:#12506f;font-weight:600">7 extractions grounded without an exact span</div>
+                <div style="flex:1"></div>
+                <div style="font-size:11px;color:#5f8ba3;font-family:Consolas,'Lucida Console',monospace">13:12:40</div>
+              </div>
+              <div style="margin-top:7px;font-size:11.5px;color:#4a7c96">Flagged, not discarded. These facts are served as low-confidence until a human confirms the passage.</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div style="padding:16px 18px;border-radius:12px;border:1px solid rgba(255,255,255,.95);background:linear-gradient(180deg,rgba(255,255,255,.94),rgba(230,246,255,.7));box-shadow:0 10px 26px rgba(24,74,116,.12)">
+            <div style="font-size:13px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#1c5678;margin-bottom:12px">Stack checks</div>
+            <div style="display:flex;flex-direction:column;gap:8px;font-size:12px;color:#2c688c">
+              <div style="display:flex;align-items:center;gap:9px"><div style="width:11px;height:11px;border-radius:50%;background:radial-gradient(circle at 32% 28%,#ffffff,#9de88a 48%,#3ba024)"></div>version integrity</div>
+              <div style="display:flex;align-items:center;gap:9px"><div style="width:11px;height:11px;border-radius:50%;background:radial-gradient(circle at 32% 28%,#ffffff,#9de88a 48%,#3ba024)"></div>database · 16.14, 3 extensions</div>
+              <div style="display:flex;align-items:center;gap:9px"><div style="width:11px;height:11px;border-radius:50%;background:radial-gradient(circle at 32% 28%,#ffffff,#9de88a 48%,#3ba024)"></div>object store · lock enabled</div>
+              <div style="display:flex;align-items:center;gap:9px"><div style="width:11px;height:11px;border-radius:50%;background:radial-gradient(circle at 32% 28%,#ffffff,#9de88a 48%,#3ba024)"></div>vault · unsealed</div>
+              <div style="display:flex;align-items:center;gap:9px"><div style="width:11px;height:11px;border-radius:50%;background:radial-gradient(circle at 32% 28%,#ffffff,#9de88a 48%,#3ba024)"></div>embeddings · bge-m3, 1024-dim</div>
+              <div style="display:flex;align-items:center;gap:9px"><div style="width:11px;height:11px;border-radius:50%;background:radial-gradient(circle at 32% 28%,#ffffff,#9de88a 48%,#3ba024)"></div>extraction · qwen3.6 on GPU</div>
+              <div style="display:flex;align-items:center;gap:9px"><div style="width:11px;height:11px;border-radius:50%;background:radial-gradient(circle at 32% 28%,#ffffff,#9de88a 48%,#3ba024)"></div>no side doors to the database</div>
+              <div style="display:flex;align-items:center;gap:9px"><div style="width:11px;height:11px;border-radius:50%;background:radial-gradient(circle at 32% 28%,#ffffff,#9de88a 48%,#3ba024)"></div>serving boundary · fail-closed</div>
+            </div>
+            <div style="margin-top:12px;font-size:11px;color:#5f8ba3">Last full run 3 minutes ago · 11 of 11 green</div>
+          </div>
+
+          <div style="padding:16px 18px;border-radius:12px;border:1px solid rgba(255,255,255,.95);background:linear-gradient(180deg,rgba(255,255,255,.94),rgba(230,246,255,.7));box-shadow:0 10px 26px rgba(24,74,116,.12)">
+            <div style="font-size:13px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#1c5678;margin-bottom:10px">Recently resolved</div>
+            <div style="font-size:11.5px;color:#4a7c96;line-height:1.7">Vault sealed after a reboot — unsealed by the operator at 09:14.<br />Two documents tombstoned by a delete signal; storm guard at 2 of 10.<br />Editable-install drift on the package version — corrected.</div>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ isTopology }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;flex-direction:column;gap:16px">
+        <div style="display:flex;align-items:center;gap:14px;padding:15px 18px;border-radius:12px;border:1px solid #8fce87;background:linear-gradient(180deg,#f8fffa,#e4f8e9);box-shadow:0 10px 26px rgba(40,120,60,.12)">
+          <div style="width:40px;height:40px;border-radius:50%;background:radial-gradient(circle at 32% 26%,#ffffff,#a9ef92 45%,#39a022);box-shadow:0 0 16px rgba(90,200,110,.6);animation:khBreathe 4s ease-in-out infinite"></div>
+          <div>
+            <div style="font-size:16px;color:#186344;font-weight:600">Appliance — everything runs on this box</div>
+            <div style="font-size:12px;color:#4b8a6d;margin-top:3px">No document, no passage and no embedding leaves the premises. The only outbound connection is the one you can see below.</div>
+          </div>
+          <div style="flex:1"></div>
+          <div style="font-size:11px;color:#4b8a6d;text-align:right">deployment plan<br /><span style="font-family:Consolas,'Lucida Console',monospace;color:#186344">appliance · single box · shape A</span></div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px">
+          <div style="padding:16px;border-radius:12px;border:1px solid rgba(150,215,160,.85);background:linear-gradient(180deg,#fbfffc,#e9f9ee);box-shadow:0 8px 20px rgba(24,74,116,.1)">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><div style="width:24px;height:24px;border-radius:6px;background:radial-gradient(circle at 30% 26%,#ffffff,#a9ef92 50%,#39a022)"></div><div style="font-size:14px;color:#186344;font-weight:600">Storage</div></div>
+            <div style="font-size:13px;color:#12506f;font-weight:600">Local · this box</div>
+            <div style="font-size:11.5px;color:#4a7c96;margin-top:7px;line-height:1.55">SeaweedFS on port 8333. Bucket kh-raw, versioning and object-lock on: originals are written once and never altered.</div>
+          </div>
+          <div style="padding:16px;border-radius:12px;border:1px solid rgba(150,215,160,.85);background:linear-gradient(180deg,#fbfffc,#e9f9ee);box-shadow:0 8px 20px rgba(24,74,116,.1)">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><div style="width:24px;height:24px;border-radius:6px;background:radial-gradient(circle at 30% 26%,#ffffff,#a9ef92 50%,#39a022)"></div><div style="font-size:14px;color:#186344;font-weight:600">Database</div></div>
+            <div style="font-size:13px;color:#12506f;font-weight:600">Local · this box</div>
+            <div style="font-size:11.5px;color:#4a7c96;margin-top:7px;line-height:1.55">Postgres 16.14 with pgvector, AGE and pg_trgm. Facts, the graph and every provenance row live here.</div>
+          </div>
+          <div style="padding:16px;border-radius:12px;border:1px solid rgba(150,215,160,.85);background:linear-gradient(180deg,#fbfffc,#e9f9ee);box-shadow:0 8px 20px rgba(24,74,116,.1)">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><div style="width:24px;height:24px;border-radius:6px;background:radial-gradient(circle at 30% 26%,#ffffff,#a9ef92 50%,#39a022);animation:khBreathe 3.2s ease-in-out infinite"></div><div style="font-size:14px;color:#186344;font-weight:600">Inference</div></div>
+            <div style="font-size:13px;color:#12506f;font-weight:600">Local GPU · this box</div>
+            <div style="font-size:11.5px;color:#4a7c96;margin-top:7px;line-height:1.55">2× RTX PRO 6000, 191 GB of VRAM. Both models are served here; no prompt is sent anywhere else.</div>
+          </div>
+          <div style="padding:16px;border-radius:12px;border:1px solid rgba(150,215,160,.85);background:linear-gradient(180deg,#fbfffc,#e9f9ee);box-shadow:0 8px 20px rgba(24,74,116,.1)">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><div style="width:24px;height:24px;border-radius:6px;background:radial-gradient(circle at 30% 26%,#ffffff,#a9ef92 50%,#39a022)"></div><div style="font-size:14px;color:#186344;font-weight:600">Secret vault</div></div>
+            <div style="font-size:13px;color:#12506f;font-weight:600">Local · this box</div>
+            <div style="font-size:11.5px;color:#4a7c96;margin-top:7px;line-height:1.55">OpenBao, raft storage, unsealed. Custody: operator holds 3 of 5 unseal shares off the box.</div>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+          <div style="padding:16px 18px;border-radius:12px;border:1px solid rgba(255,255,255,.95);background:linear-gradient(180deg,rgba(255,255,255,.94),rgba(230,246,255,.7));box-shadow:0 10px 26px rgba(24,74,116,.12)">
+            <div style="font-size:13px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#1c5678;margin-bottom:12px">Connections leaving this box</div>
+            <div style="display:flex;align-items:center;gap:12px;padding:11px 13px;border-radius:10px;background:rgba(255,255,255,.8);border:1px solid rgba(190,225,245,.9)">
+              <div style="width:12px;height:12px;border-radius:50%;background:radial-gradient(circle at 32% 28%,#ffffff,#9de88a 48%,#3ba024)"></div>
+              <div style="font-size:12.5px;color:#12506f">Microsoft Graph — to read the SharePoint sites you scoped</div>
+            </div>
+            <div style="margin-top:9px;display:flex;align-items:center;gap:12px;padding:11px 13px;border-radius:10px;background:rgba(255,255,255,.6);border:1px solid #d6e6f0;color:#7fa2b6">
+              <div style="width:12px;height:12px;border-radius:50%;border:1px solid #a9c9dd;background:#ffffff"></div>
+              <div style="font-size:12.5px">Hosted inference — not in use on this deployment</div>
+            </div>
+            <div style="margin-top:9px;display:flex;align-items:center;gap:12px;padding:11px 13px;border-radius:10px;background:rgba(255,255,255,.6);border:1px solid #d6e6f0;color:#7fa2b6">
+              <div style="width:12px;height:12px;border-radius:50%;border:1px solid #a9c9dd;background:#ffffff"></div>
+              <div style="font-size:12.5px">Hosted credential brokering — not in use on this deployment</div>
+            </div>
+          </div>
+
+          <div style="padding:16px 18px;border-radius:12px;border:1px solid rgba(255,255,255,.95);background:linear-gradient(180deg,rgba(255,255,255,.94),rgba(230,246,255,.7));box-shadow:0 10px 26px rgba(24,74,116,.12)">
+            <div style="font-size:13px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#1c5678;margin-bottom:12px">The three ways this can run</div>
+            <div style="display:flex;flex-direction:column;gap:9px;font-size:12px">
+              <div style="display:flex;gap:11px;padding:10px 12px;border-radius:10px;border:1px solid #8fce87;background:linear-gradient(180deg,#f8fffa,#e4f8e9)"><div style="width:11px;height:11px;margin-top:3px;border-radius:50%;background:radial-gradient(circle at 32% 28%,#ffffff,#9de88a 48%,#3ba024)"></div><div><span style="color:#186344;font-weight:600">Fully local appliance</span><div style="color:#4b8a6d;font-size:11.5px;margin-top:2px">our hardware, on your site — current</div></div></div>
+              <div style="display:flex;gap:11px;padding:10px 12px;border-radius:10px;border:1px solid #d6e6f0;background:rgba(255,255,255,.65)"><div style="width:11px;height:11px;margin-top:3px;border-radius:50%;border:1px solid #a9c9dd;background:#ffffff"></div><div><span style="color:#3d6d88;font-weight:600">Local, on your GPU</span><div style="color:#7fa2b6;font-size:11.5px;margin-top:2px">we adopt your hardware, you hold the unseal shares</div></div></div>
+              <div style="display:flex;gap:11px;padding:10px 12px;border-radius:10px;border:1px solid #d6e6f0;background:rgba(255,255,255,.65)"><div style="width:11px;height:11px;margin-top:3px;border-radius:50%;border:1px solid #a9c9dd;background:#ffffff"></div><div><span style="color:#3d6d88;font-weight:600">Connected to our hosted inference</span><div style="color:#7fa2b6;font-size:11.5px;margin-top:2px">passages leave the premises — the trade-off is stated, not buried</div></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ isLanding }}" hint-placeholder-val="{{ false }}">
+      <div style="display:flex;flex-direction:column;gap:14px">
+        <div style="display:flex;align-items:center;gap:14px">
+          <div style="font-size:15px;color:#0d4667;font-weight:600">What has actually come in</div>
+          <div style="font-size:12px;color:#5f8ba3">Read-only. Originals are stored once and never rewritten; an edited document arrives as a new version alongside the old one.</div>
+        </div>
+        <div style="border-radius:12px;overflow:hidden;border:1px solid rgba(255,255,255,.95);box-shadow:0 10px 26px rgba(24,74,116,.12)">
+          <div style="display:grid;grid-template-columns:2.2fr 1.4fr 1fr .7fr 1fr .9fr;gap:0;padding:11px 15px;font-size:11px;letter-spacing:.04em;text-transform:uppercase;color:#1c5678;background:linear-gradient(180deg,rgba(255,255,255,.95),rgba(214,238,252,.8))">
+            <div>Document</div><div>Source</div><div>Captured</div><div>Version</div><div>Storage</div><div>Trace</div>
+          </div>
+          <div style="display:grid;grid-template-columns:2.2fr 1.4fr 1fr .7fr 1fr .9fr;padding:12px 15px;font-size:12.5px;color:#2c688c;background:rgba(255,255,255,.86);border-top:1px solid rgba(200,228,245,.7)">
+            <div style="color:#0d4667">SOP-014 Botanical Extract Batch Release</div><div>msgraph-files</div><div>24 Jul 14:02</div><div>v2</div><div style="color:#1c6b3f">write-once ✓</div><div><a href="#">26 facts</a></div>
+          </div>
+          <div style="display:grid;grid-template-columns:2.2fr 1.4fr 1fr .7fr 1fr .9fr;padding:12px 15px;font-size:12.5px;color:#2c688c;background:rgba(248,253,255,.86);border-top:1px solid rgba(200,228,245,.7)">
+            <div style="color:#0d4667">SOP-014 Botanical Extract Batch Release</div><div>msgraph-files</div><div>02 Apr 09:31</div><div style="color:#7fa2b6">v1 · superseded</div><div style="color:#1c6b3f">write-once ✓</div><div><a href="#">22 facts</a></div>
+          </div>
+          <div style="display:grid;grid-template-columns:2.2fr 1.4fr 1fr .7fr 1fr .9fr;padding:12px 15px;font-size:12.5px;color:#2c688c;background:rgba(255,255,255,.86);border-top:1px solid rgba(200,228,245,.7)">
+            <div style="color:#0d4667">Supplier Qualification — Zenith Widgets</div><div>msgraph-files</div><div>24 Jul 13:58</div><div>v1</div><div style="color:#1c6b3f">write-once ✓</div><div><a href="#">14 facts</a></div>
+          </div>
+          <div style="display:grid;grid-template-columns:2.2fr 1.4fr 1fr .7fr 1fr .9fr;padding:12px 15px;font-size:12.5px;color:#2c688c;background:rgba(248,253,255,.86);border-top:1px solid rgba(200,228,245,.7)">
+            <div style="color:#0d4667">Batch Record BR-2291</div><div>fs-watch</div><div>24 Jul 11:20</div><div>v3</div><div style="color:#1c6b3f">write-once ✓</div><div><a href="#">41 facts</a></div>
+          </div>
+          <div style="display:grid;grid-template-columns:2.2fr 1.4fr 1fr .7fr 1fr .9fr;padding:12px 15px;font-size:12.5px;color:#8a7442;background:rgba(255,253,246,.9);border-top:1px solid rgba(220,200,150,.7)">
+            <div style="color:#6b4c0d">Cleaning Validation Protocol CV-08</div><div>msgraph-files</div><div>24 Jul 10:44</div><div>v1</div><div style="color:#8a4b00">held for review</div><div>not extracted</div>
+          </div>
+          <div style="display:grid;grid-template-columns:2.2fr 1.4fr 1fr .7fr 1fr .9fr;padding:12px 15px;font-size:12.5px;color:#7fa2b6;background:rgba(250,250,252,.86);border-top:1px solid rgba(200,228,245,.7)">
+            <div>Vendor Letter — Northvale Labs</div><div>msgraph-files</div><div>21 Jul 16:07</div><div>v1</div><div>deleted at source</div><div>facts retracted</div>
+          </div>
+        </div>
+        <div style="font-size:11.5px;color:#5f8ba3">A deleted document keeps its bytes in write-once storage; what changes is that its facts stop being served and are marked retracted.</div>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ isInference }}" hint-placeholder-val="{{ false }}">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div style="padding:16px 18px;border-radius:12px;border:1px solid rgba(255,255,255,.95);background:linear-gradient(180deg,rgba(255,255,255,.94),rgba(230,246,255,.7));box-shadow:0 10px 26px rgba(24,74,116,.12)">
+            <div style="font-size:13px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#1c5678;margin-bottom:13px">Models loaded</div>
+            <div style="display:flex;flex-direction:column;gap:11px">
+              <div style="padding:13px 15px;border-radius:10px;border:1px solid rgba(190,225,245,.95);background:linear-gradient(180deg,#ffffff,#f2faff)">
+                <div style="display:flex;align-items:center;gap:10px"><div style="width:11px;height:11px;border-radius:50%;background:radial-gradient(circle at 32% 28%,#ffffff,#9de88a 48%,#3ba024)"></div><div style="font-size:13.5px;color:#0d4667;font-weight:600">bge-m3</div><div style="font-size:11.5px;color:#5f8ba3">embeddings · 1024-dim</div></div>
+                <div style="margin-top:7px;font-size:11.5px;color:#4a7c96">Held the retrieval benchmark across all three tracks. 100% on GPU.</div>
+              </div>
+              <div style="padding:13px 15px;border-radius:10px;border:1px solid rgba(190,225,245,.95);background:linear-gradient(180deg,#ffffff,#f2faff)">
+                <div style="display:flex;align-items:center;gap:10px"><div style="width:11px;height:11px;border-radius:50%;background:radial-gradient(circle at 32% 28%,#ffffff,#9de88a 48%,#3ba024);animation:khBlink 2s ease-in-out infinite"></div><div style="font-size:13.5px;color:#0d4667;font-weight:600">qwen3.6</div><div style="font-size:11.5px;color:#5f8ba3">extraction · fp16</div></div>
+                <div style="margin-top:7px;font-size:11.5px;color:#4a7c96">Extracting now · 41 units in the last minute · 2,180 tokens/s.</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="padding:16px 18px;border-radius:12px;border:1px solid rgba(255,255,255,.95);background:linear-gradient(180deg,rgba(255,255,255,.94),rgba(230,246,255,.7));box-shadow:0 10px 26px rgba(24,74,116,.12)">
+            <div style="font-size:13px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#1c5678;margin-bottom:13px">GPU</div>
+            <div style="display:flex;flex-direction:column;gap:13px">
+              <div>
+                <div style="display:flex;font-size:12px;color:#2c688c;margin-bottom:6px"><div>GPU 0 · RTX PRO 6000</div><div style="flex:1"></div><div style="font-family:Consolas,'Lucida Console',monospace;color:#0d4667">{{ gpu0 }}%</div></div>
+                <div style="position:relative;height:18px;border-radius:9px;overflow:hidden;border:1px solid #8fb6cf;background:linear-gradient(180deg,#e6f1f7,#fbfdff)">
+                  <div style="position:absolute;inset:0 22% 0 0;background:linear-gradient(180deg,#9ff07f,#4cae2e 46%,#3d9a24 54%,#86e065)"></div>
+                  <div style="position:absolute;top:0;bottom:0;left:0;width:18%;background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.9),rgba(255,255,255,0));animation:khShine 2.4s ease-in-out infinite"></div>
+                </div>
+                <div style="font-size:11px;color:#5f8ba3;margin-top:5px">62 GB of 95.6 GB VRAM · qwen3.6 resident</div>
+              </div>
+              <div>
+                <div style="display:flex;font-size:12px;color:#2c688c;margin-bottom:6px"><div>GPU 1 · RTX PRO 6000</div><div style="flex:1"></div><div style="font-family:Consolas,'Lucida Console',monospace;color:#0d4667">{{ gpu1 }}%</div></div>
+                <div style="position:relative;height:18px;border-radius:9px;overflow:hidden;border:1px solid #8fb6cf;background:linear-gradient(180deg,#e6f1f7,#fbfdff)">
+                  <div style="position:absolute;inset:0 66% 0 0;background:linear-gradient(180deg,#9ff07f,#4cae2e 46%,#3d9a24 54%,#86e065)"></div>
+                  <div style="position:absolute;top:0;bottom:0;left:0;width:18%;background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.9),rgba(255,255,255,0));animation:khShine 2.4s ease-in-out .5s infinite"></div>
+                </div>
+                <div style="font-size:11px;color:#5f8ba3;margin-top:5px">11 GB of 95.6 GB VRAM · bge-m3 resident</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="padding:16px 18px;border-radius:12px;border:1px solid rgba(255,255,255,.95);background:linear-gradient(180deg,rgba(255,255,255,.94),rgba(230,246,255,.7));box-shadow:0 10px 26px rgba(24,74,116,.12)">
+          <div style="font-size:13px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#1c5678;margin-bottom:6px">The two knobs</div>
+          <div style="font-size:12px;color:#4a7c96;margin-bottom:15px">Everything else about extraction is fixed by the deployment plan. These two are yours.</div>
+
+          <div style="font-size:12.5px;color:#12506f;font-weight:600;margin-bottom:9px">Extraction model tier</div>
+          <div style="display:flex;flex-direction:column;gap:7px;margin-bottom:18px">
+            <div style="display:flex;gap:11px;align-items:flex-start;padding:11px 13px;border-radius:10px;border:1px solid #d6e6f0;background:rgba(255,255,255,.7)"><div style="width:13px;height:13px;margin-top:2px;border-radius:50%;border:1px solid #a9c9dd;background:#ffffff"></div><div><div style="font-size:12.5px;color:#3d6d88;font-weight:600">Faster, smaller</div><div style="font-size:11.5px;color:#7fa2b6;margin-top:2px">roughly 3× the throughput, more items land in quarantine</div></div></div>
+            <div style="display:flex;gap:11px;align-items:flex-start;padding:11px 13px;border-radius:10px;border:1px solid #7fb4d6;background:linear-gradient(180deg,#ffffff,#e2f2fd);box-shadow:0 0 0 3px rgba(120,190,235,.3)"><div style="width:13px;height:13px;margin-top:2px;border-radius:50%;background:radial-gradient(circle at 32% 28%,#ffffff,#8ccef5 45%,#2f8fd0)"></div><div><div style="font-size:12.5px;color:#12506f;font-weight:600">Balanced — qwen3.6 fp16</div><div style="font-size:11.5px;color:#4a7c96;margin-top:2px">what the deployment plan chose for this hardware</div></div></div>
+            <div style="display:flex;gap:11px;align-items:flex-start;padding:11px 13px;border-radius:10px;border:1px solid #d6e6f0;background:rgba(255,255,255,.7)"><div style="width:13px;height:13px;margin-top:2px;border-radius:50%;border:1px solid #a9c9dd;background:#ffffff"></div><div><div style="font-size:12.5px;color:#3d6d88;font-weight:600">Slower, higher quality</div><div style="font-size:11.5px;color:#7fa2b6;margin-top:2px">for a re-run over documents that quarantined heavily</div></div></div>
+          </div>
+
+          <div style="font-size:12.5px;color:#12506f;font-weight:600;margin-bottom:9px">When a document changes, re-process it…</div>
+          <div style="display:flex;gap:9px;margin-bottom:16px">
+            <div style="flex:1;text-align:center;font-size:12.5px;color:#0f4b70;padding:10px;border-radius:14px;border:1px solid #7fb4d6;background:linear-gradient(180deg,#ffffff,#dff0fc);box-shadow:0 0 0 3px rgba(120,190,235,.3)">immediately</div>
+            <div style="flex:1;text-align:center;font-size:12.5px;color:#3d6d88;padding:10px;border-radius:14px;border:1px solid #cfe3f0;background:rgba(255,255,255,.7)">in the nightly batch</div>
+          </div>
+          <div style="padding:13px 15px;border-radius:10px;background:rgba(255,255,255,.8);border:1px solid rgba(190,225,245,.9);font-size:11.5px;color:#4a7c96;line-height:1.6">These models read documents and write structured facts. There is no chat here, and no way to ask one of them a free-form question from this console.</div>
+        </div>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ isFacts }}" hint-placeholder-val="{{ false }}">
+      <div style="display:grid;grid-template-columns:1fr 340px;gap:16px">
+        <div style="display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-radius:18px;border:1px solid #9cc4dd;background:linear-gradient(180deg,#ffffff,#f4fbff);box-shadow:0 1px 3px rgba(30,90,130,.12) inset">
+            <div style="width:12px;height:12px;border-radius:50%;border:2px solid #6ea9cd"></div>
+            <div style="font-size:13px;color:#0d4667">Zenith Widgets</div>
+            <div style="flex:1"></div>
+            <div style="font-size:11px;color:#7fa2b6">entity lookup · fixed operations only, never a free query</div>
+          </div>
+
+          <div style="padding:16px 18px;border-radius:12px;border:1px solid rgba(255,255,255,.95);background:linear-gradient(180deg,rgba(255,255,255,.94),rgba(230,246,255,.7));box-shadow:0 10px 26px rgba(24,74,116,.12)">
+            <div style="display:flex;align-items:baseline;gap:11px;margin-bottom:4px">
+              <div style="font-size:19px;color:#0d4667;font-weight:600">Zenith Widgets</div>
+              <div style="font-size:12px;color:#5f8ba3">Organization · 41 facts · 14 documents</div>
+            </div>
+            <div style="font-size:12px;color:#4a7c96;margin-bottom:15px">Every line below carries its own certainty. They are not all equally true, and the console will not pretend otherwise.</div>
+
+            <div style="display:flex;flex-direction:column;gap:9px">
+              <div style="padding:12px 14px;border-radius:10px;border:1px solid #a8d9b4;background:linear-gradient(180deg,#fbfffc,#eefaf1)">
+                <div style="display:flex;align-items:center;gap:10px">
+                  <div style="font-size:13px;color:#12506f">supplies → <span style="font-weight:600">Botanical Extract, Lot BE-2291</span></div>
+                  <div style="flex:1"></div>
+                  <div style="font-size:11px;color:#1c6b3f;padding:2px 10px;border-radius:9px;background:linear-gradient(180deg,#e8ffe6,#c8f2c0);border:1px solid #8fce87">confident</div>
+                </div>
+                <div style="margin-top:6px;font-size:11px;color:#5f8ba3">SOP-014 v2 §5 · exact passage matched · <a href="#">how do we know this?</a></div>
+              </div>
+
+              <div style="padding:12px 14px;border-radius:10px;border:1px solid #e3c383;background:linear-gradient(180deg,#fffdf6,#fff5e2)">
+                <div style="display:flex;align-items:center;gap:10px">
+                  <div style="font-size:13px;color:#6b4c0d">certified_by → <span style="font-weight:600">Northvale Labs</span></div>
+                  <div style="flex:1"></div>
+                  <div style="font-size:11px;color:#8a4b00;padding:2px 10px;border-radius:9px;background:linear-gradient(180deg,#ffeec2,#ffd98a);border:1px solid #d9a13c">low confidence</div>
+                </div>
+                <div style="margin-top:6px;font-size:11px;color:#8a7442">Grounded to the right chunk, but no exact span was found. <a href="#">See the passage</a></div>
+              </div>
+
+              <div style="padding:12px 14px;border-radius:10px;border:1px solid #b9cfe0;background:linear-gradient(180deg,#fbfdff,#eef5fa)">
+                <div style="display:flex;align-items:center;gap:10px">
+                  <div style="font-size:13px;color:#3d6d88">same_as → <span style="font-weight:600">Zenith Widgets LLC</span></div>
+                  <div style="flex:1"></div>
+                  <div style="font-size:11px;color:#3d6d88;padding:2px 10px;border-radius:9px;background:linear-gradient(180deg,#f2f8fc,#dfeaf3);border:1px solid #b2cbdd">under review</div>
+                </div>
+                <div style="margin-top:6px;font-size:11px;color:#7fa2b6">A person is deciding this one. Until they do, it is not served as true. <a href="#">Open in the review queue</a></div>
+              </div>
+
+              <div style="padding:12px 14px;border-radius:10px;border:1px solid #d8d8de;background:linear-gradient(180deg,#fcfcfd,#f2f2f5)">
+                <div style="display:flex;align-items:center;gap:10px">
+                  <div style="font-size:13px;color:#8a8a95;text-decoration:line-through">audited_by → Vendor Assurance Group</div>
+                  <div style="flex:1"></div>
+                  <div style="font-size:11px;color:#6f6f7a;padding:2px 10px;border-radius:9px;background:linear-gradient(180deg,#f4f4f6,#e4e4e9);border:1px solid #c9c9d1">retracted</div>
+                </div>
+                <div style="margin-top:6px;font-size:11px;color:#9a9aa4">Its source document was deleted on 21 Jul. The fact stopped being served that day. <a href="#">See the history</a></div>
+              </div>
+
+              <div style="padding:12px 14px;border-radius:10px;border:1px dashed #b9cfe0;background:rgba(255,255,255,.6)">
+                <div style="font-size:13px;color:#7fa2b6">registered_address → <span style="font-style:italic">not known</span></div>
+                <div style="margin-top:6px;font-size:11px;color:#9ab6c8">Nothing in the corpus says. That is an answer, not a gap to fill in.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="padding:16px 18px;border-radius:12px;border:1px solid rgba(255,255,255,.95);background:linear-gradient(180deg,rgba(255,255,255,.94),rgba(230,246,255,.7));box-shadow:0 10px 26px rgba(24,74,116,.12);align-self:start">
+          <div style="font-size:13px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#1c5678;margin-bottom:12px">How do we know this?</div>
+          <div style="font-size:12px;color:#4a7c96;margin-bottom:11px">supplies → Botanical Extract, Lot BE-2291</div>
+          <div style="padding:13px;border-radius:10px;background:rgba(255,255,255,.85);border:1px solid rgba(190,225,245,.9);font-family:Georgia,'Times New Roman',serif;font-size:12.5px;color:#1e3f52;line-height:1.65">“…extract for Lot BE-2291 is supplied by <span style="background:linear-gradient(180deg,#fff6c9,#ffe98d);padding:1px 4px;border-radius:3px">Zenith Widgets</span> under supply agreement SA-118…”</div>
+          <div style="margin-top:11px;display:flex;flex-direction:column;gap:6px;font-size:11.5px;color:#4a7c96">
+            <div>Document · SOP-014 v2, §5 Records</div>
+            <div>Chunk · 7 of 13 · characters 812–941</div>
+            <div>Captured · 24 Jul 2026 from msgraph-files</div>
+            <div>Extracted · qwen3.6, ontology baseline-0.1</div>
+            <div>Original · <a href="#">open the write-once copy</a></div>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+
+    </div>
+
+    <div style="display:flex;align-items:center;gap:16px;padding:9px 16px;font-size:11px;color:#2c688c;background:linear-gradient(180deg,rgba(214,238,252,.85),rgba(178,218,242,.8));border-top:1px solid rgba(255,255,255,.8)">
+      <div style="display:flex;align-items:center;gap:7px"><div style="width:9px;height:9px;border-radius:50%;background:radial-gradient(circle at 32% 28%,#ffffff,#9de88a 48%,#3ba024);animation:khBlink 2.2s ease-in-out infinite"></div>{{ statusLine }}</div>
+      <div style="flex:1"></div>
+      <div>serving 127.0.0.1:8080 · read-only</div>
+      <div>operator channel · authorized</div>
+      <div>appliance · single box</div>
+      <div style="display:flex;gap:5px">
+        <div style="width:11px;height:11px;border-radius:3px;background:radial-gradient(circle at 30% 26%,#ffffff,#bfe4fa 50%,#3f93cf)"></div>
+        <div style="width:11px;height:11px;border-radius:3px;background:radial-gradient(circle at 30% 26%,#ffffff,#bfe4fa 50%,#3f93cf)"></div>
+        <div style="width:11px;height:11px;border-radius:3px;background:radial-gradient(circle at 30% 26%,#ffffff,#a9ef92 50%,#39a022)"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;defaultTab&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;monitor&quot;,&quot;sources&quot;,&quot;review&quot;,&quot;health&quot;,&quot;topology&quot;,&quot;landing&quot;,&quot;inference&quot;,&quot;facts&quot;],&quot;default&quot;:&quot;monitor&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Console&quot;},&quot;feedIntervalMs&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;min&quot;:600,&quot;max&quot;:6000,&quot;step&quot;:200,&quot;default&quot;:2200,&quot;unit&quot;:&quot;ms&quot;,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Console&quot;}}">
+const POOL = [
+  "capture  · msgraph-files: page 14/22 · 61 items landed · 3 replays skipped (content-hashed)",
+  "process  · SOP-014 v2 → 1 superparent / 6 parents / 7 children embedded (bge-m3)",
+  "extract  · qwen3.6 · 26 facts staged · 3 quarantined · 1 repair round-trip",
+  "resolve  · sweep ops: 41 mentions · 12 matched on an identifier · 6 sent to review",
+  "serving  · /v1/retrieve p95 182ms · budget 300ms · 0 refusals",
+  "capture  · throttled by Graph (429) · honoring Retry-After 12s",
+  "vault    · access token minted for tenants/ops/sources/msgraph-files",
+  "ground   · 7 facts kept with a span flag rather than discarded",
+  "resolve  · Zenith Widgets ↔ Zenith Widgets LLC scored 0.62 → held for a human",
+  "extract  · predicate 'retained_for' is not in baseline-0.1 → quarantined (3rd time)",
+  "capture  · 2 documents tombstoned by a delete signal · storm guard 2 of 10",
+  "checks   · khctl verify: 11 of 11 green",
+  "process  · queue depth 74 · 3 workers claiming with SKIP LOCKED",
+  "resolve  · merge accepted by a reviewer · 4 facts re-pointed · reversible"
+];
+
+class Component extends DCLogic {
+  state = { tab: "monitor", feed: [], t: 0, cleared: 37, decision: null, bars: [] };
+
+  componentDidMount() {
+    const start = [];
+    for (let i = 0; i < 9; i++) start.push(this.line(i, i * 37));
+    const bars = [];
+    for (let i = 0; i < 28; i++) bars.push(24 + Math.round(Math.abs(Math.sin(i * 1.7)) * 62));
+    const tab = this.props.defaultTab || "monitor";
+    this.setState({ feed: start, bars: bars, tab: tab });
+    const ms = this.props.feedIntervalMs || 2200;
+    this.timer = setInterval(() => this.tick(), ms);
+    this.onKey = (e) => {
+      if (this.state.tab !== "review") return;
+      const k = e.key.toLowerCase();
+      if (k === "a") this.decide("merged");
+      else if (k === "r") this.decide("separate");
+      else if (k === "s") this.decide("split");
+      else if (e.key === " ") this.decide("skipped");
+    };
+    window.addEventListener("keydown", this.onKey);
+  }
+
+  componentWillUnmount() {
+    clearInterval(this.timer);
+    window.removeEventListener("keydown", this.onKey);
+  }
+
+  line(i, ago) {
+    const base = 14 * 3600 + 9 * 60 + 4;
+    const s = base - ago;
+    const hh = String(Math.floor(s / 3600) % 24).padStart(2, "0");
+    const mm = String(Math.floor(s / 60) % 60).padStart(2, "0");
+    const ss = String(s % 60).padStart(2, "0");
+    return { time: hh + ":" + mm + ":" + ss, text: POOL[((i % POOL.length) + POOL.length) % POOL.length] };
+  }
+
+  tick() {
+    this.setState((s) => {
+      const feed = [this.line(-s.t - 1, -(s.t + 1) * 3)].concat(s.feed).slice(0, 9);
+      const bars = s.bars.slice(1).concat([24 + Math.round(Math.random() * 62)]);
+      return { t: s.t + 1, feed: feed, bars: bars };
+    });
+  }
+
+  decide(kind) {
+    const texts = {
+      merged: "Merged into Zenith Widgets. 4 facts re-pointed at the surviving record. Undo any time from the entity's history.",
+      separate: "Kept separate. Zenith Widgets LLC is now its own entity; the pair will not be offered again unless new evidence arrives.",
+      split: "Opened the split view for this entity's earlier merges. Nothing has changed yet.",
+      skipped: "Skipped. The item goes back into the queue at the same confidence."
+    };
+    this.setState((s) => ({
+      decision: texts[kind],
+      cleared: kind === "skipped" ? s.cleared : s.cleared + 1
+    }));
+  }
+
+  tabBg(name) {
+    return this.state.tab === name
+      ? "linear-gradient(180deg,rgba(255,255,255,.98),rgba(246,252,255,.95))"
+      : "linear-gradient(180deg,rgba(255,255,255,.55),rgba(206,232,248,.45))";
+  }
+
+  uptime() {
+    const s = 4 * 86400 + 6 * 3600 + 12 * 60 + this.state.t * 2;
+    const d = Math.floor(s / 86400);
+    const h = String(Math.floor(s / 3600) % 24).padStart(2, "0");
+    const m = String(Math.floor(s / 60) % 60).padStart(2, "0");
+    const ss = String(s % 60).padStart(2, "0");
+    return d + "d " + h + ":" + m + ":" + ss;
+  }
+
+  renderVals() {
+    const t = this.state.t;
+    const wobble = (base, amp, phase) => base + Math.round(Math.sin(t / 3 + phase) * amp);
+    return {
+      isMonitor: this.state.tab === "monitor",
+      isSources: this.state.tab === "sources",
+      isReview: this.state.tab === "review",
+      isHealth: this.state.tab === "health",
+      isTopology: this.state.tab === "topology",
+      isLanding: this.state.tab === "landing",
+      isInference: this.state.tab === "inference",
+      isFacts: this.state.tab === "facts",
+      tabMonitor: this.tabBg("monitor"),
+      tabSources: this.tabBg("sources"),
+      tabReview: this.tabBg("review"),
+      tabHealth: this.tabBg("health"),
+      tabTopology: this.tabBg("topology"),
+      tabLanding: this.tabBg("landing"),
+      tabInference: this.tabBg("inference"),
+      tabFacts: this.tabBg("facts"),
+      goMonitor: () => this.setState({ tab: "monitor" }),
+      goSources: () => this.setState({ tab: "sources" }),
+      goReview: () => this.setState({ tab: "review" }),
+      goHealth: () => this.setState({ tab: "health" }),
+      goTopology: () => this.setState({ tab: "topology" }),
+      goLanding: () => this.setState({ tab: "landing" }),
+      goInference: () => this.setState({ tab: "inference" }),
+      goFacts: () => this.setState({ tab: "facts" }),
+      feed: this.state.feed,
+      bars: this.state.bars.map((b) => b + "%"),
+      uptime: this.uptime(),
+      landed: (1318 + Math.floor(t / 2)).toLocaleString(),
+      facts: (9295 + t * 3).toLocaleString(),
+      p95: wobble(182, 21, 0),
+      perMin: wobble(46, 9, 1.4),
+      gpu0: wobble(78, 8, 0.5),
+      gpu1: wobble(34, 11, 2.1),
+      refreshLabel: Math.round((this.props.feedIntervalMs || 2200) / 100) / 10 + "s",
+      pipelineStatus:
+        "Capture is mid-sweep on two SharePoint sites · extraction is the slowest stage right now · resolve is holding " +
+        "1,172 pairs it will not decide alone.",
+      statusLine: this.state.feed.length ? this.state.feed[0].text.replace(/\s+/g, " ") : "watching",
+      cleared: this.state.cleared,
+      hasDecision: !!this.state.decision,
+      decisionText: this.state.decision || "",
+      accept: () => this.decide("merged"),
+      reject: () => this.decide("separate"),
+      split: () => this.decide("split"),
+      skip: () => this.decide("skipped"),
+      startPull: () => this.setState({ tab: "monitor" }),
+      addStatus:
+        "Step 2 handed the authorization to the vault. Choose which sites this source may read — the default is nothing."
+    };
+  }
+}
+
+</script>
+</body>
+</html>

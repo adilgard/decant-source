@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@200;300;400;500;600;700&amp;family=Cinzel:wght@400;600;700&amp;family=Silkscreen:wght@400&amp;display=swap" />
+<style>
+@keyframes khSpinSlow{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+@keyframes khSpinRev{from{transform:rotate(360deg)}to{transform:rotate(0)}}
+@keyframes khDiamondA{from{transform:rotate(45deg)}to{transform:rotate(405deg)}}
+@keyframes khFlicker{0%,89%,93%,100%{opacity:1;transform:translateX(0)}90%{opacity:.4;transform:translateX(1px)}91%{opacity:.8;transform:translateX(-1px)}92%{opacity:.55;transform:translateX(0)}}
+@keyframes khBlink{0%,100%{opacity:1}50%{opacity:.2}}
+@keyframes khShine{0%{transform:translateX(-120%) skewX(-18deg)}60%{transform:translateX(420%) skewX(-18deg)}100%{transform:translateX(420%) skewX(-18deg)}}
+@keyframes khSweep{from{background-position:0 0}to{background-position:24px 0}}
+@keyframes khBreathe{0%,100%{transform:scale(1);opacity:.8}50%{transform:scale(1.12);opacity:1}}
+@keyframes khGhost{0%,100%{opacity:.04}50%{opacity:.09}}
+@keyframes khCrystal{0%,100%{filter:drop-shadow(0 0 14px rgba(150,180,255,.7))}50%{filter:drop-shadow(0 0 30px rgba(200,220,255,.95))}}
+body{margin:0;background:#050810;font-family:Archivo,"Segoe UI",sans-serif;-webkit-font-smoothing:antialiased}
+a{color:#8fb4ff;text-decoration:none}
+a:hover{color:#c3d5ff;text-decoration:underline}
+</style>
+</helmet>
+<div style="position:relative;min-height:100vh;overflow:hidden;padding:26px;box-sizing:border-box;background:radial-gradient(120% 90% at 50% 30%,#101a3a 0%,#0a1128 42%,#050810 80%)">
+  <div style="position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(255,255,255,.025) 0 1px,transparent 1px 3px)"></div>
+  <div style="position:absolute;left:50%;top:38%;transform:translate(-50%,-50%);font-family:Georgia,serif;font-style:italic;font-size:44px;white-space:nowrap;color:#a9c4ff;animation:khGhost 9s ease-in-out infinite;pointer-events:none">every fact will carry its source passage</div>
+
+  <div style="position:relative;max-width:1420px;margin:0 auto;border-radius:20px;overflow:hidden;border:1px solid rgba(255,255,255,.16);box-shadow:0 30px 80px rgba(0,0,10,.6),0 1px 0 rgba(255,255,255,.12) inset,0 0 70px rgba(90,120,255,.1);background:rgba(14,20,42,.62);backdrop-filter:blur(22px) saturate(1.35)">
+
+    <div style="display:flex;align-items:center;gap:12px;padding:11px 16px;background:linear-gradient(180deg,rgba(255,255,255,.1),rgba(255,255,255,.03));border-bottom:1px solid rgba(255,255,255,.12)">
+      <div style="width:18px;height:18px;border-radius:50%;background:radial-gradient(circle at 34% 28%,rgba(255,255,255,.95),rgba(170,195,255,.5) 50%,rgba(90,120,235,.4));border:1px solid rgba(255,255,255,.4);box-shadow:0 0 10px rgba(140,170,255,.6)"></div>
+      <div style="font-family:Cinzel,Georgia,serif;font-size:13px;font-weight:600;letter-spacing:.1em;color:#e9f0ff;text-shadow:0 0 14px rgba(150,180,255,.6)">decant.Source</div>
+      <div style="font-family:Silkscreen,Consolas,monospace;font-size:8px;letter-spacing:.2em;color:#7db4e8">OPERATOR : CONSOLE</div>
+      <div style="width:58px;height:10px;opacity:.35;background:repeating-linear-gradient(90deg,#b8ccff 0 2px,transparent 2px 5px,#b8ccff 5px 6px,transparent 6px 11px)"></div>
+      <div style="flex:1"></div>
+      <div style="font-family:Silkscreen,Consolas,monospace;font-size:8px;letter-spacing:.16em;color:rgba(150,180,235,.6)">CONCEPT 04 : VIRTUAL SELF</div>
+      <div style="display:flex;gap:6px;margin-left:10px">
+        <div style="width:26px;height:17px;border-radius:9px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.08)"></div>
+        <div style="width:34px;height:17px;border-radius:9px;border:1px solid rgba(255,140,120,.5);background:rgba(255,110,90,.25)"></div>
+      </div>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:14px;padding:12px 16px;border-bottom:1px solid rgba(255,255,255,.1)">
+      <div style="display:flex;align-items:center;gap:9px;padding:8px 15px;clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);border:1px solid rgba(160,190,255,.5);background:linear-gradient(180deg,rgba(120,150,255,.28),rgba(70,100,235,.16));backdrop-filter:blur(12px);box-shadow:0 0 16px rgba(110,140,255,.3),0 1px 0 rgba(255,255,255,.25) inset;cursor:pointer">
+        <div style="width:9px;height:9px;border-radius:50%;background:#7be0c8;box-shadow:0 0 8px rgba(110,230,200,.9)"></div>
+        <div style="font-family:Silkscreen,Consolas,monospace;font-size:8.5px;letter-spacing:.14em;color:#e9f0ff">TENANT : OPS</div>
+        <div style="font-size:9px;color:#8fa8d8">▼</div>
+      </div>
+      <div style="font-size:10.5px;color:#5c6f9e">isolated · read + act</div>
+      <div style="flex:1;min-width:220px;display:flex;align-items:center;gap:8px;padding:8px 14px;clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.05);backdrop-filter:blur(10px)">
+        <div style="width:10px;height:10px;flex:none;border-radius:50%;border:2px solid rgba(160,185,235,.6)"></div>
+        <div style="font-size:12px;color:#5c6f9e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Look up an entity, a document, a source…</div>
+      </div>
+      <div style="flex:0 1 auto;min-width:0;font-family:Consolas,'Lucida Console',monospace;font-size:8.5px;letter-spacing:.22em;color:rgba(150,175,225,.45);text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">viewport 01 · tenant : ops</div>
+      <div style="flex:none;display:flex;align-items:center;gap:9px">
+        <div style="font-family:Silkscreen,Consolas,monospace;font-size:8px;letter-spacing:.14em;color:#7db4e8">UPTIME</div>
+        <div style="font-family:Consolas,'Lucida Console',monospace;font-size:12px;color:#c9d8f8;padding:4px 11px;clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px);background:rgba(0,2,12,.6);border:1px solid rgba(140,170,255,.25)">{{ uptime }}</div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:6px;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.1);flex-wrap:wrap">
+      <div onClick="{{ goMonitor }}" style="cursor:pointer;padding:7px 15px;clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);font-size:12px;font-weight:500;color:#dbe7ff;backdrop-filter:blur(10px);border:{{ tabMonitorB }};background:{{ tabMonitor }}">Ingestion monitor</div>
+      <div onClick="{{ goSources }}" style="cursor:pointer;padding:7px 15px;clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);font-size:12px;font-weight:500;color:#dbe7ff;backdrop-filter:blur(10px);border:{{ tabSourcesB }};background:{{ tabSources }}">Sources &amp; access</div>
+      <div onClick="{{ goReview }}" style="cursor:pointer;display:flex;align-items:center;gap:7px;padding:7px 15px;clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);font-size:12px;font-weight:500;color:#dbe7ff;backdrop-filter:blur(10px);border:{{ tabReviewB }};background:{{ tabReview }}">Review queue<span style="font-family:Consolas,monospace;font-size:10px;font-weight:700;color:#0a1128;padding:1px 8px;border-radius:9px;background:#9fc0ff;box-shadow:0 0 10px rgba(140,170,255,.6)">1,204</span></div>
+      <div onClick="{{ goHealth }}" style="cursor:pointer;display:flex;align-items:center;gap:7px;padding:7px 15px;clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);font-size:12px;font-weight:500;color:#dbe7ff;backdrop-filter:blur(10px);border:{{ tabHealthB }};background:{{ tabHealth }}">Errors &amp; health<span style="font-family:Consolas,monospace;font-size:10px;font-weight:700;color:#2a0800;padding:1px 8px;border-radius:9px;background:#ff9b83;box-shadow:0 0 10px rgba(255,140,110,.5)">4</span></div>
+      <div onClick="{{ goTopology }}" style="cursor:pointer;padding:7px 15px;clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);font-size:12px;font-weight:500;color:#dbe7ff;backdrop-filter:blur(10px);border:{{ tabTopologyB }};background:{{ tabTopology }}">System connections</div>
+      <div onClick="{{ goLanding }}" style="cursor:pointer;padding:7px 15px;clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);font-size:12px;font-weight:500;color:#dbe7ff;backdrop-filter:blur(10px);border:{{ tabLandingB }};background:{{ tabLanding }}">Data landing</div>
+      <div onClick="{{ goInference }}" style="cursor:pointer;padding:7px 15px;clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);font-size:12px;font-weight:500;color:#dbe7ff;backdrop-filter:blur(10px);border:{{ tabInferenceB }};background:{{ tabInference }}">Inference</div>
+      <div onClick="{{ goFacts }}" style="cursor:pointer;padding:7px 15px;clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);font-size:12px;font-weight:500;color:#dbe7ff;backdrop-filter:blur(10px);border:{{ tabFactsB }};background:{{ tabFacts }}">Facts &amp; entities</div>
+    </div>
+
+    <div style="position:relative;overflow:hidden;padding:18px;min-height:760px;box-sizing:border-box">
+      <div style="position:absolute;right:-160px;top:-160px;width:460px;height:460px;pointer-events:none;opacity:.35">
+        <div style="position:absolute;inset:0;border-radius:50%;border:1px dashed rgba(185,205,255,.3);animation:khSpinSlow 90s linear infinite"></div>
+        <div style="position:absolute;inset:56px;border-radius:50%;border:1px solid rgba(185,205,255,.16)"></div>
+        <div style="position:absolute;inset:104px;border:1px solid rgba(200,215,255,.2);animation:khDiamondA 110s linear infinite"></div>
+        <div style="position:absolute;left:50%;top:50%;width:34px;height:58px;margin:-29px 0 0 -17px;animation:khCrystal 4.6s ease-in-out infinite"><div style="position:absolute;inset:0;clip-path:polygon(50% 0%,88% 26%,88% 74%,50% 100%,12% 74%,12% 26%);background:linear-gradient(165deg,rgba(240,246,255,.95),rgba(120,150,235,.6))"></div></div>
+      </div>
+      <div style="position:absolute;left:-110px;bottom:-110px;width:300px;height:300px;pointer-events:none;opacity:.3">
+        <div style="position:absolute;inset:0;border-radius:50%;border:1px dashed rgba(185,205,255,.3);animation:khSpinRev 74s linear infinite"></div>
+        <div style="position:absolute;inset:66px;border:1px solid rgba(200,215,255,.18);animation:khDiamondA 92s linear infinite"></div>
+        <div style="position:absolute;left:50%;top:50%;width:24px;height:40px;margin:-20px 0 0 -12px;animation:khCrystal 5.2s ease-in-out 1s infinite"><div style="position:absolute;inset:0;clip-path:polygon(50% 0%,88% 26%,88% 74%,50% 100%,12% 74%,12% 26%);background:linear-gradient(165deg,rgba(240,246,255,.95),rgba(120,150,235,.6))"></div></div>
+      </div>
+      <div style="position:absolute;left:44%;top:46%;width:76px;height:76px;pointer-events:none;opacity:.55"><div style="position:absolute;inset:0;border-radius:50%;border:1px dashed rgba(185,205,255,.3);animation:khSpinRev 32s linear infinite"></div><div style="position:absolute;left:50%;top:50%;width:15px;height:26px;margin:-13px 0 0 -7px;animation:khCrystal 4.8s ease-in-out .5s infinite"><div style="position:absolute;inset:0;clip-path:polygon(50% 0%,88% 26%,88% 74%,50% 100%,12% 74%,12% 26%);background:linear-gradient(165deg,rgba(240,246,255,.95),rgba(120,150,235,.6))"></div></div></div>
+
+      <sc-if value="{{ isMonitor }}" hint-placeholder-val="{{ true }}">
+      <div style="position:relative;display:flex;flex-direction:column;gap:14px">
+
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
+          <div style="position:relative;padding:13px 78px 13px 15px;clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px);border:1px solid rgba(123,224,200,.3);background:rgba(123,224,200,.06);backdrop-filter:blur(10px)"><div style="position:absolute;right:14px;top:50%;width:52px;height:52px;margin-top:-26px;border-radius:50%;background:conic-gradient(#7be0c8 100%,rgba(255,255,255,.08) 0);filter:drop-shadow(0 0 8px rgba(110,230,200,.5))"><div style="position:absolute;inset:6px;border-radius:50%;background:#10182f"></div><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#7be0c8">100%</div></div>
+            <div style="display:flex;align-items:center;gap:8px"><div style="width:9px;height:9px;border-radius:50%;background:#7be0c8;box-shadow:0 0 10px rgba(110,230,200,.9);animation:khBreathe 3.6s ease-in-out infinite"></div><div style="font-family:Silkscreen,Consolas,monospace;font-size:7.5px;letter-spacing:.18em;color:#7be0c8">STACK : HEALTH</div></div>
+            <div style="font-size:21px;font-weight:600;color:#e9f0ff;margin-top:7px;line-height:1">11 / 11 <span style="font-size:12px;font-weight:400;color:#8fa8d8">green</span></div>
+            <div style="font-size:11px;color:#5c6f9e;margin-top:4px">khctl verify · 3 minutes ago</div>
+          </div>
+          <div style="position:relative;padding:13px 78px 13px 15px;clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px);border:1px solid rgba(160,190,255,.3);background:rgba(120,150,255,.08);backdrop-filter:blur(10px)"><div style="position:absolute;right:14px;top:50%;width:52px;height:52px;margin-top:-26px;border-radius:50%;background:conic-gradient(#9fc0ff 30%,rgba(255,255,255,.08) 0);filter:drop-shadow(0 0 8px rgba(140,170,255,.5))"><div style="position:absolute;inset:6px;border-radius:50%;background:#10182f"></div><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#9fc0ff">30%</div></div>
+            <div style="display:flex;align-items:center;gap:8px"><div style="width:9px;height:9px;border-radius:50%;background:#9fc0ff;box-shadow:0 0 10px rgba(140,170,255,.9);animation:khBreathe 4.4s ease-in-out infinite"></div><div style="font-family:Silkscreen,Consolas,monospace;font-size:7.5px;letter-spacing:.18em;color:#9fc0ff">DOCUMENTS : LANDED</div></div>
+            <div style="font-size:21px;font-weight:600;color:#e9f0ff;margin-top:7px;line-height:1">{{ landed }} <span style="font-size:12px;font-weight:400;color:#8fa8d8">of 4,376</span></div>
+            <div style="font-size:11px;color:#5c6f9e;margin-top:4px">3 sources sweeping</div>
+          </div>
+          <div style="position:relative;padding:13px 78px 13px 15px;clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px);border:1px solid rgba(230,220,150,.28);background:rgba(230,215,140,.06);backdrop-filter:blur(10px)"><div style="position:absolute;right:14px;top:50%;width:52px;height:52px;margin-top:-26px;border-radius:50%;background:conic-gradient(#eadf9a 97%,rgba(255,255,255,.08) 0);filter:drop-shadow(0 0 8px rgba(230,215,140,.5))"><div style="position:absolute;inset:6px;border-radius:50%;background:#10182f"></div><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#eadf9a">97%</div></div>
+            <div style="display:flex;align-items:center;gap:8px"><div style="width:9px;height:9px;border-radius:50%;background:#eadf9a;box-shadow:0 0 10px rgba(230,215,140,.8);animation:khBreathe 5s ease-in-out infinite"></div><div style="font-family:Silkscreen,Consolas,monospace;font-size:7.5px;letter-spacing:.18em;color:#eadf9a">AWAITING : HUMAN</div></div>
+            <div style="font-size:21px;font-weight:600;color:#e9f0ff;margin-top:7px;line-height:1">1,204</div>
+            <div style="font-size:11px;color:#5c6f9e;margin-top:4px">1,172 merges · 29 quarantined · 3 flagged</div>
+          </div>
+          <div style="position:relative;padding:13px 78px 13px 15px;clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px);border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.05);backdrop-filter:blur(10px)"><div style="position:absolute;right:14px;top:50%;width:52px;height:52px;margin-top:-26px;border-radius:50%;background:conic-gradient(#c9b8ff 61%,rgba(255,255,255,.08) 0);filter:drop-shadow(0 0 8px rgba(180,150,255,.5))"><div style="position:absolute;inset:6px;border-radius:50%;background:#10182f"></div><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#c9b8ff">61%</div></div>
+            <div style="display:flex;align-items:center;gap:8px"><div style="width:9px;height:9px;border-radius:50%;background:#c9b8ff;box-shadow:0 0 10px rgba(180,150,255,.8);animation:khBreathe 4s ease-in-out infinite"></div><div style="font-family:Silkscreen,Consolas,monospace;font-size:7.5px;letter-spacing:.18em;color:#c9b8ff">SERVING : LAYER</div></div>
+            <div style="font-size:21px;font-weight:600;color:#e9f0ff;margin-top:7px;line-height:1">p95 {{ p95 }} <span style="font-size:12px;font-weight:400;color:#8fa8d8">ms</span></div>
+            <div style="font-size:11px;color:#5c6f9e;margin-top:4px">budget 300 ms · read-only channel</div>
+          </div>
+        </div>
+
+        <div style="padding:16px 18px;clip-path:polygon(16px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 16px);border:1px solid rgba(255,255,255,.14);background:linear-gradient(160deg,rgba(120,150,255,.08),rgba(255,255,255,.03));backdrop-filter:blur(12px)">
+          <div style="display:flex;align-items:baseline;gap:12px;margin-bottom:4px">
+            <div style="width:13px;height:22px;flex:none;animation:khCrystal 4.2s ease-in-out infinite"><div style="width:100%;height:100%;clip-path:polygon(50% 0%,88% 26%,88% 74%,50% 100%,12% 74%,12% 26%);background:linear-gradient(165deg,rgba(240,246,255,.95),rgba(120,150,235,.6))"></div></div>
+            <div style="font-size:15px;font-weight:600;letter-spacing:.04em;color:#e9f0ff;text-shadow:0 0 16px rgba(140,170,255,.4)">The pipeline</div>
+            <div style="font-size:11.5px;color:#5c6f9e">near-real-time · refreshed every {{ refreshLabel }}</div>
+            <div style="flex:1"></div>
+            <div style="font-family:Silkscreen,Consolas,monospace;font-size:8px;letter-spacing:.2em;color:#7db4e8">CAPTURE → FACTS : LIVE</div>
+          </div>
+          <div style="font-size:12px;color:#8fa8d8;margin-bottom:15px">{{ pipelineStatus }}</div>
+
+          <div style="display:grid;grid-template-columns:1fr 30px 1fr 30px 1fr 30px 1fr 30px 1fr;align-items:stretch">
+            <div style="padding:13px;clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);border:1px solid rgba(160,190,255,.25);background:rgba(120,150,255,.07)">
+              <div style="display:flex;align-items:center;gap:7px;margin-bottom:7px"><div style="font-family:Silkscreen,Consolas,monospace;font-size:9px;color:#9fc0ff">→</div><div style="font-family:Silkscreen,Consolas,monospace;font-size:7.5px;letter-spacing:.16em;color:#9fc0ff">01 : CAPTURE</div></div>
+              <div style="font-size:23px;font-weight:600;color:#e9f0ff;line-height:1">1,318</div>
+              <div style="font-size:10.5px;color:#5c6f9e;margin:5px 0 9px">documents landed, WORM</div>
+              <div style="position:relative;height:9px;border-radius:5px;overflow:hidden;background:rgba(255,255,255,.08)">
+                <div style="position:absolute;inset:0 26% 0 0;border-radius:5px;background:linear-gradient(90deg,#4d6bff,#9fc0ff);box-shadow:0 0 10px rgba(120,150,255,.7)"></div>
+                <div style="position:absolute;top:0;bottom:0;left:0;width:22%;background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.5),rgba(255,255,255,0));animation:khShine 2.6s ease-in-out infinite"></div>
+              </div>
+              <div style="font-size:10.5px;color:#8fa8d8;margin-top:6px">in flight: 22 · page 14 of 22</div>
+            </div>
+            <div style="align-self:center;height:4px;margin:0 5px;background-image:repeating-linear-gradient(90deg,rgba(160,190,255,.6) 0 6px,transparent 6px 12px);background-size:24px 100%;animation:khSweep 1.1s linear infinite"></div>
+            <div style="padding:13px;clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);border:1px solid rgba(160,190,255,.25);background:rgba(120,150,255,.07)">
+              <div style="display:flex;align-items:center;gap:7px;margin-bottom:7px"><div style="font-family:Silkscreen,Consolas,monospace;font-size:9px;color:#9fc0ff">→</div><div style="font-family:Silkscreen,Consolas,monospace;font-size:7.5px;letter-spacing:.16em;color:#9fc0ff">02 : PROCESS</div></div>
+              <div style="font-size:23px;font-weight:600;color:#e9f0ff;line-height:1">1,244</div>
+              <div style="font-size:10.5px;color:#5c6f9e;margin:5px 0 9px">parsed · chunked · embedded</div>
+              <div style="position:relative;height:9px;border-radius:5px;overflow:hidden;background:rgba(255,255,255,.08)">
+                <div style="position:absolute;inset:0 32% 0 0;border-radius:5px;background:linear-gradient(90deg,#4d6bff,#9fc0ff);box-shadow:0 0 10px rgba(120,150,255,.7)"></div>
+                <div style="position:absolute;top:0;bottom:0;left:0;width:22%;background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.5),rgba(255,255,255,0));animation:khShine 2.6s ease-in-out .3s infinite"></div>
+              </div>
+              <div style="font-size:10.5px;color:#8fa8d8;margin-top:6px">queue depth 74 · bge-m3 1024-dim</div>
+            </div>
+            <div style="align-self:center;height:4px;margin:0 5px;background-image:repeating-linear-gradient(90deg,rgba(160,190,255,.6) 0 6px,transparent 6px 12px);background-size:24px 100%;animation:khSweep 1.1s linear .2s infinite"></div>
+            <div style="padding:13px;clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);border:1px solid rgba(160,190,255,.25);background:rgba(120,150,255,.07)">
+              <div style="display:flex;align-items:center;gap:7px;margin-bottom:7px"><div style="font-family:Silkscreen,Consolas,monospace;font-size:9px;color:#9fc0ff">→</div><div style="font-family:Silkscreen,Consolas,monospace;font-size:7.5px;letter-spacing:.16em;color:#9fc0ff">03 : EXTRACT</div></div>
+              <div style="font-size:23px;font-weight:600;color:#e9f0ff;line-height:1">1,109</div>
+              <div style="font-size:10.5px;color:#5c6f9e;margin:5px 0 9px">9,842 facts staged</div>
+              <div style="position:relative;height:9px;border-radius:5px;overflow:hidden;background:rgba(255,255,255,.08)">
+                <div style="position:absolute;inset:0 42% 0 0;border-radius:5px;background:linear-gradient(90deg,#4d6bff,#9fc0ff);box-shadow:0 0 10px rgba(120,150,255,.7)"></div>
+                <div style="position:absolute;top:0;bottom:0;left:0;width:22%;background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.5),rgba(255,255,255,0));animation:khShine 2.6s ease-in-out .6s infinite"></div>
+              </div>
+              <div style="font-size:10.5px;color:#eadf9a;margin-top:6px">29 quarantined · qwen3.6 fp16</div>
+            </div>
+            <div style="align-self:center;height:4px;margin:0 5px;background-image:repeating-linear-gradient(90deg,rgba(160,190,255,.6) 0 6px,transparent 6px 12px);background-size:24px 100%;animation:khSweep 1.1s linear .4s infinite"></div>
+            <div style="padding:13px;clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);border:1px solid rgba(230,220,150,.3);background:rgba(230,215,140,.06)">
+              <div style="display:flex;align-items:center;gap:7px;margin-bottom:7px"><div style="font-family:Silkscreen,Consolas,monospace;font-size:9px;color:#eadf9a">→</div><div style="font-family:Silkscreen,Consolas,monospace;font-size:7.5px;letter-spacing:.16em;color:#eadf9a">04 : RESOLVE</div></div>
+              <div style="font-size:23px;font-weight:600;color:#e9f0ff;line-height:1">1,038</div>
+              <div style="font-size:10.5px;color:#5c6f9e;margin:5px 0 9px">mentions swept this hour</div>
+              <div style="position:relative;height:9px;border-radius:5px;overflow:hidden;background:rgba(255,255,255,.08)">
+                <div style="position:absolute;inset:0 55% 0 0;border-radius:5px;background:linear-gradient(90deg,#c9b877,#eadf9a);box-shadow:0 0 10px rgba(230,215,140,.6)"></div>
+                <div style="position:absolute;top:0;bottom:0;left:0;width:22%;background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.5),rgba(255,255,255,0));animation:khShine 2.6s ease-in-out .9s infinite"></div>
+              </div>
+              <div style="font-size:10.5px;color:#eadf9a;margin-top:6px">1,172 held for review — not merged</div>
+            </div>
+            <div style="align-self:center;height:4px;margin:0 5px;background-image:repeating-linear-gradient(90deg,rgba(160,190,255,.6) 0 6px,transparent 6px 12px);background-size:24px 100%;animation:khSweep 1.1s linear .6s infinite"></div>
+            <div style="padding:13px;clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);border:1px solid rgba(123,224,200,.3);background:rgba(123,224,200,.06)">
+              <div style="display:flex;align-items:center;gap:7px;margin-bottom:7px"><div style="font-family:Silkscreen,Consolas,monospace;font-size:9px;color:#7be0c8">→</div><div style="font-family:Silkscreen,Consolas,monospace;font-size:7.5px;letter-spacing:.16em;color:#7be0c8">05 : FACTS</div></div>
+              <div style="font-size:23px;font-weight:600;color:#e9f0ff;line-height:1">{{ facts }}</div>
+              <div style="font-size:10.5px;color:#5c6f9e;margin:5px 0 9px">promoted &amp; servable</div>
+              <div style="position:relative;height:9px;border-radius:5px;overflow:hidden;background:rgba(255,255,255,.08)">
+                <div style="position:absolute;inset:0 18% 0 0;border-radius:5px;background:linear-gradient(90deg,#4fbfa4,#7be0c8);box-shadow:0 0 10px rgba(110,230,200,.6)"></div>
+                <div style="position:absolute;top:0;bottom:0;left:0;width:22%;background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.5),rgba(255,255,255,0));animation:khShine 2.6s ease-in-out 1.2s infinite"></div>
+              </div>
+              <div style="font-size:10.5px;color:#7be0c8;margin-top:6px">7,105 confident · 2,190 low-confidence</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1.15fr .85fr;gap:14px">
+          <div style="padding:16px 18px;clip-path:polygon(16px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 16px);border:1px solid rgba(255,255,255,.14);background:linear-gradient(160deg,rgba(120,150,255,.08),rgba(255,255,255,.03));backdrop-filter:blur(12px)">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+              <div style="font-size:14px;font-weight:600;letter-spacing:.04em;color:#e9f0ff">Per-source progress</div>
+              <div style="font-size:11px;color:#5c6f9e">pause / resume are operator actions</div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:14px">
+              <div>
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:7px">
+                  <div style="width:10px;height:10px;border-radius:50%;background:#9fc0ff;box-shadow:0 0 8px rgba(140,170,255,.8)"></div>
+                  <div style="font-size:12.5px;color:#dbe7ff;font-weight:500">msgraph-files · SharePoint “Quality &amp; Regulatory”</div>
+                  <div style="font-family:Silkscreen,Consolas,monospace;font-size:7px;letter-spacing:.1em;color:#7be0c8;padding:2px 8px;border-radius:8px;border:1px solid rgba(123,224,200,.35);background:rgba(123,224,200,.08)">PULL &amp; WATCH</div>
+                  <div style="flex:1"></div>
+                  <div style="font-size:12px;color:#c9d8f8;font-family:Consolas,'Lucida Console',monospace">1,240 / 3,000</div>
+                </div>
+                <div style="position:relative;height:12px;border-radius:6px;overflow:hidden;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1)">
+                  <div style="position:absolute;inset:0 59% 0 0;border-radius:6px;background:linear-gradient(90deg,#4d6bff,#9fc0ff);box-shadow:0 0 12px rgba(120,150,255,.7)"></div>
+                  <div style="position:absolute;top:0;bottom:0;left:0;width:18%;background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.55),rgba(255,255,255,0));animation:khShine 2.2s ease-in-out infinite"></div>
+                </div>
+                <div style="display:flex;align-items:center;gap:10px;margin-top:7px">
+                  <div style="font-size:11px;color:#8fa8d8">delta cursor advancing · last page 41s ago · 0 errors</div>
+                  <div style="flex:1"></div>
+                  <div style="cursor:pointer;font-size:11px;color:#dbe7ff;padding:4px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.22);background:linear-gradient(180deg,rgba(255,255,255,.12),rgba(255,255,255,.04))" style-hover="background:linear-gradient(180deg,rgba(255,255,255,.22),rgba(255,255,255,.08))">Pause</div>
+                  <div style="cursor:pointer;font-size:11px;color:#dbe7ff;padding:4px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.22);background:linear-gradient(180deg,rgba(255,255,255,.12),rgba(255,255,255,.04))" style-hover="background:linear-gradient(180deg,rgba(255,255,255,.22),rgba(255,255,255,.08))">Detail</div>
+                </div>
+              </div>
+              <div>
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:7px">
+                  <div style="width:10px;height:10px;border-radius:50%;background:#7be0c8;box-shadow:0 0 8px rgba(110,230,200,.8)"></div>
+                  <div style="font-size:12.5px;color:#dbe7ff;font-weight:500">fs-watch · /srv/pilot_sops</div>
+                  <div style="font-family:Silkscreen,Consolas,monospace;font-size:7px;letter-spacing:.1em;color:#7be0c8;padding:2px 8px;border-radius:8px;border:1px solid rgba(123,224,200,.35);background:rgba(123,224,200,.08)">WATCH FOLDER</div>
+                  <div style="flex:1"></div>
+                  <div style="font-size:12px;color:#c9d8f8;font-family:Consolas,'Lucida Console',monospace">78 / 78</div>
+                </div>
+                <div style="position:relative;height:12px;border-radius:6px;overflow:hidden;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1)">
+                  <div style="position:absolute;inset:0;border-radius:6px;background:linear-gradient(90deg,#4fbfa4,#7be0c8);box-shadow:0 0 12px rgba(110,230,200,.5)"></div>
+                </div>
+                <div style="font-size:11px;color:#8fa8d8;margin-top:7px">idle · re-sweep every 5 min · last sweep was a no-op (idempotent)</div>
+              </div>
+              <div>
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:7px">
+                  <div style="width:10px;height:10px;border-radius:50%;background:#ff9b83;box-shadow:0 0 10px rgba(255,140,110,.8);animation:khBlink 1.4s ease-in-out infinite"></div>
+                  <div style="font-size:12.5px;color:#dbe7ff;font-weight:500">msgraph-files · SharePoint “Manufacturing Ops”</div>
+                  <div style="font-family:Silkscreen,Consolas,monospace;font-size:7px;letter-spacing:.1em;color:#ffcabb;padding:2px 8px;border-radius:8px;border:1px solid rgba(255,150,130,.4);background:rgba(255,110,90,.1)">DEGRADED</div>
+                  <div style="flex:1"></div>
+                  <div style="font-size:12px;color:#c9d8f8;font-family:Consolas,'Lucida Console',monospace">412 / 1,298</div>
+                </div>
+                <div style="position:relative;height:12px;border-radius:6px;overflow:hidden;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1)">
+                  <div style="position:absolute;inset:0 68% 0 0;border-radius:6px;background:linear-gradient(90deg,#d96a52,#ff9b83);box-shadow:0 0 12px rgba(255,140,110,.55)"></div>
+                </div>
+                <div style="display:flex;align-items:center;gap:10px;margin-top:7px">
+                  <div style="font-size:11px;color:#ffcabb">stalled — Graph returned 429, honoring Retry-After (12s) · 3 retries endured</div>
+                  <div style="flex:1"></div>
+                  <div style="cursor:pointer;font-size:11px;font-weight:600;color:#ffd9cd;padding:4px 14px;border-radius:12px;border:1px solid rgba(255,150,130,.45);background:rgba(255,110,90,.15)" style-hover="background:rgba(255,110,90,.28)">Retry now</div>
+                </div>
+              </div>
+            </div>
+            <div style="margin-top:15px;display:flex;align-items:flex-end;gap:3px;height:52px;padding:10px 12px;border-radius:12px;background:rgba(0,2,12,.5);border:1px solid rgba(255,255,255,.08)">
+              <sc-for list="{{ bars }}" as="b" hint-placeholder-count="28">
+                <div style="flex:1;border-radius:1px;background:linear-gradient(180deg,#9fc0ff,#4d6bff);opacity:.8;height:{{ b }}"></div>
+              </sc-for>
+            </div>
+            <div style="font-size:11px;color:#5c6f9e;margin-top:6px">throughput, documents/min · last 28 minutes · now {{ perMin }}/min</div>
+          </div>
+
+          <div style="padding:16px 18px;clip-path:polygon(16px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 16px);border:1px solid rgba(140,170,255,.2);background:rgba(0,2,12,.55);backdrop-filter:blur(12px);display:flex;flex-direction:column">
+            <div style="display:flex;align-items:center;gap:9px;margin-bottom:12px">
+              <div style="width:7px;height:7px;border-radius:50%;background:#7be0c8;box-shadow:0 0 8px rgba(110,230,200,.9);animation:khBlink 1.6s ease-in-out infinite"></div>
+              <div style="font-family:Silkscreen,Consolas,monospace;font-size:8.5px;letter-spacing:.2em;color:#7db4e8">ACTIVITY : LIVE</div>
+              <div style="font-size:10.5px;color:#5c6f9e">what the system is doing right now</div>
+            </div>
+            <div style="flex:1;display:flex;flex-direction:column;gap:6px;font-family:Consolas,'Lucida Console',monospace;font-size:11px">
+              <sc-for list="{{ feed }}" as="line" hint-placeholder-count="9">
+                <div style="display:flex;gap:9px;padding:5px 8px;border-left:2px solid rgba(140,170,255,.5)">
+                  <div style="color:#7db4e8;flex:none">{{ line.time }}</div>
+                  <div style="color:#b9cdf5">{{ line.text }}</div>
+                </div>
+              </sc-for>
+            </div>
+            <div style="margin-top:12px;font-family:Consolas,'Lucida Console',monospace;font-size:8px;letter-spacing:.24em;color:rgba(150,180,235,.4);text-align:center">/≡/=—::the stream says what it is doing, honestly::—=/≡/</div>
+            <div style="margin-top:8px;padding-top:10px;border-top:1px solid rgba(255,255,255,.1);font-size:10.5px;color:#5c6f9e">Reads come from the read-only serving layer. Pause, retry and review decisions travel the separate operator channel.</div>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ isReview }}" hint-placeholder-val="{{ false }}">
+      <div style="position:relative;display:grid;grid-template-columns:250px 1fr 260px;gap:14px">
+        <div style="padding:14px;clip-path:polygon(16px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 16px);border:1px solid rgba(255,255,255,.14);background:linear-gradient(160deg,rgba(120,150,255,.08),rgba(255,255,255,.03));backdrop-filter:blur(12px)">
+          <div style="font-family:Silkscreen,Consolas,monospace;font-size:8.5px;letter-spacing:.2em;color:#7db4e8;margin-bottom:11px">QUEUE</div>
+          <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:13px;font-size:12px">
+            <div style="display:flex;align-items:center;gap:8px;padding:7px 11px;clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);border:1px solid rgba(160,190,255,.5);background:rgba(120,150,255,.16);color:#e9f0ff;font-weight:600;box-shadow:0 0 14px rgba(110,140,255,.25)">Ambiguous merges<div style="flex:1"></div>1,172</div>
+            <div style="display:flex;align-items:center;gap:8px;padding:7px 11px;clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04);color:#8fa8d8">Quarantined extractions<div style="flex:1"></div>29</div>
+            <div style="display:flex;align-items:center;gap:8px;padding:7px 11px;clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.04);color:#8fa8d8">Flagged documents<div style="flex:1"></div>3</div>
+          </div>
+          <div style="font-size:11px;color:#5c6f9e;margin-bottom:8px">sorted by confidence — least certain first</div>
+          <div style="display:flex;flex-direction:column;gap:5px">
+            <div style="padding:9px 11px;border-radius:12px;border:1px solid rgba(160,190,255,.55);background:rgba(120,150,255,.14);box-shadow:0 0 12px rgba(110,140,255,.2)">
+              <div style="font-size:12px;color:#e9f0ff;font-weight:600">Zenith Widgets</div>
+              <div style="font-size:11px;color:#8fa8d8">merge · 0.62 gray band</div>
+            </div>
+            <div style="padding:9px 11px;border-radius:12px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.03)">
+              <div style="font-size:12px;color:#b9cdf5">Northvale Labs</div>
+              <div style="font-size:11px;color:#5c6f9e">merge · 0.64 gray band</div>
+            </div>
+            <div style="padding:9px 11px;border-radius:12px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.03)">
+              <div style="font-size:12px;color:#b9cdf5">predicate “retained_for”</div>
+              <div style="font-size:11px;color:#5c6f9e">quarantine · 3 occurrences</div>
+            </div>
+            <div style="padding:9px 11px;border-radius:12px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.03)">
+              <div style="font-size:12px;color:#b9cdf5">A. Okafor / A. Okafor-Reid</div>
+              <div style="font-size:11px;color:#5c6f9e">merge · 0.66 gray band</div>
+            </div>
+            <div style="padding:9px 11px;border-radius:12px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.03)">
+              <div style="font-size:12px;color:#b9cdf5">SOP-231 rev C</div>
+              <div style="font-size:11px;color:#5c6f9e">flagged at capture</div>
+            </div>
+          </div>
+          <div style="margin-top:12px;padding-top:11px;border-top:1px solid rgba(255,255,255,.1);font-size:11px;color:#5c6f9e">Select several with Shift to decide them as a batch.</div>
+        </div>
+
+        <div style="padding:16px 18px;clip-path:polygon(16px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 16px);border:1px solid rgba(255,255,255,.14);background:linear-gradient(160deg,rgba(120,150,255,.08),rgba(255,255,255,.03));backdrop-filter:blur(12px)">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:4px">
+            <div style="font-size:16px;font-weight:600;color:#e9f0ff;text-shadow:0 0 16px rgba(140,170,255,.4)">Are these the same organization?</div>
+            <div style="flex:1"></div>
+            <div style="font-family:Consolas,monospace;font-size:10px;letter-spacing:.1em;color:#5c6f9e">item 1 of 1,204</div>
+          </div>
+          <div style="font-size:12px;color:#8fa8d8;margin-bottom:14px">The resolver stopped here on purpose: the score fell in the gray band and no identifier agreed.</div>
+
+          <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-radius:14px;background:rgba(230,215,140,.07);border:1px solid rgba(230,220,150,.3);margin-bottom:14px">
+            <div style="font-family:Consolas,monospace;font-size:12px;font-weight:700;color:#eadf9a">0.62</div>
+            <div style="position:relative;flex:1;height:10px;border-radius:5px;overflow:hidden;background:linear-gradient(90deg,rgba(255,140,110,.7) 0%,rgba(230,215,140,.7) 45%,rgba(230,215,140,.7) 72%,rgba(110,230,200,.7) 100%)">
+              <div style="position:absolute;top:-2px;bottom:-2px;left:62%;width:3px;background:#ffffff;box-shadow:0 0 8px rgba(255,255,255,.9)"></div>
+            </div>
+            <div style="font-size:11px;color:#5c6f9e">auto-merge needs 0.86 + a corroborating identifier or graph edge</div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+            <div style="padding:14px;clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px);border:1px solid rgba(160,190,255,.3);background:rgba(120,150,255,.06)">
+              <div style="font-family:Silkscreen,Consolas,monospace;font-size:7px;letter-spacing:.16em;color:#9fc0ff;margin-bottom:6px">CANDIDATE A : EXISTING</div>
+              <div style="font-size:15px;color:#e9f0ff;font-weight:600">Zenith Widgets</div>
+              <div style="font-size:11.5px;color:#5c6f9e;margin-top:3px">Organization · 41 facts · first seen 12 Mar 2025</div>
+              <div style="margin-top:11px;display:flex;flex-direction:column;gap:5px;font-size:11.5px;color:#b9cdf5;font-family:Consolas,'Lucida Console',monospace">
+                <div>domain · zenithwidgets.com</div>
+                <div>tax_id · <span style="color:#5c6f9e">none recorded</span></div>
+                <div>aliases · Zenith, Zenith Widgets Co.</div>
+                <div>appears in · 14 documents</div>
+              </div>
+            </div>
+            <div style="padding:14px;clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px);border:1px solid rgba(255,150,130,.35);background:rgba(255,110,90,.06)">
+              <div style="font-family:Silkscreen,Consolas,monospace;font-size:7px;letter-spacing:.16em;color:#ffcabb;margin-bottom:6px">CANDIDATE B : NEW MENTION</div>
+              <div style="font-size:15px;color:#e9f0ff;font-weight:600">Zenith Widgets LLC</div>
+              <div style="font-size:11.5px;color:#5c6f9e;margin-top:3px">Organization · 1 mention · seen 24 Jul 2026</div>
+              <div style="margin-top:11px;display:flex;flex-direction:column;gap:5px;font-size:11.5px;color:#b9cdf5;font-family:Consolas,'Lucida Console',monospace">
+                <div>domain · <span style="color:#5c6f9e">none extracted</span></div>
+                <div>tax_id · 88-2019447</div>
+                <div>aliases · —</div>
+                <div>appears in · SOP-014 v2 §5</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px">
+            <div style="padding:13px 14px;clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px);border:1px solid rgba(123,224,200,.3);background:rgba(123,224,200,.05)">
+              <div style="font-size:12px;font-weight:600;color:#a9ecd9;margin-bottom:8px">Evidence for the same thing</div>
+              <div style="display:flex;flex-direction:column;gap:7px;font-size:11.5px;color:#9dc4b6">
+                <div>Names agree after normalization (difflib 0.94)</div>
+                <div>Both appear in supplier-qualification documents from the same site</div>
+                <div>One shared neighbour in the graph: <span style="color:#9fc0ff">supplies → Botanical Extract Batch</span></div>
+              </div>
+            </div>
+            <div style="padding:13px 14px;clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px);border:1px solid rgba(255,150,130,.3);background:rgba(255,110,90,.05)">
+              <div style="font-size:12px;font-weight:600;color:#ffcabb;margin-bottom:8px">Evidence against</div>
+              <div style="display:flex;flex-direction:column;gap:7px;font-size:11.5px;color:#d9a294">
+                <div>No identifier overlap — B carries a tax_id A has never had</div>
+                <div>“LLC” suffix could be a distinct legal entity of the same group</div>
+                <div>Adjudicator (qwen3.6) returned same_entity = unsure, 0.58</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top:14px;padding:14px;clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px);border:1px solid rgba(255,255,255,.1);background:rgba(0,2,12,.45)">
+            <div style="font-family:Silkscreen,Consolas,monospace;font-size:7.5px;letter-spacing:.16em;color:#7db4e8;margin-bottom:9px">THE PASSAGE THAT PRODUCED CANDIDATE B</div>
+            <div style="font-size:13px;color:#dbe7ff;line-height:1.65;font-family:Georgia,'Times New Roman',serif;font-style:italic">“Finished batches are released only against the certificate of analysis supplied by <span style="background:rgba(159,192,255,.22);padding:1px 5px;border-radius:4px;box-shadow:0 0 0 1px rgba(159,192,255,.45);font-style:normal">Zenith Widgets LLC</span> (tax ID 88-2019447), whose qualification record is retained for seven years.”</div>
+            <div style="margin-top:9px;font-size:11px;color:#5c6f9e">SOP-014 Botanical Extract Batch Release · version 2 · §5 Records · chunk 7 of 13 · <a href="#">open the immutable original</a></div>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:12px">
+          <div style="padding:15px;clip-path:polygon(16px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 16px);border:1px solid rgba(255,255,255,.14);background:linear-gradient(160deg,rgba(120,150,255,.08),rgba(255,255,255,.03));backdrop-filter:blur(12px)">
+            <div style="font-family:Silkscreen,Consolas,monospace;font-size:8.5px;letter-spacing:.2em;color:#7db4e8;margin-bottom:12px">DECIDE</div>
+            <div style="display:flex;flex-direction:column;gap:9px">
+              <div onClick="{{ accept }}" style="cursor:pointer;text-align:center;font-size:12.5px;font-weight:600;color:#ffffff;padding:11px;border-radius:17px;border:1px solid rgba(160,190,255,.6);background:linear-gradient(180deg,rgba(120,150,255,.5),rgba(70,100,235,.35));box-shadow:0 0 18px rgba(110,140,255,.45),0 1px 0 rgba(255,255,255,.35) inset" style-hover="background:linear-gradient(180deg,rgba(150,175,255,.6),rgba(90,120,245,.45))">Merge them <span style="font-weight:400;opacity:.7">(A)</span></div>
+              <div onClick="{{ reject }}" style="cursor:pointer;text-align:center;font-size:12.5px;font-weight:500;color:#dbe7ff;padding:11px;border-radius:17px;border:1px solid rgba(255,255,255,.25);background:linear-gradient(180deg,rgba(255,255,255,.14),rgba(255,255,255,.05));box-shadow:0 1px 0 rgba(255,255,255,.2) inset" style-hover="background:linear-gradient(180deg,rgba(255,255,255,.24),rgba(255,255,255,.1))">Keep separate <span style="font-weight:400;opacity:.7">(R)</span></div>
+              <div onClick="{{ split }}" style="cursor:pointer;text-align:center;font-size:12.5px;font-weight:500;color:#ffd9cd;padding:11px;border-radius:17px;border:1px solid rgba(255,150,130,.45);background:rgba(255,110,90,.12)" style-hover="background:rgba(255,110,90,.24)">Split an earlier merge <span style="font-weight:400;opacity:.7">(S)</span></div>
+              <div onClick="{{ skip }}" style="cursor:pointer;text-align:center;font-size:12px;color:#8fa8d8;padding:9px;border-radius:15px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.03)" style-hover="background:rgba(255,255,255,.08)">Skip for now <span style="opacity:.7">(space)</span></div>
+            </div>
+            <div style="margin-top:12px;font-size:11.5px;color:#8fa8d8;line-height:1.55">Every merge is reversible. Splitting restores both records and re-resolves the facts that hung off them — nothing is silently joined forever.</div>
+          </div>
+
+          <sc-if value="{{ hasDecision }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:13px 15px;border-radius:16px;border:1px solid rgba(123,224,200,.4);background:rgba(123,224,200,.08);box-shadow:0 0 20px rgba(100,220,190,.2)">
+            <div style="font-family:Silkscreen,Consolas,monospace;font-size:7.5px;letter-spacing:.18em;color:#7be0c8;margin-bottom:5px">RECORDED</div>
+            <div style="font-size:11.5px;color:#c6f3e6;line-height:1.55">{{ decisionText }}</div>
+          </div>
+          </sc-if>
+
+          <div style="padding:15px;clip-path:polygon(16px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 16px);border:1px solid rgba(255,255,255,.14);background:linear-gradient(160deg,rgba(120,150,255,.08),rgba(255,255,255,.03));backdrop-filter:blur(12px)">
+            <div style="font-family:Silkscreen,Consolas,monospace;font-size:8.5px;letter-spacing:.2em;color:#7db4e8;margin-bottom:11px">YOUR SESSION</div>
+            <div style="font-size:26px;font-weight:600;color:#e9f0ff;line-height:1">{{ cleared }}</div>
+            <div style="font-size:11.5px;color:#5c6f9e;margin-bottom:11px">items cleared today · median 14s each</div>
+            <div style="position:relative;height:9px;border-radius:5px;overflow:hidden;background:rgba(255,255,255,.08)">
+              <div style="position:absolute;inset:0 88% 0 0;border-radius:5px;background:linear-gradient(90deg,#4fbfa4,#7be0c8);box-shadow:0 0 10px rgba(110,230,200,.6)"></div>
+              <div style="position:absolute;top:0;bottom:0;left:0;width:20%;background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.5),rgba(255,255,255,0));animation:khShine 3s ease-in-out infinite"></div>
+            </div>
+            <div style="font-size:11px;color:#8fa8d8;margin-top:9px">Keyboard only: A merge · R keep separate · S split · space skip. Your hands never need to leave the keys.</div>
+          </div>
+        </div>
+      </div>
+      </sc-if>
+
+      <sc-if value="{{ isOther }}" hint-placeholder-val="{{ false }}">
+      <div style="position:relative;max-width:620px;margin:80px auto 0;padding:28px;border-radius:20px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.05);backdrop-filter:blur(14px);text-align:center;box-shadow:0 0 40px rgba(90,120,255,.12)">
+        <div style="font-family:Silkscreen,Consolas,monospace;font-size:12px;color:rgba(200,220,255,.6);margin-bottom:12px">↑ ↑ ↑</div>
+        <div style="font-family:Silkscreen,Consolas,monospace;font-size:8.5px;letter-spacing:.24em;color:#ffcabb;margin-bottom:10px">SURFACE : NOT YET SKINNED</div>
+        <div style="font-size:19px;font-weight:600;color:#e9f0ff;text-shadow:0 0 16px rgba(140,170,255,.4)">{{ otherTitle }}</div>
+        <div style="font-size:12.5px;color:#8fa8d8;margin-top:9px;line-height:1.6">This surface exists in full in concept 03. It gets the Virtual Self treatment once the direction is picked — the structure and content carry over unchanged.</div>
+        <div style="margin-top:16px"><a href="../v3 blend/Operator.dc.html" style="display:inline-block;font-size:12px;font-weight:600;color:#ffffff;padding:9px 22px;border-radius:16px;border:1px solid rgba(160,190,255,.6);background:linear-gradient(180deg,rgba(120,150,255,.5),rgba(70,100,235,.35));box-shadow:0 0 18px rgba(110,140,255,.45),0 1px 0 rgba(255,255,255,.35) inset;text-decoration:none">See it in concept 03</a></div>
+      </div>
+      </sc-if>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:16px;padding:9px 16px;background:rgba(0,2,12,.6);border-top:1px solid rgba(255,255,255,.1)">
+      <div style="font-family:Silkscreen,Consolas,monospace;font-size:8px;letter-spacing:.2em;color:#7be0c8;animation:khFlicker 11s linear infinite">SYSTEM : NOMINAL</div>
+      <div style="font-family:Consolas,'Lucida Console',monospace;font-size:8.5px;letter-spacing:.14em;color:rgba(150,180,235,.35)">/≡/=—::read is safe : act is deliberate::—=/≡/</div>
+      <div style="display:flex;align-items:center;gap:7px;min-width:0;flex:1"><div style="width:6px;height:6px;border-radius:50%;background:#7be0c8;box-shadow:0 0 6px rgba(110,230,200,.9);animation:khBlink 2.2s ease-in-out infinite"></div><div style="font-family:Consolas,'Lucida Console',monospace;font-size:10.5px;color:#b9cdf5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ statusLine }}</div></div>
+      <div style="flex:none;font-size:10px;color:#5c6f9e">serving 127.0.0.1:8080 · read-only</div>
+      <div style="flex:none;font-size:10px;color:#5c6f9e">appliance · single box</div>
+      <div style="flex:none;display:flex;gap:4px">
+        <div style="width:8px;height:8px;transform:rotate(45deg);background:#9fc0ff;box-shadow:0 0 6px rgba(140,170,255,.7)"></div>
+        <div style="width:8px;height:8px;transform:rotate(45deg);background:#7be0c8;box-shadow:0 0 6px rgba(110,230,200,.7)"></div>
+        <div style="width:8px;height:8px;transform:rotate(45deg);background:#c9b8ff;box-shadow:0 0 6px rgba(180,150,255,.7)"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;defaultTab&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;monitor&quot;,&quot;sources&quot;,&quot;review&quot;,&quot;health&quot;,&quot;topology&quot;,&quot;landing&quot;,&quot;inference&quot;,&quot;facts&quot;],&quot;default&quot;:&quot;monitor&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Console&quot;},&quot;feedIntervalMs&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;min&quot;:600,&quot;max&quot;:6000,&quot;step&quot;:200,&quot;default&quot;:2200,&quot;unit&quot;:&quot;ms&quot;,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Console&quot;}}">
+const POOL = [
+  "capture  · msgraph-files: page 14/22 · 61 items landed · 3 replays skipped (content-hashed)",
+  "process  · SOP-014 v2 → 1 superparent / 6 parents / 7 children embedded (bge-m3)",
+  "extract  · qwen3.6 · 26 facts staged · 3 quarantined · 1 repair round-trip",
+  "resolve  · sweep ops: 41 mentions · 12 matched on an identifier · 6 sent to review",
+  "serving  · /v1/retrieve p95 182ms · budget 300ms · 0 refusals",
+  "capture  · throttled by Graph (429) · honoring Retry-After 12s",
+  "vault    · access token minted for tenants/ops/sources/msgraph-files",
+  "ground   · 7 facts kept with a span flag rather than discarded",
+  "resolve  · Zenith Widgets ↔ Zenith Widgets LLC scored 0.62 → held for a human",
+  "extract  · predicate 'retained_for' is not in baseline-0.1 → quarantined (3rd time)",
+  "capture  · 2 documents tombstoned by a delete signal · storm guard 2 of 10",
+  "checks   · khctl verify: 11 of 11 green",
+  "process  · queue depth 74 · 3 workers claiming with SKIP LOCKED",
+  "resolve  · merge accepted by a reviewer · 4 facts re-pointed · reversible"
+];
+
+const OTHER_TITLES = {
+  sources: "Sources & access",
+  health: "Errors & health",
+  topology: "System connections",
+  landing: "Data landing",
+  inference: "Inference",
+  facts: "Facts & entities"
+};
+
+class Component extends DCLogic {
+  state = { tab: "monitor", feed: [], t: 0, cleared: 37, decision: null, bars: [] };
+
+  componentDidMount() {
+    const start = [];
+    for (let i = 0; i < 9; i++) start.push(this.line(i, i * 37));
+    const bars = [];
+    for (let i = 0; i < 28; i++) bars.push(24 + Math.round(Math.abs(Math.sin(i * 1.7)) * 62));
+    const tab = this.props.defaultTab || "monitor";
+    this.setState({ feed: start, bars: bars, tab: tab });
+    const ms = this.props.feedIntervalMs || 2200;
+    this.timer = setInterval(() => this.tick(), ms);
+    this.onKey = (e) => {
+      if (this.state.tab !== "review") return;
+      const k = e.key.toLowerCase();
+      if (k === "a") this.decide("merged");
+      else if (k === "r") this.decide("separate");
+      else if (k === "s") this.decide("split");
+      else if (e.key === " ") this.decide("skipped");
+    };
+    window.addEventListener("keydown", this.onKey);
+  }
+
+  componentWillUnmount() {
+    clearInterval(this.timer);
+    window.removeEventListener("keydown", this.onKey);
+  }
+
+  line(i, ago) {
+    const base = 14 * 3600 + 9 * 60 + 4;
+    const s = base - ago;
+    const hh = String(Math.floor(s / 3600) % 24).padStart(2, "0");
+    const mm = String(Math.floor(s / 60) % 60).padStart(2, "0");
+    const ss = String(s % 60).padStart(2, "0");
+    return { time: hh + ":" + mm + ":" + ss, text: POOL[((i % POOL.length) + POOL.length) % POOL.length] };
+  }
+
+  tick() {
+    this.setState((s) => {
+      const feed = [this.line(-s.t - 1, -(s.t + 1) * 3)].concat(s.feed).slice(0, 9);
+      const bars = s.bars.slice(1).concat([24 + Math.round(Math.random() * 62)]);
+      return { t: s.t + 1, feed: feed, bars: bars };
+    });
+  }
+
+  decide(kind) {
+    const texts = {
+      merged: "Merged into Zenith Widgets. 4 facts re-pointed at the surviving record. Undo any time from the entity's history.",
+      separate: "Kept separate. Zenith Widgets LLC is now its own entity; the pair will not be offered again unless new evidence arrives.",
+      split: "Opened the split view for this entity's earlier merges. Nothing has changed yet.",
+      skipped: "Skipped. The item goes back into the queue at the same confidence."
+    };
+    this.setState((s) => ({
+      decision: texts[kind],
+      cleared: kind === "skipped" ? s.cleared : s.cleared + 1
+    }));
+  }
+
+  tabBg(name) {
+    return this.state.tab === name
+      ? "linear-gradient(180deg,rgba(120,150,255,.32),rgba(70,100,235,.18))"
+      : "rgba(255,255,255,.04)";
+  }
+  tabB(name) {
+    return this.state.tab === name ? "1px solid rgba(160,190,255,.6)" : "1px solid rgba(255,255,255,.12)";
+  }
+
+  uptime() {
+    const s = 4 * 86400 + 6 * 3600 + 12 * 60 + this.state.t * 2;
+    const d = Math.floor(s / 86400);
+    const h = String(Math.floor(s / 3600) % 24).padStart(2, "0");
+    const m = String(Math.floor(s / 60) % 60).padStart(2, "0");
+    const ss = String(s % 60).padStart(2, "0");
+    return d + "d " + h + ":" + m + ":" + ss;
+  }
+
+  renderVals() {
+    const t = this.state.t;
+    const tab = this.state.tab;
+    const wobble = (base, amp, phase) => base + Math.round(Math.sin(t / 3 + phase) * amp);
+    return {
+      isMonitor: tab === "monitor",
+      isReview: tab === "review",
+      isOther: tab !== "monitor" && tab !== "review",
+      otherTitle: OTHER_TITLES[tab] || "",
+      tabMonitor: this.tabBg("monitor"), tabMonitorB: this.tabB("monitor"),
+      tabSources: this.tabBg("sources"), tabSourcesB: this.tabB("sources"),
+      tabReview: this.tabBg("review"), tabReviewB: this.tabB("review"),
+      tabHealth: this.tabBg("health"), tabHealthB: this.tabB("health"),
+      tabTopology: this.tabBg("topology"), tabTopologyB: this.tabB("topology"),
+      tabLanding: this.tabBg("landing"), tabLandingB: this.tabB("landing"),
+      tabInference: this.tabBg("inference"), tabInferenceB: this.tabB("inference"),
+      tabFacts: this.tabBg("facts"), tabFactsB: this.tabB("facts"),
+      goMonitor: () => this.setState({ tab: "monitor" }),
+      goSources: () => this.setState({ tab: "sources" }),
+      goReview: () => this.setState({ tab: "review" }),
+      goHealth: () => this.setState({ tab: "health" }),
+      goTopology: () => this.setState({ tab: "topology" }),
+      goLanding: () => this.setState({ tab: "landing" }),
+      goInference: () => this.setState({ tab: "inference" }),
+      goFacts: () => this.setState({ tab: "facts" }),
+      feed: this.state.feed,
+      bars: this.state.bars.map((b) => b + "%"),
+      uptime: this.uptime(),
+      landed: (1318 + Math.floor(t / 2)).toLocaleString(),
+      facts: (9295 + t * 3).toLocaleString(),
+      p95: wobble(182, 21, 0),
+      perMin: wobble(46, 9, 1.4),
+      refreshLabel: Math.round((this.props.feedIntervalMs || 2200) / 100) / 10 + "s",
+      pipelineStatus:
+        "Capture is mid-sweep on two SharePoint sites · extraction is the slowest stage right now · resolve is holding " +
+        "1,172 pairs it will not decide alone.",
+      statusLine: this.state.feed.length ? this.state.feed[0].text.replace(/\s+/g, " ") : "watching",
+      cleared: this.state.cleared,
+      hasDecision: !!this.state.decision,
+      decisionText: this.state.decision || "",
+      accept: () => this.decide("merged"),
+      reject: () => this.decide("separate"),
+      split: () => this.decide("split"),
+      skip: () => this.decide("skipped")
+    };
+  }
+}
+
+</script>
+</body>
+</html>

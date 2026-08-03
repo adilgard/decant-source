@@ -1,0 +1,14 @@
+# Normalize text files; pin endings where the runtime cares.
+* text=auto
+
+# Anything executed on the Ubuntu boxes must stay LF
+*.sh text eol=lf
+Dockerfile text eol=lf
+*.hcl text eol=lf
+
+# Windows batch files must stay CRLF
+*.cmd text eol=crlf
+
+# Binary — never touch
+*.docx binary
+*.xlsx binary

@@ -1,0 +1,30 @@
+# Production OpenBao override — used by `khctl apply` whenever the plan's
+# secrets seam is "ours":  docker compose -f docker-compose.yml -f
+# docker-compose.openbao-prod.yml up -d ...
+#
+# Replaces the pilot's dev-mode vault (in-memory, auto-unsealed) with raft
+# persistence + manual init/unseal under the plan's custody ceremony.
+# The dev BAO_DEV_* environment variables from the base file are ignored
+# by `server -config`.
+services:
+  openbao:
+    # BP28 #13: a fresh named volume mounts at /openbao/data ROOT-owned
+    # (the image's stock entrypoint chowns its standard dirs, but the raft
+    # path is not one of them), so the openbao user cannot write vault.db
+    # and the container crash-loops forever on a clean box. Start as root,
+    # chown the raft path, then hand off to the stock entrypoint — which
+    # drops privileges to the openbao user itself (su-exec). The vault
+    # PROCESS never runs as root.
+    user: "0:0"
+    entrypoint:
+      - /bin/sh
+      - -c
+      - chown -R openbao:openbao /openbao/data && exec /usr/local/bin/docker-entrypoint.sh "$$@"
+      - --
+    command: server -config=/etc/openbao/config.hcl
+    volumes:
+      - kh_bao_data:/openbao/data
+      - ./openbao/config.hcl:/etc/openbao/config.hcl:ro
+
+volumes:
+  kh_bao_data:

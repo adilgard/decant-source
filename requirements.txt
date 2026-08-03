@@ -1,0 +1,22 @@
+# Knowledge Hub — Python dependencies (from SETUP.md).
+# Human-readable list; after a successful install we freeze exact versions to
+# requirements.lock.txt for reproducible installs on the Ubuntu boxes.
+pydantic            # data models / validation (the models.py contracts)
+psycopg[binary]     # Postgres driver
+boto3               # S3 client (SeaweedFS)
+dlt                 # data load tool (ingestion pipelines)
+docling             # document parsing (PDF/docx -> structured text)
+semchunk            # semantic chunking (paragraph -> sentence splitting w/ overlap)
+tokenizers          # bge-m3 tokenizer for chunk size control (tokenizer.json ships in the kit; HF hub = dev-bench fallback)
+splink              # probabilistic entity resolution (4.x bundles DuckDB; no extra needed)
+pytest              # tests
+ollama              # Ollama Python client (embeddings + extraction)
+hvac                # OpenBao/Vault client
+openpyxl            # metrics_report.py — Excel report generation (was transitive; now direct)
+httpx               # tests/test_service_http.py — HTTP client for the S5 serving-boundary tests
+                    # (was transitive via ollama; now direct. The service itself is stdlib-only.)
+psutil              # metrics_report.py — clean shutdown of headless LibreOffice (was transitive; now direct)
+FlagEmbedding       # bge-m3 LEARNED SPARSE for hybrid retrieval benchmarking (Ollama's embed API
+                    # is dense-only). Pulls torch: on Windows we force torch==2.13.0+cu130 from
+                    # https://download.pytorch.org/whl/cu130 (docling's resolution gave +cpu);
+                    # on Linux plain torch==2.13.0 from PyPI is CUDA-enabled already.

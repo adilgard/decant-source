@@ -1,0 +1,11 @@
+{
+  "identities": [
+    {
+      "name": "kh_admin",
+      "credentials": [
+        { "accessKey": "kh_s3_admin", "secretKey": "kh_s3_secret_pw" }
+      ],
+      "actions": ["Admin"]
+    }
+  ]
+}

@@ -473,6 +473,10 @@ def _fake_infra(tmp_path):
     (infra / "migrations").mkdir()
     (infra / "migrations" / "001_test.sql").write_text("SELECT 1;",
                                                        encoding="utf-8")
+    (infra / "ontologies").mkdir()   # d.s Stage 1: ships the baseline set
+    (infra / "ontologies" / "baseline-0.1.json").write_text(
+        '{"version": "baseline-0.1", "entity_types": ["A"],'
+        ' "predicates": ["p"]}', encoding="utf-8")
     pkg = infra / "knowledge_hub_pkg"
     (pkg / "knowledge_hub").mkdir(parents=True)
     (pkg / "pyproject.toml").write_text("[project]\nname='x'",

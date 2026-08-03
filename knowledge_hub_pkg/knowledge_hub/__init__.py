@@ -86,7 +86,7 @@ in lock-step with
 same commit, always.
 """
 
-__version__ = "0.28.0"
+__version__ = "0.29.0"
 
 from knowledge_hub.choke_point import (
     CredentialResolver,

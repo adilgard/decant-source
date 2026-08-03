@@ -1,6 +1,6 @@
 [project]
 name = "knowledge_hub"
-version = "0.28.0"
+version = "0.29.0"
 description = "Knowledge Hub — pilot package (keep models.py in lock-step with knowledge_hub_baseline_schema.sql + migrations)"
 requires-python = ">=3.12"
 dependencies = [

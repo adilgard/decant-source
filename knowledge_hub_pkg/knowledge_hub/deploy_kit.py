@@ -141,7 +141,10 @@ BUNDLE_FILES = (
     "requirements.txt",
     "requirements.lock.txt",
 )
-BUNDLE_DIRS = ("migrations",)
+# ontologies/ ships the portable BASELINE set only (d.s Stage 1 shipping
+# rule): a deployment's own imported versions accumulate in its work-dir
+# copy, which seed_work_dir never overwrites (present files are kept).
+BUNDLE_DIRS = ("migrations", "ontologies")
 # Kit dirs seeded into the deployment home for RUNTIME use (not read by
 # apply itself) — consumed by deploy_launch.seed_work_dir, same
 # producer/consumer symmetry as BUNDLE_DIRS.

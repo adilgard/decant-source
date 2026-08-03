@@ -692,6 +692,106 @@ async function importOntologyFile(file) {
   await refreshOntology();
 }
 
+/* ---------------------------------------------------------- data landing */
+// d.s Stage 2: console folder ingest. The path is typed (no browser
+// folder picker — it cannot return a real server path) and validated
+// server-side. Job creation is the audited write; progress is polled.
+function landSay(ok, text) {
+  $("ld-msg-box").classList.toggle("kh-hide", !ok);
+  $("ld-err-box").classList.toggle("kh-hide", ok);
+  $(ok ? "ld-msg" : "ld-err").textContent = text;
+}
+
+async function populateOntologySelect() {
+  const resp = await api("/v1/ontology");
+  if (resp.status !== 200) return;
+  const body = await resp.json();
+  const sel = $("ld-ontology");
+  const current = sel.value;
+  sel.textContent = "";
+  const dflt = document.createElement("option");
+  dflt.value = "";
+  dflt.textContent = "active selection (default" +
+    (body.active ? ": " + body.active : "") + ")";
+  sel.appendChild(dflt);
+  body.versions.forEach((v) => {
+    const opt = document.createElement("option");
+    opt.value = v.version;
+    opt.textContent = v.version + (v.active ? " (active)" : "");
+    sel.appendChild(opt);
+  });
+  sel.value = current;   // keep the operator's pick across refreshes
+}
+
+async function startIngest() {
+  const params = { path: $("ld-path").value.trim(),
+                   recurse: $("ld-recurse").checked };
+  if ($("ld-include").value.trim()) params.include = $("ld-include").value.trim();
+  if ($("ld-exclude").value.trim()) params.exclude = $("ld-exclude").value.trim();
+  if ($("ld-ontology").value) params.ontology_version = $("ld-ontology").value;
+  if (!params.path) { landSay(false, "Type the folder's absolute path first."); return; }
+  let resp;
+  try {
+    resp = await api("/v1/actions/ingest_folder", {
+      method: "POST", body: JSON.stringify(params) });
+  } catch (e) { return; }
+  const body = await resp.json();
+  if (resp.status === 403) { landSay(false, "Operator role required."); return; }
+  if (resp.status !== 200) {
+    landSay(false, "Not started — " + (body.detail || body.error || resp.status) + ".");
+    return;
+  }
+  const r = body.result;
+  landSay(true, "Job " + r.job_id + " queued for " + r.path + " under ontology " +
+    r.ontology_version + ". The runner picks it up within seconds; progress shows on the right.");
+  await refreshJobs();
+}
+
+function jobRow(j) {
+  const colors = {
+    queued:  ["#8fa8d8", "rgba(255,255,255,.25)", "rgba(255,255,255,.06)"],
+    running: ["#eadf9a", "rgba(230,220,150,.4)", "rgba(230,215,140,.08)"],
+    done:    ["#7be0c8", "rgba(123,224,200,.35)", "rgba(123,224,200,.08)"],
+    failed:  ["#ffcabb", "rgba(255,150,130,.4)", "rgba(255,110,90,.1)"],
+  }[j.status] || ["#8fa8d8", "rgba(255,255,255,.25)", "rgba(255,255,255,.06)"];
+  const c = j.counts || {};
+  const line = j.status === "failed"
+    ? (j.error || "failed").split("\n")[0]
+    : ["landed " + fmt(c.files_landed), "duplicates " + fmt(c.files_replayed),
+       "unknown skipped " + fmt(c.skipped_unknown),
+       "processed " + fmt(c.docs_processed), "extracted " + fmt(c.docs_extracted),
+       "facts " + fmt(c.facts_promoted)].join(" · ");
+  const row = document.createElement("div");
+  row.setAttribute("style",
+    "padding:11px 13px;border-radius:12px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.03)");
+  row.innerHTML =
+    '<div style="display:flex;align-items:center;gap:10px">' +
+    '<div style="font-family:Consolas,monospace;font-size:12px;color:#e9f0ff;font-weight:600">job ' + j.id + "</div>" +
+    '<div style="font-family:Silkscreen,Consolas,monospace;font-size:7px;letter-spacing:.1em;color:' + colors[0] +
+      ';padding:2px 8px;border-radius:8px;border:1px solid ' + colors[1] + ";background:" + colors[2] + '">' +
+      esc(j.status.toUpperCase()) + "</div>" +
+    '<div style="flex:1"></div>' +
+    '<div style="font-size:10.5px;color:#5c6f9e;font-family:Consolas,monospace">' + esc((j.created_at || "").slice(0, 19).replace("T", " ")) + "</div></div>" +
+    '<div style="font-size:11px;color:#b9cdf5;font-family:Consolas,monospace;margin-top:6px;word-break:break-all">' + esc((j.params || {}).path || "") + "</div>" +
+    '<div style="font-size:11px;color:' + (j.status === "failed" ? "#ffcabb" : "#8fa8d8") + ';margin-top:5px">' + esc(line) +
+      (c.ontology_version ? ' <span style="color:#5c6f9e">· ontology ' + esc(c.ontology_version) + "</span>" : "") + "</div>";
+  return row;
+}
+
+async function refreshJobs() {
+  const resp = await api("/v1/jobs");
+  if (resp.status === 403) { lock(NO_ROLE_MSG); return; }
+  if (resp.status !== 200) return;
+  const body = await resp.json();
+  const list = $("ld-jobs");
+  list.textContent = "";
+  if (!body.jobs.length) {
+    list.innerHTML = '<div style="font-size:11px;color:#5c6f9e">no jobs yet</div>';
+    return;
+  }
+  body.jobs.forEach((j) => list.appendChild(jobRow(j)));
+}
+
 /* ------------------------------------------------------------------- tabs */
 function setTab(name) {
   state.tab = name;
@@ -702,14 +802,20 @@ function setTab(name) {
       : "rgba(255,255,255,.04)";
     el.style.border = active ? "1px solid rgba(160,190,255,.6)" : "1px solid rgba(255,255,255,.12)";
   });
-  const wired = name === "monitor" || name === "review" || name === "ontology";
+  const wired = name === "monitor" || name === "review" ||
+    name === "ontology" || name === "landing";
   $("panel-monitor").classList.toggle("kh-hide", name !== "monitor");
   $("panel-review").classList.toggle("kh-hide", name !== "review");
   $("panel-ontology").classList.toggle("kh-hide", name !== "ontology");
+  $("panel-landing").classList.toggle("kh-hide", name !== "landing");
   $("panel-other").classList.toggle("kh-hide", wired);
   if (!wired) $("other-title").textContent = OTHER_TITLES[name] || "";
   if (name === "review" && state.token) refreshReviews(true).catch(() => {});
   if (name === "ontology" && state.token) refreshOntology().catch(() => {});
+  if (name === "landing" && state.token) {
+    refreshJobs().catch(() => {});
+    populateOntologySelect().catch(() => {});
+  }
 }
 
 /* ------------------------------------------------------------------- boot */
@@ -731,6 +837,9 @@ function startPolling() {
   state.timers.push(setInterval(() => {
     if (state.tab === "review") refreshReviews(true).catch(() => {});
   }, REVIEW_POLL_MS));
+  state.timers.push(setInterval(() => {
+    if (state.tab === "landing") refreshJobs().catch(() => {});
+  }, POLL_MS));
   state.timers.push(setInterval(tickUptime, 1000));
 }
 
@@ -743,6 +852,11 @@ document.addEventListener("DOMContentLoaded", () => {
   $("token-input").addEventListener("keydown", (e) => {
     if (e.key === "Enter") unlock($("token-input").value.trim());
   });
+  $("ld-start").addEventListener("click", () => startIngest().catch(() => {}));
+  $("ld-path").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") startIngest().catch(() => {});
+  });
+
   $("onto-import").addEventListener("click", () => $("onto-file").click());
   $("onto-file").addEventListener("change", (e) => {
     const file = e.target.files && e.target.files[0];

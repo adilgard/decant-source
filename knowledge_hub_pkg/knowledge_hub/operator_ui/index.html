@@ -372,6 +372,70 @@ a:hover{color:#c3d5ff;text-decoration:underline}
         </div>
       </div>
 
+      <div id="panel-landing" class="kh-hide" style="position:relative;display:flex;flex-direction:column;gap:14px">
+        <!-- d.s Stage 2: console folder ingest. The path is TYPED and
+             validated server-side — a browser folder picker cannot return
+             a real server path, so none is offered. -->
+        <div style="padding:13px 16px;clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px);border:1px solid rgba(255,255,255,.14);background:linear-gradient(160deg,rgba(120,150,255,.08),rgba(255,255,255,.03));backdrop-filter:blur(12px)">
+          <div style="font-family:Silkscreen,Consolas,monospace;font-size:8.5px;letter-spacing:.2em;color:#7db4e8">DATA LANDING : FOLDER INGEST</div>
+          <div style="font-size:12px;color:#8fa8d8;margin-top:6px;line-height:1.6">Type an absolute folder path <span style="color:#b9cdf5">on the server</span> — it is validated there, not here. Eligible files (<span style="font-family:Consolas,monospace;color:#b9cdf5">.md .txt .pdf .docx</span>) land in the immutable raw store; files already ingested are skipped by content hash, unknown types are skipped and counted, never fatal. Extraction runs against the stored copy under the ontology version fixed when the job is created. The run is a background job — progress appears on the right.</div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:.85fr 1.15fr;gap:14px">
+          <div style="padding:16px 18px;clip-path:polygon(16px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 16px);border:1px solid rgba(255,255,255,.14);background:linear-gradient(160deg,rgba(120,150,255,.08),rgba(255,255,255,.03));backdrop-filter:blur(12px)">
+            <div style="font-family:Silkscreen,Consolas,monospace;font-size:8.5px;letter-spacing:.2em;color:#7db4e8;margin-bottom:12px">NEW : INGEST JOB</div>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <div>
+                <div style="font-size:11px;color:#8fa8d8;margin-bottom:4px">Absolute folder path (server-side)</div>
+                <input id="ld-path" type="text" spellcheck="false" placeholder="D:\clientdocs\policies  ·  /srv/docs/policies"
+                       style="width:100%;box-sizing:border-box;padding:9px 12px;border-radius:10px;border:1px solid rgba(160,190,255,.4);background:rgba(0,2,12,.6);color:#e9f0ff;font-family:Consolas,monospace;font-size:12px;outline:none">
+              </div>
+              <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:#b9cdf5;cursor:pointer">
+                <input id="ld-recurse" type="checkbox" checked> include subfolders
+              </label>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                <div>
+                  <div style="font-size:11px;color:#8fa8d8;margin-bottom:4px">Include globs <span style="color:#5c6f9e">(optional, comma-sep)</span></div>
+                  <input id="ld-include" type="text" spellcheck="false" placeholder="*.pdf, reports/**"
+                         style="width:100%;box-sizing:border-box;padding:8px 11px;border-radius:10px;border:1px solid rgba(255,255,255,.18);background:rgba(0,2,12,.5);color:#e9f0ff;font-family:Consolas,monospace;font-size:11.5px;outline:none">
+                </div>
+                <div>
+                  <div style="font-size:11px;color:#8fa8d8;margin-bottom:4px">Exclude globs <span style="color:#5c6f9e">(optional)</span></div>
+                  <input id="ld-exclude" type="text" spellcheck="false" placeholder="drafts/**, *~*"
+                         style="width:100%;box-sizing:border-box;padding:8px 11px;border-radius:10px;border:1px solid rgba(255,255,255,.18);background:rgba(0,2,12,.5);color:#e9f0ff;font-family:Consolas,monospace;font-size:11.5px;outline:none">
+                </div>
+              </div>
+              <div>
+                <div style="font-size:11px;color:#8fa8d8;margin-bottom:4px">Ontology version for this ingest</div>
+                <select id="ld-ontology" style="width:100%;box-sizing:border-box;padding:8px 11px;border-radius:10px;border:1px solid rgba(255,255,255,.18);background:rgba(0,2,12,.6);color:#e9f0ff;font-family:Consolas,monospace;font-size:12px;outline:none">
+                  <option value="">active selection (default)</option>
+                </select>
+                <div style="font-size:10.5px;color:#5c6f9e;margin-top:4px">fixed when the job is created — a later swap never reaches a running job</div>
+              </div>
+              <div id="ld-start" style="cursor:pointer;text-align:center;font-size:12.5px;font-weight:600;color:#ffffff;padding:11px;border-radius:17px;border:1px solid rgba(160,190,255,.6);background:linear-gradient(180deg,rgba(120,150,255,.5),rgba(70,100,235,.35));box-shadow:0 0 18px rgba(110,140,255,.45),0 1px 0 rgba(255,255,255,.35) inset">Start ingest job</div>
+            </div>
+            <div id="ld-msg-box" class="kh-hide" style="margin-top:12px;padding:12px 14px;border-radius:14px;border:1px solid rgba(123,224,200,.4);background:rgba(123,224,200,.08)">
+              <div style="font-family:Silkscreen,Consolas,monospace;font-size:7.5px;letter-spacing:.18em;color:#7be0c8;margin-bottom:5px">QUEUED</div>
+              <div id="ld-msg" style="font-size:11.5px;color:#c6f3e6;line-height:1.55"></div>
+            </div>
+            <div id="ld-err-box" class="kh-hide" style="margin-top:12px;padding:12px 14px;border-radius:14px;border:1px solid rgba(255,150,130,.4);background:rgba(255,110,90,.08)">
+              <div style="font-family:Silkscreen,Consolas,monospace;font-size:7.5px;letter-spacing:.18em;color:#ffcabb;margin-bottom:5px">REFUSED</div>
+              <div id="ld-err" style="font-size:11.5px;color:#ffd9cd;line-height:1.55"></div>
+            </div>
+          </div>
+
+          <div style="padding:16px 18px;clip-path:polygon(16px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 16px);border:1px solid rgba(255,255,255,.14);background:linear-gradient(160deg,rgba(120,150,255,.08),rgba(255,255,255,.03));backdrop-filter:blur(12px)">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+              <div style="font-size:14px;font-weight:600;letter-spacing:.04em;color:#e9f0ff">Jobs</div>
+              <div style="font-size:11px;color:#5c6f9e">background runner · progress refreshes with the poll</div>
+            </div>
+            <div id="ld-jobs" style="display:flex;flex-direction:column;gap:10px">
+              <div style="font-size:11px;color:#5c6f9e">no jobs yet</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div id="panel-other" class="kh-hide">
         <div style="position:relative;max-width:620px;margin:80px auto 0;padding:28px;border-radius:20px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.05);backdrop-filter:blur(14px);text-align:center;box-shadow:0 0 40px rgba(90,120,255,.12)">
           <div style="font-family:Silkscreen,Consolas,monospace;font-size:12px;color:rgba(200,220,255,.6);margin-bottom:12px">↑ ↑ ↑</div>

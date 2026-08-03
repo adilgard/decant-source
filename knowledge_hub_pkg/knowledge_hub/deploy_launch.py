@@ -912,8 +912,15 @@ def adapter_for(entry):
         if not Path(root).is_dir():
             return None, f"config.root {root!r} is not a directory on this box"
         from knowledge_hub.sources_fs import FilesystemSourceAdapter
-        return (FilesystemSourceAdapter(source_ref=entry.source_ref,
-                                        root=root), None)
+        # Scope options (d.s Stage 2) ride the registry config so a source
+        # behaves identically whether a sweep or a console job runs it.
+        # CLI-registered sources without them keep the pilot behavior
+        # (recurse, no filters).
+        return (FilesystemSourceAdapter(
+            source_ref=entry.source_ref, root=root,
+            recurse=entry.config.get("recurse", True),
+            include=entry.config.get("include"),
+            exclude=entry.config.get("exclude")), None)
     return None, (f"source_system {entry.source_system!r} has no "
                   f"registry-driven adapter yet (runs via its own runbook)")
 
@@ -1051,11 +1058,17 @@ def run_ingest(tenants: list[str], add_sources: list[str],
         operator action could change. Rebuilding per sweep means a --watch
         loop picks up a console swap on its next pass; heavy pieces
         (scorer, embedder, store) are built once above and shared."""
+        def trio_for(version: str):
+            # A document pinned at capture time (console folder job) must
+            # extract under ITS version even when this CLI sweep drains it.
+            b = PostgresOntologyBinding(store, version=version)
+            return b, LLMJointExtractionStrategy(b), StructuredMapStrategy(b)
+
         binding = PostgresOntologyBinding(store)
         extraction = ExtractionService(
             pipeline, raw_store, binding, LLMJointExtractionStrategy(binding),
             StructuredMapStrategy(binding), SpanGrounder(),
-            dispatcher=ext_dispatcher)
+            dispatcher=ext_dispatcher, strategy_factory=trio_for)
         resolution = ResolutionService(pipeline, scorer, embedder)
         return binding, extraction, resolution
 
@@ -1104,6 +1117,13 @@ def _ingest_run(tenants, add_sources, capture, processing,
             for entry in entries:
                 if entry.status == "disabled":
                     say(f"[{tenant}] {entry.source_ref}: disabled — skipped")
+                    continue
+                if entry.config.get("job_only"):
+                    # Console folder sources re-run ONLY via a new operator
+                    # job — watched-folder behavior is out of scope by
+                    # design, so the sweep leaves them alone.
+                    say(f"[{tenant}] {entry.source_ref}: job-only — skipped "
+                        f"(re-runs via the console)")
                     continue
                 adapter, why_not = adapter_for(entry)
                 if adapter is None:

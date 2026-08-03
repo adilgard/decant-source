@@ -42,7 +42,7 @@ per-unit token/wall numbers persisted here are that benchmark's inputs.
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from typing import Callable, Optional
 
 from pydantic import BaseModel
 
@@ -133,7 +133,10 @@ class ExtractionService:
                  llm_strategy: ExtractionStrategy,
                  structured_strategy: ExtractionStrategy,
                  grounder: Grounder,
-                 dispatcher: Optional[PostgresDispatcher] = None):
+                 dispatcher: Optional[PostgresDispatcher] = None,
+                 strategy_factory: Optional[Callable[
+                     [str], tuple[OntologyBinding, ExtractionStrategy,
+                                  ExtractionStrategy]]] = None):
         self.pipeline = pipeline
         self.store = pipeline.store
         self.raw_store = raw_store
@@ -142,6 +145,39 @@ class ExtractionService:
         self.structured_strategy = structured_strategy
         self.grounder = grounder
         self.dispatcher = dispatcher  # the extraction_queue dispatcher
+        # d.s Stage 2: per-document ontology pinning. A raw document whose
+        # native_metadata carries ontology_version_override (stamped at
+        # capture time by a console folder job — the version FIXED at job
+        # creation) extracts under THAT version, not the process default.
+        # The factory builds the (binding, llm, structured) trio for a
+        # version; trios are cached per version. Injected, so this service
+        # stays typed against the seams, never the concrete strategies.
+        self._strategy_factory = strategy_factory
+        self._trios: dict[str, tuple[OntologyBinding, ExtractionStrategy,
+                                     ExtractionStrategy]] = {
+            binding.version: (binding, llm_strategy, structured_strategy)}
+
+    def _trio_for(self, raw: RawDocument) -> tuple[
+            OntologyBinding, ExtractionStrategy, ExtractionStrategy]:
+        """The binding + strategies this document extracts under: its
+        capture-time override when one is stamped, the service default
+        otherwise. An override with no factory is a HARD error — extracting
+        under the wrong version silently would be a provenance lie; the
+        nack keeps the document visible on the queue instead."""
+        override = (raw.native_metadata or {}).get(
+            "ontology_version_override")
+        if override is None or override == self.binding.version:
+            return self.binding, self.llm_strategy, self.structured_strategy
+        if override not in self._trios:
+            if self._strategy_factory is None:
+                raise ExtractionError(
+                    raw.tenant_id, None, None,
+                    f"raw_document id={raw.id} is pinned to ontology "
+                    f"{override!r} but this ExtractionService has no "
+                    f"strategy_factory — wire one (operator_jobs/run_ingest "
+                    f"do) or re-run without the pin")
+            self._trios[override] = self._strategy_factory(override)
+        return self._trios[override]
 
     # ------------------------------------------------------------ consume --
     def consume(self, tenant_id: str, limit: int = 10) -> list[ExtractSummary]:
@@ -191,17 +227,21 @@ class ExtractionService:
                 document_id=document.id, status="review",
                 reason=document.review_reason)
 
+        binding, llm_strategy, structured_strategy = self._trio_for(raw)
         if document.data_track == PROSE_TRACK:
-            summary = self._extract_prose(raw, document)
+            summary = self._extract_prose(raw, document, binding,
+                                          llm_strategy)
         else:
-            summary = self._extract_structured(raw, document)
+            summary = self._extract_structured(raw, document, binding,
+                                               structured_strategy)
 
         self._mark_extracted(tenant_id, raw_document_id)
         return summary
 
     # ------------------------------------------------------- prose track --
-    def _extract_prose(self, raw: RawDocument,
-                       document: Document) -> ExtractSummary:
+    def _extract_prose(self, raw: RawDocument, document: Document,
+                       binding: OntologyBinding,
+                       strategy: ExtractionStrategy) -> ExtractSummary:
         tenant_id = document.tenant_id
         parents = self._parents(tenant_id, document.id)
         if not parents:
@@ -216,39 +256,40 @@ class ExtractionService:
 
         for parent in parents:
             if self._already_ran(tenant_id, parent.content_hash,
-                                 self.llm_strategy):
+                                 strategy, binding):
                 summary.units_replayed += 1
                 continue
             unit = ExtractionUnit(
                 document=document, source_system=raw.source_system,
                 chunk=parent, text=parent.content,
                 digest=digest.for_prompt())
-            result = self.llm_strategy.extract(unit)
+            result = strategy.extract(unit)
             self._finalize(unit, result, digest, parent.content_hash,
-                           self.llm_strategy, summary)
+                           strategy, binding, summary)
 
         if summary.units_replayed == summary.units:
             summary.status = "replayed"
         return summary
 
     # -------------------------------------------------- structured track --
-    def _extract_structured(self, raw: RawDocument,
-                            document: Document) -> ExtractSummary:
+    def _extract_structured(self, raw: RawDocument, document: Document,
+                            binding: OntologyBinding,
+                            strategy: ExtractionStrategy) -> ExtractSummary:
         tenant_id = document.tenant_id
         summary = ExtractSummary(
             tenant_id=tenant_id, raw_document_id=raw.id,
             document_id=document.id, status="extracted", units=1)
         if self._already_ran(tenant_id, raw.content_hash,
-                             self.structured_strategy):
+                             strategy, binding):
             summary.units_replayed, summary.status = 1, "replayed"
             return summary
         unit = ExtractionUnit(
             document=document, source_system=raw.source_system,
             payload=self.raw_store.get(raw.raw_uri),
             config={"structured_map": self._structured_map(raw)})
-        result = self.structured_strategy.extract(unit)
+        result = strategy.extract(unit)
         self._finalize(unit, result, _DocDigest(), raw.content_hash,
-                       self.structured_strategy, summary)
+                       strategy, binding, summary)
         return summary
 
     def _structured_map(self, raw: RawDocument) -> Optional[dict]:
@@ -271,7 +312,7 @@ class ExtractionService:
     # ------------------------------------------------------ finalize/stage --
     def _finalize(self, unit: ExtractionUnit, result: ExtractionResult,
                   digest: _DocDigest, unit_hash: str,
-                  strategy: ExtractionStrategy,
+                  strategy: ExtractionStrategy, binding: OntologyBinding,
                   summary: ExtractSummary) -> None:
         """Ground -> envelope -> intra-unit mention dedup -> stage_pending ->
         record the run, atomically. Quarantined items persist regardless —
@@ -355,7 +396,7 @@ class ExtractionService:
                 object_literal=fact.object_literal,
                 attributes=({"evidence": fact.evidence} if fact.evidence
                             else {}),
-                ontology_version=self.binding.version,
+                ontology_version=binding.version,
                 source_document_id=unit.document.id,
                 source_chunk_id=unit.chunk.id if unit.chunk else None,
                 char_start=grounding.char_start,
@@ -378,7 +419,7 @@ class ExtractionService:
             source_chunk_id=unit.chunk.id if unit.chunk else None,
             unit_hash=unit_hash, strategy=strategy.extractor,
             extractor=strategy.extractor, extractor_version=strategy.version,
-            ontology_version=self.binding.version,
+            ontology_version=binding.version,
             prompt_tokens=result.stats.prompt_tokens,
             output_tokens=result.stats.output_tokens,
             wall_ms=result.stats.wall_ms,
@@ -444,10 +485,14 @@ class ExtractionService:
         return [self.store.get_chunk(tenant_id, r["id"]) for r in rows]
 
     def _already_ran(self, tenant_id: str, unit_hash: str,
-                     strategy: ExtractionStrategy) -> bool:
+                     strategy: ExtractionStrategy,
+                     binding: OntologyBinding) -> bool:
+        # The idempotency ledger keys on the ontology version too, so the
+        # same content under a NEW version is fresh work, never a replay —
+        # the property Stage 3's re-extraction rides on.
         return self.store.find_extraction_run(
             tenant_id, unit_hash, strategy.extractor, strategy.version,
-            self.binding.version) is not None
+            binding.version) is not None
 
     def _load_digest(self, tenant_id: str, document_id: int) -> _DocDigest:
         """Rebuild the document's digest from staged mentions + their fact

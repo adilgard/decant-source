@@ -62,7 +62,9 @@ migrations/010 (audit + ack columns), config.py (operator_* settings).
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import os
 import re
 import threading
 import time
@@ -132,6 +134,18 @@ _CREDENTIAL_KEY = re.compile(
     r"(?i)(password|passwd|secret|token|credential|api_?key|private_?key)")
 
 _ALERT_QUEUES = {"dispatch": "dispatch_queue", "extraction": "extraction_queue"}
+
+
+def _parse_globs(field: str, raw: Any) -> Optional[list[str]]:
+    """Comma-separated glob patterns -> list (WriteParamSpec has no list
+    type — str in, parsed deterministically). None/blank -> no filter."""
+    if raw is None or (isinstance(raw, str) and not raw.strip()):
+        return None
+    if not isinstance(raw, str):
+        raise WriteCallError(f"ingest_folder: {field} must be a "
+                             f"comma-separated string of glob patterns")
+    patterns = [p.strip() for p in raw.split(",") if p.strip()]
+    return patterns or None
 
 
 # ---------------------------------------------------------------- refusals --
@@ -581,6 +595,87 @@ class OperatorService:
                     "config": updated.config},
             target=f"source:{updated.source_ref}")
 
+    # ------------------------------------------------------------ folder jobs
+    def ingest_folder(self, principal: Principal,
+                      p: dict[str, Any]) -> WriteOutcome:
+        """Create one folder-ingest job (d.s Stage 2). Validation is all
+        HERE, server-side and deterministic — the browser cannot supply a
+        real path, so the operator types one and this refuses anything
+        that isn't an absolute, existing, readable directory. The job's
+        ontology version is RESOLVED NOW and frozen into params: the
+        runner never reads the active selection mid-run."""
+        tenant = principal.tenant_id
+        folder = self._require_folder(p["path"])
+        include = _parse_globs("include", p.get("include"))
+        exclude = _parse_globs("exclude", p.get("exclude"))
+
+        version = p.get("ontology_version")
+        if version:
+            try:  # must already be imported — a typo fails at creation
+                self._store.get_ontology_definition(tenant, version)
+            except LookupError:
+                raise WriteCallError(
+                    f"ingest_folder: ontology_version {version!r} is not "
+                    f"imported — import it first, or omit the param to "
+                    f"use the active selection")
+        else:
+            version, _ = self._store.get_ontology_definition(tenant)
+
+        # Stable per path (casefolded — Windows paths are case-insensitive),
+        # so re-ingesting the same folder resumes the same source's cursor.
+        source_ref = p.get("source_ref") or (
+            "folder-" + hashlib.sha256(
+                str(folder).casefold().encode("utf-8")).hexdigest()[:8])
+
+        params = {"path": str(folder), "recurse": p.get("recurse", True),
+                  "include": include, "exclude": exclude,
+                  "ontology_version": version, "source_ref": source_ref}
+        job_id = self._store.insert_job(tenant, "folder_ingest", params,
+                                        created_by=principal.principal_id)
+        return WriteOutcome(
+            result={"job_id": job_id, **params,
+                    "note": "queued — the background runner picks it up; "
+                            "watch it under GET /v1/jobs"},
+            target=f"job:{job_id}")
+
+    def jobs(self, tenant: str) -> dict[str, Any]:
+        """The console's job listing (read; routed like open_alerts)."""
+        rows = self._store.list_jobs(tenant)
+        for r in rows:
+            for ts in ("created_at", "started_at", "finished_at"):
+                r[ts] = r[ts].isoformat() if r[ts] else None
+        return {"jobs": rows}
+
+    @staticmethod
+    def _require_folder(raw_path: Any):
+        if not isinstance(raw_path, str) or not raw_path.strip():
+            raise WriteCallError("ingest_folder: path must be a non-empty "
+                                 "string")
+        folder = Path(raw_path.strip())
+        if not folder.is_absolute():
+            raise WriteCallError(
+                f"ingest_folder: path must be ABSOLUTE (got {raw_path!r}) — "
+                f"the folder lives on the server, so a relative path would "
+                f"resolve against the service's working directory, not "
+                f"yours")
+        if not folder.exists():
+            raise WriteCallError(
+                f"ingest_folder: {str(folder)!r} does not exist on this box")
+        if not folder.is_dir():
+            raise WriteCallError(
+                f"ingest_folder: {str(folder)!r} is not a directory")
+        if not os.access(folder, os.R_OK):
+            raise WriteCallError(
+                f"ingest_folder: {str(folder)!r} is not readable by the "
+                f"operator service account")
+        try:
+            next(iter(folder.iterdir()), None)  # prove listability, not just the bit
+        except OSError as e:
+            raise WriteCallError(
+                f"ingest_folder: cannot list {str(folder)!r} "
+                f"({type(e).__name__})")
+        return folder.resolve()
+
     # --------------------------------------------------------------- ontology
     def import_ontology(self, principal: Principal,
                         p: dict[str, Any]) -> WriteOutcome:
@@ -795,6 +890,23 @@ def register_operator_defaults(gate: OperatorGate,
                     "config": P(type="dict", required=True)},
             scope=OPERATE_SCOPE), service.edit_scope),
         (WriteOperation(
+            name="ingest_folder",
+            description="Ingest a local folder on the server (d.s Stage 2):"
+                        " typed absolute path, validated server-side;"
+                        " optional recurse/include/exclude and an ontology"
+                        " version (defaults to the active selection, FIXED"
+                        " at creation). Creates a background job — eligible"
+                        " files land content-hash idempotently, unknown"
+                        " types are skipped and counted, extraction runs"
+                        " against the stored copy.",
+            params={"path": P(type="str", required=True),
+                    "recurse": P(type="bool", default=True),
+                    "include": P(type="str"),
+                    "exclude": P(type="str"),
+                    "ontology_version": P(type="str"),
+                    "source_ref": P(type="str")},
+            scope=OPERATE_SCOPE), service.ingest_folder),
+        (WriteOperation(
             name="import_ontology",
             description="Validate and load one ontology set (version + the"
                         " two allowlists, optional examples/aliases) into"
@@ -848,6 +960,7 @@ class OperatorApp:
                       for name in self.gate.operations()) + [
             "GET /v1/actions",
             "GET /v1/alerts",
+            "GET /v1/jobs",
             "GET /v1/monitor",
             "GET /v1/monitor/activity",
             "GET /v1/ontology",
@@ -925,6 +1038,12 @@ class OperatorApp:
             with self._store_lock:
                 listing = self.service.list_ontologies(principal.tenant_id)
             return 200, {"tenant_id": principal.tenant_id, **listing}
+        if method == "GET" and path == "/v1/jobs":
+            if not {ROLE_REVIEWER, ROLE_OPERATOR} & set(principal.roles):
+                return 403, {"error": "forbidden"}
+            with self._store_lock:
+                jobs = self.service.jobs(principal.tenant_id)
+            return 200, {"tenant_id": principal.tenant_id, **jobs}
         if method == "POST" and path.startswith("/v1/actions/"):
             name = path[len("/v1/actions/"):]
             if "/" in name or not name:
@@ -1115,19 +1234,33 @@ def main(argv: Optional[list[str]] = None) -> None:
     parser.add_argument("--host", default=settings.operator_host)
     parser.add_argument("--port", type=int, default=settings.operator_port)
     parser.add_argument("--dsn", default=None)
+    parser.add_argument("--no-worker", action="store_true",
+                        help="serve the API without the background job "
+                             "runner (jobs queue up untouched)")
     args = parser.parse_args(argv)
 
     app = build_operator_app(dsn=args.dsn)
     if not app.service.ping_postgres():
         raise SystemExit("operator store failed to answer (is migration 010 "
                          "applied?) — refusing to start blind")
+    runner = None
+    if not args.no_worker:
+        # The job runner rides in this process on its OWN store connection
+        # (operator_jobs.py explains why it must not share the app's) —
+        # console up = jobs run, no separate service to babysit.
+        from knowledge_hub.operator_jobs import JobRunner
+        runner = JobRunner(dsn=args.dsn)
+        runner.start()
     server = make_server(app, args.host, args.port)
     print(f"knowledge_hub operator API {installed_version()} on "
           f"http://{args.host}:{args.port} — "
-          f"{len(app.gate.operations())} write actions, every one audited")
+          f"{len(app.gate.operations())} write actions, every one audited"
+          + ("" if runner else " — JOB RUNNER OFF (--no-worker)"))
     try:
         server.serve_forever()
     except KeyboardInterrupt:
+        if runner:
+            runner.stop()
         server.shutdown()
 
 

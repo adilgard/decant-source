@@ -27,6 +27,7 @@ from psycopg.types.json import Jsonb
 from knowledge_hub.config import settings
 from knowledge_hub.interfaces import AnnCandidate, FactStore, StagedPending
 from knowledge_hub.models import (
+    DEFAULT_TENANT,
     Chunk,
     Document,
     Entity,
@@ -527,6 +528,90 @@ class PostgresFactStore(FactStore):
                         activated_by = EXCLUDED.activated_by
                 """,
                 (version, activated_by))
+
+    # ------------------------------------------------------- operator jobs --
+    # Migration 012: the console-triggered background-work queue. The gate's
+    # write op INSERTS (audited); operator_jobs.JobRunner claims and executes;
+    # the console polls. All state lives on the row — a restarted runner
+    # resumes from Postgres, never from memory.
+
+    def insert_job(self, tenant_id: str, kind: str, params: dict[str, Any],
+                   created_by: Optional[str] = None) -> int:
+        with self.transaction(tenant_id) as conn:
+            row = conn.execute(
+                "INSERT INTO operator_jobs (tenant_id, kind, params,"
+                " created_by) VALUES (%s, %s, %s, %s) RETURNING id",
+                (tenant_id, kind, Jsonb(params), created_by)).fetchone()
+        return row["id"]
+
+    def claim_next_job(self, worker_tenant: str = DEFAULT_TENANT
+                       ) -> Optional[dict[str, Any]]:
+        """Claim the oldest queued job (any tenant — the job row carries its
+        own tenant_id). FOR UPDATE SKIP LOCKED, the house outbox pattern:
+        concurrent runners never double-claim. `worker_tenant` only picks
+        the connection."""
+        with self.transaction(worker_tenant) as conn:
+            row = conn.execute(
+                """
+                UPDATE operator_jobs SET status = 'running',
+                       started_at = now()
+                WHERE id = (SELECT id FROM operator_jobs
+                            WHERE status = 'queued'
+                            ORDER BY id
+                            FOR UPDATE SKIP LOCKED LIMIT 1)
+                RETURNING *
+                """).fetchone()
+        return dict(row) if row else None
+
+    def update_job_counts(self, tenant_id: str, job_id: int,
+                          counts: dict[str, Any]) -> None:
+        """Mid-run progress: the runner writes its counters onto the row
+        after each pass so the console's poll shows movement, not a spinner."""
+        with self.transaction(tenant_id) as conn:
+            conn.execute(
+                "UPDATE operator_jobs SET counts = %s"
+                " WHERE tenant_id = %s AND id = %s",
+                (Jsonb(counts), tenant_id, job_id))
+
+    def finish_job(self, tenant_id: str, job_id: int, *, status: str,
+                   counts: Optional[dict[str, Any]] = None,
+                   error: Optional[str] = None) -> None:
+        if status not in ("done", "failed"):
+            raise ValueError(f"terminal job status must be done|failed,"
+                             f" got {status!r}")
+        with self.transaction(tenant_id) as conn:
+            conn.execute(
+                "UPDATE operator_jobs SET status = %s, counts = %s,"
+                " error = %s, finished_at = now()"
+                " WHERE tenant_id = %s AND id = %s",
+                (status, Jsonb(counts) if counts is not None else None,
+                 error, tenant_id, job_id))
+
+    def get_job(self, tenant_id: str, job_id: int) -> Optional[dict[str, Any]]:
+        with self.transaction(tenant_id) as conn:
+            row = conn.execute(
+                "SELECT * FROM operator_jobs"
+                " WHERE tenant_id = %s AND id = %s",
+                (tenant_id, job_id)).fetchone()
+        return dict(row) if row else None
+
+    def list_jobs(self, tenant_id: str, limit: int = 20
+                  ) -> list[dict[str, Any]]:
+        with self.transaction(tenant_id) as conn:
+            rows = conn.execute(
+                "SELECT * FROM operator_jobs WHERE tenant_id = %s"
+                " ORDER BY id DESC LIMIT %s", (tenant_id, limit)).fetchall()
+        return [dict(r) for r in rows]
+
+    def requeue_stale_jobs(self, worker_tenant: str = DEFAULT_TENANT) -> int:
+        """Runner-start recovery: rows still 'running' belong to a runner
+        that died (single-runner deployment — documented in JobRunner).
+        Requeue them; every job kind must be idempotent to re-run (folder
+        ingest is content-hash + cursor idempotent by construction)."""
+        with self.transaction(worker_tenant) as conn:
+            return conn.execute(
+                "UPDATE operator_jobs SET status = 'queued',"
+                " started_at = NULL WHERE status = 'running'").rowcount
 
     @staticmethod
     def _rewrite_key(ref: str, mention_ids: Mapping[str, int]) -> str:

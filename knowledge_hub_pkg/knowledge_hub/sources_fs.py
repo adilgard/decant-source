@@ -25,6 +25,7 @@ one forbidden file must not wedge the whole pull at its cursor forever).
 """
 from __future__ import annotations
 
+import fnmatch
 import logging
 import mimetypes
 import os
@@ -42,19 +43,57 @@ from knowledge_hub.interfaces import (
 
 logger = logging.getLogger(__name__)
 
+# The console folder-ingest starter set (d.s Stage 2): what DoclingParser's
+# prose track handles today. Structured containers (.csv/.xlsx/...) keep
+# arriving via CLI-registered sources, which pass extensions=None (no
+# filter) — existing behavior unchanged.
+ELIGIBLE_EXTENSIONS = frozenset({".md", ".txt", ".pdf", ".docx"})
+
+
+def _glob_match(rel_posix: str, patterns: list[str]) -> bool:
+    """Case-insensitive match of a RELATIVE posix path against any pattern.
+    fnmatchcase over casefolded inputs, deliberately: fnmatch.fnmatch would
+    route through os.path.normcase, whose behavior differs per platform —
+    this rule is identical on the dev bench and the deployed box."""
+    folded = rel_posix.casefold()
+    return any(fnmatch.fnmatchcase(folded, p.casefold()) for p in patterns)
+
 
 class FilesystemSourceAdapter(SourceAdapter):
     source_system = "filesystem"
 
     def __init__(self, source_ref: str, root: str | Path,
-                 include_hidden: bool = False):
+                 include_hidden: bool = False,
+                 recurse: bool = True,
+                 include: Optional[list[str]] = None,
+                 exclude: Optional[list[str]] = None,
+                 extensions: Optional[frozenset[str] | set[str]] = None,
+                 extra_metadata: Optional[dict[str, Any]] = None):
+        """d.s Stage 2 options, all defaulting to the pilot behavior:
+        `recurse` off limits the scan to the root itself; `include`/`exclude`
+        are glob patterns over the RELATIVE posix path (exclude wins);
+        `extensions` is the eligible-suffix allowlist — a non-matching file
+        is SKIPPED AND COUNTED, never fatal (an unparseable format must not
+        wedge a folder run); `extra_metadata` is merged into every item's
+        native_metadata (the folder-job path stamps its fixed
+        ontology_version_override through this)."""
         super().__init__(source_ref)
         self.root = Path(root).resolve()
         if not self.root.is_dir():
             raise NotADirectoryError(f"source root is not a directory: {self.root}")
         self.include_hidden = include_hidden
+        self.recurse = recurse
+        self.include = list(include) if include else None
+        self.exclude = list(exclude) if exclude else None
+        self.extensions = frozenset(e.lower() for e in extensions) \
+            if extensions else None
+        self.extra_metadata = dict(extra_metadata) if extra_metadata else None
         # Diagnostics from the most recent scan (permission-denied files).
         self.skipped_unreadable: list[str] = []
+        # Stage 2 counters, reset per scan: ineligible suffix (logged,
+        # never fatal) and operator-glob exclusions.
+        self.skipped_unknown: list[str] = []
+        self.excluded_by_glob: int = 0
 
     # ------------------------------------------------------------ iterators --
     def backfill(self, tenant_id: str,
@@ -68,8 +107,11 @@ class FilesystemSourceAdapter(SourceAdapter):
     # ------------------------------------------------------------- internals --
     def _scan(self, after: Optional[str]) -> Iterator[SourceItem]:
         self.skipped_unreadable = []
+        self.skipped_unknown = []
+        self.excluded_by_glob = 0
         entries: list[tuple[str, Path, os.stat_result]] = []
-        for path in self.root.rglob("*"):
+        walker = self.root.rglob("*") if self.recurse else self.root.glob("*")
+        for path in walker:
             try:
                 if not self.include_hidden and any(
                         part.startswith(".") for part in
@@ -81,6 +123,24 @@ class FilesystemSourceAdapter(SourceAdapter):
             except OSError:
                 continue  # vanished or unstatable mid-scan; next run re-sees it
             native_id = path.relative_to(self.root).as_posix()
+            # Operator scope first (their stated intent), eligibility second
+            # (our parsing reality, counted so the run summary can say what
+            # was left behind — silent truncation reads as "covered it").
+            if self.include is not None and \
+                    not _glob_match(native_id, self.include):
+                self.excluded_by_glob += 1
+                continue
+            if self.exclude is not None and \
+                    _glob_match(native_id, self.exclude):
+                self.excluded_by_glob += 1
+                continue
+            if self.extensions is not None and \
+                    path.suffix.lower() not in self.extensions:
+                self.skipped_unknown.append(native_id)
+                logger.info("source %s: %r has no eligible extension "
+                            "(%s), skipping", self.source_ref, native_id,
+                            ", ".join(sorted(self.extensions)))
+                continue
             entries.append((self._token(st.st_mtime_ns, native_id), path, st))
 
         for token, path, st in sorted(entries, key=lambda e: e[0]):
@@ -103,6 +163,19 @@ class FilesystemSourceAdapter(SourceAdapter):
     def _item(self, token: str, path: Path, st: os.stat_result,
               content: bytes) -> SourceItem:
         native_id = path.relative_to(self.root).as_posix()
+        metadata = {
+            "absolute_path": str(path),
+            "root": str(self.root),
+            "source_ref": self.source_ref,
+            "size": st.st_size,
+            "mtime": datetime.fromtimestamp(st.st_mtime, tz=timezone.utc).isoformat(),
+            "ctime": datetime.fromtimestamp(st.st_ctime, tz=timezone.utc).isoformat(),
+            "platform": os.name,
+        }
+        if self.extra_metadata:
+            # Job-fixed stamps (e.g. ontology_version_override) ride the raw
+            # row's native_metadata — durable provenance of operator intent.
+            metadata.update(self.extra_metadata)
         return SourceItem(
             native_id=native_id,
             content=content,
@@ -110,17 +183,19 @@ class FilesystemSourceAdapter(SourceAdapter):
             size=st.st_size,
             mtime=datetime.fromtimestamp(st.st_mtime, tz=timezone.utc),
             source_acl=self._capture_acl(path, st),
-            native_metadata={
-                "absolute_path": str(path),
-                "root": str(self.root),
-                "source_ref": self.source_ref,
-                "size": st.st_size,
-                "mtime": datetime.fromtimestamp(st.st_mtime, tz=timezone.utc).isoformat(),
-                "ctime": datetime.fromtimestamp(st.st_ctime, tz=timezone.utc).isoformat(),
-                "platform": os.name,
-            },
+            native_metadata=metadata,
             cursor=token,
         )
+
+    def stats(self) -> dict[str, Any]:
+        """Post-run skip accounting for the run summary (paths relative to
+        the root — safe to log, no content)."""
+        return {
+            "skipped_unknown": len(self.skipped_unknown),
+            "skipped_unknown_files": self.skipped_unknown[:50],
+            "skipped_unreadable": len(self.skipped_unreadable),
+            "excluded_by_glob": self.excluded_by_glob,
+        }
 
     @staticmethod
     def _capture_acl(path: Path, st: os.stat_result) -> SourceAcl:

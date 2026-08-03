@@ -296,7 +296,8 @@ def test_off_ontology_quarantines_not_facts(mini_doc, extraction,
                              document_id=mini_doc["document"].id,
                              status="extracted", units=1)
     extraction._finalize(unit, result, _DocDigest(),
-                         mini_doc["chunk"].content_hash, llm_strategy, summary)
+                         mini_doc["chunk"].content_hash, llm_strategy,
+                         extraction.binding, summary)
 
     quarantined = rows(store, tenant, "quarantined_extractions")
     assert {q["reason"] for q in quarantined} >= {"unbound_entity_type"}
@@ -388,7 +389,8 @@ def test_grounding_failure_lowers_confidence_and_flags(mini_doc, extraction,
                              document_id=mini_doc["document"].id,
                              status="extracted", units=1)
     extraction._finalize(unit, result, _DocDigest(),
-                         f"ground-{tenant}", llm_strategy, summary)
+                         f"ground-{tenant}", llm_strategy,
+                         extraction.binding, summary)
     assert summary.grounding_flags == 2
 
     flagged = {f["grounding"]: f for f in rows(store, tenant, "pending_facts")}

@@ -601,6 +601,97 @@ function showDecision(text) {
   $("decision-text").textContent = text;
 }
 
+/* --------------------------------------------------------------- ontology */
+// d.s Stage 1. Two rules the UI must keep saying: importing is INERT
+// (nothing extracts under a version until it is selected), and selecting
+// applies to FUTURE ingests only (facts keep the version that produced
+// them). Both actions travel the audited write channel.
+function ontoSay(ok, text) {
+  $("onto-msg-box").classList.toggle("kh-hide", !ok);
+  $("onto-err-box").classList.toggle("kh-hide", ok);
+  $(ok ? "onto-msg" : "onto-err").textContent = text;
+}
+
+async function refreshOntology() {
+  const resp = await api("/v1/ontology");
+  if (resp.status === 403) { lock(NO_ROLE_MSG); return; }
+  if (resp.status !== 200) return;
+  const body = await resp.json();
+  $("onto-active").textContent = body.active || "none selected";
+  const list = $("onto-list");
+  list.textContent = "";
+  if (!body.versions.length) {
+    list.innerHTML = '<div style="font-size:11px;color:#5c6f9e">no ontology versions loaded yet — import one</div>';
+    return;
+  }
+  body.versions.forEach((v) => list.appendChild(ontologyRow(v)));
+}
+
+function ontologyRow(v) {
+  const row = document.createElement("div");
+  const tag = v.active
+    ? '<div style="font-family:Silkscreen,Consolas,monospace;font-size:7px;letter-spacing:.1em;color:#7be0c8;padding:2px 8px;border-radius:8px;border:1px solid rgba(123,224,200,.35);background:rgba(123,224,200,.08)">ACTIVE</div>'
+    : '<div style="font-family:Silkscreen,Consolas,monospace;font-size:7px;letter-spacing:.1em;color:#8fa8d8;padding:2px 8px;border-radius:8px;border:1px solid rgba(255,255,255,.25);background:rgba(255,255,255,.06)">LOADED</div>';
+  const when = v.effective_from ? v.effective_from.slice(0, 10) : "—";
+  row.setAttribute("style", v.active
+    ? "padding:11px 13px;border-radius:12px;border:1px solid rgba(123,224,200,.45);background:rgba(123,224,200,.06)"
+    : "padding:11px 13px;border-radius:12px;border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.03)");
+  row.innerHTML =
+    '<div style="display:flex;align-items:center;gap:10px">' +
+    '<div style="font-size:13px;color:#e9f0ff;font-weight:600;font-family:Consolas,\'Lucida Console\',monospace">' + esc(v.version) + "</div>" + tag +
+    '<div style="flex:1"></div>' +
+    '<div style="font-size:11px;color:#8fa8d8;font-family:Consolas,monospace">' + fmt(v.entity_types) + " types · " + fmt(v.predicates) + " predicates · loaded " + esc(when) + "</div>" +
+    (v.active ? "" :
+      '<div data-select="' + esc(v.version) + '" style="cursor:pointer;font-size:11px;color:#dbe7ff;padding:4px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.22);background:linear-gradient(180deg,rgba(255,255,255,.12),rgba(255,255,255,.04))">Select as active</div>') +
+    "</div>" +
+    (v.notes ? '<div style="font-size:11px;color:#5c6f9e;margin-top:6px">' + esc(v.notes) + "</div>" : "");
+  const btn = row.querySelector("[data-select]");
+  if (btn) btn.addEventListener("click", () => selectOntology(v.version));
+  return row;
+}
+
+async function selectOntology(version) {
+  let resp;
+  try {
+    resp = await api("/v1/actions/select_ontology", {
+      method: "POST", body: JSON.stringify({ version: version }) });
+  } catch (e) { return; }
+  const body = await resp.json();
+  if (resp.status !== 200) {
+    ontoSay(false, "Not selected — " + (body.detail || body.error || resp.status) + ".");
+    return;
+  }
+  ontoSay(true, "Active ontology is now " + version + ". This applies to future ingests only — " +
+    "facts already extracted keep the version that produced them. The selection is on the audit trail.");
+  await refreshOntology();
+}
+
+async function importOntologyFile(file) {
+  let parsed;
+  try {
+    parsed = JSON.parse(await file.text());
+  } catch (e) {
+    ontoSay(false, "Not imported — " + file.name + " is not valid JSON: " + e.message);
+    return;
+  }
+  let resp;
+  try {
+    resp = await api("/v1/actions/import_ontology", {
+      method: "POST", body: JSON.stringify({ ontology: parsed }) });
+  } catch (e) { return; }
+  const body = await resp.json();
+  if (resp.status !== 200) {
+    ontoSay(false, "Not imported — " + (body.detail || body.error || resp.status) + ".");
+    return;
+  }
+  const r = body.result;
+  ontoSay(true, (r.status === "already_imported"
+    ? "Version " + r.version + " was already loaded with identical content — nothing changed."
+    : "Imported " + r.version + " (" + r.entity_types + " entity types, " + r.predicates +
+      " predicates). It is loaded but NOT active — select it to apply to future ingests."));
+  await refreshOntology();
+}
+
 /* ------------------------------------------------------------------- tabs */
 function setTab(name) {
   state.tab = name;
@@ -611,11 +702,14 @@ function setTab(name) {
       : "rgba(255,255,255,.04)";
     el.style.border = active ? "1px solid rgba(160,190,255,.6)" : "1px solid rgba(255,255,255,.12)";
   });
+  const wired = name === "monitor" || name === "review" || name === "ontology";
   $("panel-monitor").classList.toggle("kh-hide", name !== "monitor");
   $("panel-review").classList.toggle("kh-hide", name !== "review");
-  $("panel-other").classList.toggle("kh-hide", name === "monitor" || name === "review");
-  if (name !== "monitor" && name !== "review") $("other-title").textContent = OTHER_TITLES[name] || "";
+  $("panel-ontology").classList.toggle("kh-hide", name !== "ontology");
+  $("panel-other").classList.toggle("kh-hide", wired);
+  if (!wired) $("other-title").textContent = OTHER_TITLES[name] || "";
   if (name === "review" && state.token) refreshReviews(true).catch(() => {});
+  if (name === "ontology" && state.token) refreshOntology().catch(() => {});
 }
 
 /* ------------------------------------------------------------------- boot */
@@ -649,6 +743,13 @@ document.addEventListener("DOMContentLoaded", () => {
   $("token-input").addEventListener("keydown", (e) => {
     if (e.key === "Enter") unlock($("token-input").value.trim());
   });
+  $("onto-import").addEventListener("click", () => $("onto-file").click());
+  $("onto-file").addEventListener("change", (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = "";       // same file re-selected still fires change
+    if (file) importOntologyFile(file).catch(() => {});
+  });
+
   $("btn-merge").addEventListener("click", () => decide("merge"));
   $("btn-separate").addEventListener("click", () => decide("separate"));
   $("btn-split").addEventListener("click", () => decide("split"));

@@ -727,7 +727,14 @@ class ResolutionService:
             ontology_version=self._ontology(tenant_id)))
 
     def _ontology(self, tenant_id: str) -> str:
-        if self._ontology_version is None:
-            self._ontology_version, _ = \
-                self.store.get_ontology_definition(tenant_id)
-        return self._ontology_version
+        """The version stamped on entities/labels this service creates. An
+        explicit constructor pin wins (tests, replay tooling); otherwise
+        resolve the operator's ACTIVE selection per call — deliberately
+        uncached (d.s Stage 1), so a long-lived service (the operator
+        console's resolver lives for weeks) follows a console swap instead
+        of stamping the version that was active at first use. One
+        single-row indexed SELECT per new entity/label is noise."""
+        if self._ontology_version is not None:
+            return self._ontology_version
+        version, _ = self.store.get_ontology_definition(tenant_id)
+        return version

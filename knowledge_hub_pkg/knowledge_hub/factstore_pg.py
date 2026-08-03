@@ -421,12 +421,23 @@ class PostgresFactStore(FactStore):
                                 version: Optional[str] = None
                                 ) -> tuple[str, dict[str, Any]]:
         """The current (or a specific) ontology row: (version, definition).
-        'Current' = newest effective_from — the binding swap point."""
+
+        'Current' = the operator's explicit selection (ontology_active,
+        migration 011) — THE single source of truth every unpinned binding,
+        label stamp, and entity stamp resolves. The old newest-effective_from
+        rule survives only as a fallback for a pointer row that does not
+        exist yet (a registry emptied before 011 seeded it), so insertion is
+        INERT and activation is a separate, audited act."""
         conn = self._conn(tenant_id)
         if version is None:
             row = conn.execute(
-                "SELECT version, definition FROM ontology_versions"
-                " ORDER BY effective_from DESC LIMIT 1").fetchone()
+                "SELECT v.version, v.definition FROM ontology_active a"
+                " JOIN ontology_versions v ON v.version = a.version"
+            ).fetchone()
+            if row is None:  # unseeded pointer: legacy newest-wins fallback
+                row = conn.execute(
+                    "SELECT version, definition FROM ontology_versions"
+                    " ORDER BY effective_from DESC LIMIT 1").fetchone()
         else:
             row = conn.execute(
                 "SELECT version, definition FROM ontology_versions"
@@ -434,6 +445,78 @@ class PostgresFactStore(FactStore):
         if row is None:
             raise LookupError(f"ontology version {version!r} not found")
         return row["version"], row["definition"]
+
+    def insert_ontology_version(self, tenant_id: str, version: str,
+                                definition: dict[str, Any],
+                                notes: Optional[str] = None) -> str:
+        """Load one VALIDATED ontology set (the ontology_registry module is
+        the gate; this method only persists). Inert: importing never touches
+        the active selection. Idempotent on identical content ('already_
+        imported'); the same version with DIFFERENT content is a hard error
+        — versions are immutable, publish a new version string instead.
+        Returns 'created' or 'already_imported'."""
+        with self.transaction(tenant_id) as conn:
+            row = conn.execute(
+                "SELECT definition FROM ontology_versions WHERE version = %s",
+                (version,)).fetchone()
+            if row is not None:
+                if row["definition"] == definition:
+                    return "already_imported"
+                raise ValueError(
+                    f"ontology version {version!r} already exists with "
+                    f"different content — versions are immutable; import "
+                    f"under a new version string")
+            conn.execute(
+                "INSERT INTO ontology_versions (version, definition, notes)"
+                " VALUES (%s, %s, %s)",
+                (version, Jsonb(definition), notes))
+        return "created"
+
+    def list_ontology_versions(self, tenant_id: str) -> list[dict[str, Any]]:
+        """Every loaded ontology set, newest first, with the active one
+        flagged — the operator console's listing."""
+        conn = self._conn(tenant_id)
+        active_row = conn.execute(
+            "SELECT version FROM ontology_active").fetchone()
+        active = active_row["version"] if active_row else None
+        rows = conn.execute(
+            "SELECT version, effective_from, definition, notes"
+            " FROM ontology_versions"
+            " ORDER BY effective_from DESC, version").fetchall()
+        return [{
+            "version": r["version"],
+            "effective_from": r["effective_from"],
+            "entity_types": len(r["definition"].get("entity_types", [])),
+            "predicates": len(r["definition"].get("predicates", [])),
+            "notes": r["notes"],
+            "active": r["version"] == active,
+        } for r in rows]
+
+    def set_active_ontology(self, tenant_id: str, version: str,
+                            activated_by: Optional[str] = None) -> None:
+        """Point the single-row selection at `version` (which must already
+        be imported). Applies to FUTURE extraction only — nothing here
+        touches facts, and nothing ever rewrites a fact's ontology_version
+        (that column is true provenance). History is the operator audit
+        trail; this row answers only the present tense."""
+        with self.transaction(tenant_id) as conn:
+            row = conn.execute(
+                "SELECT 1 FROM ontology_versions WHERE version = %s",
+                (version,)).fetchone()
+            if row is None:
+                raise LookupError(
+                    f"ontology version {version!r} not found — import it "
+                    f"before selecting it")
+            conn.execute(
+                """
+                INSERT INTO ontology_active (one, version, activated_by)
+                VALUES (TRUE, %s, %s)
+                ON CONFLICT (one) DO UPDATE
+                    SET version = EXCLUDED.version,
+                        activated_at = now(),
+                        activated_by = EXCLUDED.activated_by
+                """,
+                (version, activated_by))
 
     @staticmethod
     def _rewrite_key(ref: str, mention_ids: Mapping[str, int]) -> str:

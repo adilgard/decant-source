@@ -649,7 +649,8 @@ def test_action_catalog_is_role_scoped_and_registry_generated(
                               "resolve_flagged_document"}
     assert all_actions == review_actions | {
         "pause_source", "resume_source", "retry_failed_item",
-        "acknowledge_alert", "add_source", "edit_scope"}
+        "acknowledge_alert", "add_source", "edit_scope",
+        "import_ontology", "select_ontology"}   # d.s Stage 1
 
     # The endpoint list IS the registry, spelled as URLs.
     generated = {e for e in operator_app.endpoints()

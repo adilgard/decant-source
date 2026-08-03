@@ -84,6 +84,13 @@ class Settings(BaseSettings):
     operator_host: str = "127.0.0.1"
     operator_port: int = 8081
 
+    # --- Ontology registry (d.s Stage 1) ---
+    # The git-tracked folder holding portable ontology sets (<version>.json).
+    # Relative paths resolve against the working directory — the deployment
+    # home under khctl, the infra root on the dev bench — same convention as
+    # bge_m3_tokenizer_json above.
+    ontology_dir: str = "ontologies"
+
     @property
     def postgres_dsn(self) -> str:
         return (

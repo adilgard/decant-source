@@ -84,6 +84,11 @@ from knowledge_hub.config import settings
 from knowledge_hub.factstore_pg import PostgresFactStore
 from knowledge_hub.interfaces import SecretNotFound, SecretsProvider
 from knowledge_hub.models import Label, OperatorAudit
+from knowledge_hub.ontology_registry import (
+    OntologyValidationError,
+    save_ontology_file,
+    validate_ontology_set,
+)
 from knowledge_hub.pipeline import Pipeline
 from knowledge_hub.resolution import ResolutionService
 from knowledge_hub.serving import Principal
@@ -356,7 +361,6 @@ class OperatorService:
         self._resolution = resolution
         self._registry = registry
         self._secrets = secrets
-        self._ontology: dict[str, str] = {}
 
     # ------------------------------------------------------ review resolution
     def resolve_merge(self, principal: Principal,
@@ -577,6 +581,60 @@ class OperatorService:
                     "config": updated.config},
             target=f"source:{updated.source_ref}")
 
+    # --------------------------------------------------------------- ontology
+    def import_ontology(self, principal: Principal,
+                        p: dict[str, Any]) -> WriteOutcome:
+        """Validate + load one ontology set (d.s Stage 1): the deterministic
+        gate (ontology_registry) first, then BOTH forms — the portable
+        <version>.json in the git-tracked folder, and the ontology_versions
+        row. Import is INERT: nothing extracts under this version until the
+        operator separately selects it."""
+        tenant = principal.tenant_id
+        try:
+            onto = validate_ontology_set(p["ontology"])
+            path = save_ontology_file(onto)
+        except OntologyValidationError as e:
+            raise WriteCallError(f"import_ontology: {e}")
+        status = self._store.insert_ontology_version(
+            tenant, onto.version, onto.definition,
+            notes=onto.notes or "imported via operator console")
+        return WriteOutcome(
+            result={"version": onto.version,
+                    "status": status,     # created | already_imported
+                    "entity_types": len(onto.definition["entity_types"]),
+                    "predicates": len(onto.definition["predicates"]),
+                    "file": str(path),
+                    "active": False if status == "created" else None,
+                    "note": "imported, NOT active — select it to apply to "
+                            "future ingests"},
+            target=f"ontology:{onto.version}")
+
+    def select_ontology(self, principal: Principal,
+                        p: dict[str, Any]) -> WriteOutcome:
+        """Point the single active-ontology row (migration 011) at an
+        imported version. FUTURE ingests only: facts keep the version that
+        extracted them (true provenance); re-extracting existing data is a
+        separate, scoped, deliberate action (Stage 3)."""
+        tenant = principal.tenant_id
+        self._store.set_active_ontology(
+            tenant, p["version"], activated_by=principal.principal_id)
+        return WriteOutcome(
+            result={"active_version": p["version"],
+                    "applies_to": "future ingests only — existing facts "
+                                  "keep the ontology version that "
+                                  "extracted them"},
+            target=f"ontology:{p['version']}")
+
+    def list_ontologies(self, tenant: str) -> dict[str, Any]:
+        """The console's ontology listing (read; routed like open_alerts)."""
+        rows = self._store.list_ontology_versions(tenant)
+        active = next((r["version"] for r in rows if r["active"]), None)
+        return {"active": active,
+                "versions": [{**r, "effective_from":
+                              r["effective_from"].isoformat()
+                              if r["effective_from"] else None}
+                             for r in rows]}
+
     # ---------------------------------------------------------------- helpers
     def _require_source(self, tenant: str, source_ref: str):
         entry = self._registry.get(tenant, source_ref)
@@ -613,10 +671,12 @@ class OperatorService:
         return {"vault_path": path, "present": present}
 
     def _ontology_for(self, tenant: str) -> str:
-        if tenant not in self._ontology:
-            self._ontology[tenant], _ = \
-                self._store.get_ontology_definition(tenant)
-        return self._ontology[tenant]
+        """Deliberately UNCACHED (d.s Stage 1): flywheel labels must stamp
+        the version that is active at decision time, and this process lives
+        for weeks — the old first-use cache would survive an operator swap
+        and stamp a retired version forever."""
+        version, _ = self._store.get_ontology_definition(tenant)
+        return version
 
     # ----------------------------------------------------------------- reads
     def open_alerts(self, tenant: str) -> list[dict[str, Any]]:
@@ -734,6 +794,24 @@ def register_operator_defaults(gate: OperatorGate,
             params={"source_ref": P(type="str", required=True),
                     "config": P(type="dict", required=True)},
             scope=OPERATE_SCOPE), service.edit_scope),
+        (WriteOperation(
+            name="import_ontology",
+            description="Validate and load one ontology set (version + the"
+                        " two allowlists, optional examples/aliases) into"
+                        " the git-tracked folder AND the registry."
+                        " Deterministic validation, specific errors."
+                        " Importing is inert — nothing extracts under the"
+                        " new version until it is selected.",
+            params={"ontology": P(type="dict", required=True)},
+            scope=OPERATE_SCOPE), service.import_ontology),
+        (WriteOperation(
+            name="select_ontology",
+            description="Make an imported ontology version the active one —"
+                        " the single selection every future ingest extracts"
+                        " under. Future ingests ONLY: existing facts keep"
+                        " the version that extracted them.",
+            params={"version": P(type="str", required=True)},
+            scope=OPERATE_SCOPE), service.select_ontology),
     ]:
         gate.register(spec, handler)
 
@@ -772,6 +850,7 @@ class OperatorApp:
             "GET /v1/alerts",
             "GET /v1/monitor",
             "GET /v1/monitor/activity",
+            "GET /v1/ontology",
             "GET /v1/passages/<chunk_id>",
             "GET /v1/reviews",
             "GET /v1/reviews/<kind:id>",
@@ -839,6 +918,13 @@ class OperatorApp:
             with self._store_lock:
                 alerts = self.service.open_alerts(principal.tenant_id)
             return 200, {"tenant_id": principal.tenant_id, "alerts": alerts}
+        if method == "GET" and path == "/v1/ontology":
+            # Routed like alerts: a service read, role-gated, store-locked.
+            if not {ROLE_REVIEWER, ROLE_OPERATOR} & set(principal.roles):
+                return 403, {"error": "forbidden"}
+            with self._store_lock:
+                listing = self.service.list_ontologies(principal.tenant_id)
+            return 200, {"tenant_id": principal.tenant_id, **listing}
         if method == "POST" and path.startswith("/v1/actions/"):
             name = path[len("/v1/actions/"):]
             if "/" in name or not name:

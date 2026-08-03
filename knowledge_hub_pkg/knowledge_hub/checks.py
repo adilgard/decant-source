@@ -115,11 +115,16 @@ def check_postgres(dsn: Optional[str] = None,
         tables = {r[0] for r in conn.execute(
             "SELECT tablename FROM pg_tables WHERE schemaname='public'")}
         need = {"raw_documents", "documents", "chunks", "entities", "facts",
-                "entity_mentions", "resolution_policy", "ontology_versions"}
+                "entity_mentions", "resolution_policy", "ontology_versions",
+                "ontology_active"}   # migration 011: the operator selection
         missing_t = need - tables
         if missing_t:
             raise RuntimeError(f"missing tables: {missing_t}")
-        onto = conn.execute("SELECT version FROM ontology_versions").fetchone()
+        # The ACTIVE version (011), not an arbitrary first row — once more
+        # than one version is loaded the two answers differ.
+        onto = (conn.execute("SELECT version FROM ontology_active").fetchone()
+                or conn.execute(
+                    "SELECT version FROM ontology_versions").fetchone())
         graph_name = "disabled"
         if require_graph:
             graph = conn.execute(

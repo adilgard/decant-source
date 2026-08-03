@@ -1,0 +1,71 @@
+{
+  "version": "baseline-0.1",
+  "entity_types": [
+    "Person",
+    "Organization",
+    "Document",
+    "Process",
+    "System",
+    "Project",
+    "Event",
+    "Asset",
+    "Communication",
+    "Location"
+  ],
+  "predicates": [
+    "authored_by",
+    "mentions",
+    "part_of",
+    "supersedes",
+    "reports_to",
+    "owns",
+    "governs",
+    "participated_in",
+    "references",
+    "derived_from"
+  ],
+  "examples": {
+    "entity_types": {
+      "Person": ["Dana Reyes", "the shift supervisor"],
+      "Organization": ["QA Team", "Diversified Botanics"],
+      "Document": ["SOP-014", "the cleaning log"],
+      "Process": ["batch release review", "equipment cleaning"],
+      "System": ["the ERP system", "LIMS"],
+      "Project": ["the Building A retrofit"],
+      "Event": ["the quarterly audit"],
+      "Asset": ["mixer M-3", "the labeler"],
+      "Communication": ["the recall notice email"],
+      "Location": ["Building A", "the wash station"]
+    },
+    "predicates": {
+      "authored_by": ["SOP-014 authored_by Dana Reyes (Document authored_by Person)"],
+      "mentions": ["the audit report mentions mixer M-3"],
+      "part_of": ["the labeler part_of Building A; a step part_of a process"],
+      "supersedes": ["SOP-015 supersedes SOP-014 (newer Document supersedes older)"],
+      "reports_to": ["a line operator reports_to the shift supervisor"],
+      "owns": ["the QA Team owns SOP-014 (owner is the SUBJECT, owned thing is the OBJECT)"],
+      "governs": ["SOP-014 governs the batch release process"],
+      "participated_in": ["Dana Reyes participated_in the quarterly audit"],
+      "references": ["SOP-014 references the cleaning log"],
+      "derived_from": ["the summary sheet derived_from the batch record"]
+    }
+  },
+  "predicate_aliases": {
+    "owned_by": {"predicate": "owns", "swap": true},
+    "owner_of": "owns",
+    "authored": {"predicate": "authored_by", "swap": true},
+    "wrote": {"predicate": "authored_by", "swap": true},
+    "written_by": "authored_by",
+    "belongs_to": "part_of",
+    "member_of": "part_of",
+    "refers_to": "references",
+    "mentioned_in": {"predicate": "mentions", "swap": true},
+    "governed_by": {"predicate": "governs", "swap": true},
+    "replaces": "supersedes",
+    "superseded_by": {"predicate": "supersedes", "swap": true},
+    "replaced_by": {"predicate": "supersedes", "swap": true},
+    "derives_from": "derived_from",
+    "participates_in": "participated_in"
+  },
+  "notes": "Placeholder vocabulary. Shaped like the real ontology; type names are throwaway. Portable form of the schema seed + migration 004 data."
+}

@@ -1040,16 +1040,28 @@ def run_ingest(tenants: list[str], add_sources: list[str],
                                    SectionChunker(), embedder,
                                    dispatcher=dispatcher,
                                    extraction_dispatcher=ext_dispatcher)
-    binding = PostgresOntologyBinding(store, version="baseline-0.1")
-    extraction = ExtractionService(
-        pipeline, raw_store, binding, LLMJointExtractionStrategy(binding),
-        StructuredMapStrategy(binding), SpanGrounder(),
-        dispatcher=ext_dispatcher)
-    resolution = ResolutionService(pipeline, TieredScorer(store), embedder)
+    scorer = TieredScorer(store)
+
+    def make_stage_services():
+        """Extraction + resolution, built FRESH each sweep. The binding is
+        deliberately unpinned (d.s Stage 1): version=None resolves the
+        operator's active selection (ontology_active, migration 011) — the
+        single source of truth. The old hard-coded "baseline-0.1" pin here
+        was the split-brain path: the worker extracted under a version no
+        operator action could change. Rebuilding per sweep means a --watch
+        loop picks up a console swap on its next pass; heavy pieces
+        (scorer, embedder, store) are built once above and shared."""
+        binding = PostgresOntologyBinding(store)
+        extraction = ExtractionService(
+            pipeline, raw_store, binding, LLMJointExtractionStrategy(binding),
+            StructuredMapStrategy(binding), SpanGrounder(),
+            dispatcher=ext_dispatcher)
+        resolution = ResolutionService(pipeline, scorer, embedder)
+        return binding, extraction, resolution
 
     try:
         return _ingest_run(tenants, add_sources, capture, processing,
-                           extraction, resolution, store, limit, watch,
+                           make_stage_services, store, limit, watch,
                            interval, say)
     except Exception as e:
         detail = _infra_failure(e)
@@ -1060,8 +1072,8 @@ def run_ingest(tenants: list[str], add_sources: list[str],
         return 1
 
 
-def _ingest_run(tenants, add_sources, capture, processing, extraction,
-                resolution, store, limit, watch, interval,
+def _ingest_run(tenants, add_sources, capture, processing,
+                make_stage_services, store, limit, watch, interval,
                 say: Callable[[str], None]) -> int:
     for spec in add_sources:
         ref, _, folder = spec.partition("=")
@@ -1080,6 +1092,9 @@ def _ingest_run(tenants, add_sources, capture, processing, extraction,
             say(f"[{tenant}] source {ref!r} registered -> {root}")
 
     def sweep() -> None:
+        binding, extraction, resolution = make_stage_services()
+        say(f"ontology: {binding.version} (operator-selected active — "
+            f"applies to this sweep's extraction)")
         for tenant in tenants:
             entries = capture.registry.list_for_tenant(tenant)
             if not entries:

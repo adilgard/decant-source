@@ -5,6 +5,13 @@ git-tracked; the database's `ontology_versions` table is the LOADED form,
 this folder is the PORTABLE form. Importing (operator console →
 `import_ontology`, or dropping a file here and importing it) writes both.
 
+SHIPPING RULE: this folder travels with every deployment, so in the REPO
+it holds only the baseline set. Domain ontology masters live in a library
+outside the project tree and reach a client deployment one at a time via
+the console's import — an end user receives only the sets relevant to
+them, never the whole catalog. On a DEPLOYED box this folder fills up
+with that deployment's own imported sets, which is exactly right.
+
 ## Shape
 
 ```json

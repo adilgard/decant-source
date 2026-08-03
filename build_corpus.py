@@ -98,7 +98,8 @@ def _summary(scale: str) -> None:
     import psycopg
     from psycopg.rows import dict_row
     dsn = "host=localhost port=5432 dbname=knowledge_hub user=kh password=kh_pilot_pw"
-    with psycopg.connect(dsn, row_factory=dict_row) as conn:
+    with psycopg.connect(dsn, row_factory=dict_row,
+                         connect_timeout=10) as conn:
         for label, q in [
             ("documents by track",
              "SELECT doc_type, count(*) n FROM documents WHERE tenant_id=%s "

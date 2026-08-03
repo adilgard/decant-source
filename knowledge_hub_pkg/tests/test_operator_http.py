@@ -68,7 +68,7 @@ from knowledge_hub.sources_fs import FilesystemSourceAdapter
 
 @pytest.fixture(scope="module")
 def db(test_dsn: str) -> psycopg.Connection:
-    conn = psycopg.connect(test_dsn, autocommit=True, row_factory=dict_row)
+    conn = psycopg.connect(test_dsn, autocommit=True, row_factory=dict_row, connect_timeout=10)
     yield conn
     conn.close()
 

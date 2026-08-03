@@ -1,0 +1,276 @@
+{
+  "version": "baseline-tax-0.2",
+  "entity_types": [
+    "Person",
+    "Organization",
+    "Document",
+    "Process",
+    "System",
+    "Project",
+    "Event",
+    "Asset",
+    "Communication",
+    "Location",
+    "StatuteProvision",
+    "Regulation",
+    "AdministrativeGuidance",
+    "CourtCase",
+    "Court",
+    "LegislativeAct",
+    "DefinedTerm",
+    "Doctrine",
+    "TaxpayerClass",
+    "TaxForm",
+    "Jurisdiction"
+  ],
+  "predicates": [
+    "authored_by",
+    "mentions",
+    "part_of",
+    "supersedes",
+    "reports_to",
+    "owns",
+    "governs",
+    "participated_in",
+    "references",
+    "derived_from",
+    "defines",
+    "allows",
+    "disallows",
+    "limits",
+    "requires",
+    "grants_election",
+    "provides_exception_to",
+    "applies_to",
+    "interpreted_by",
+    "amended_by",
+    "effective_for",
+    "decided_by",
+    "applies_doctrine"
+  ],
+  "examples": {
+    "entity_types": {
+      "Person": ["Dana Reyes", "the shift supervisor"],
+      "Organization": ["QA Team", "Diversified Botanics", "the Internal Revenue Service", "the Treasury Department"],
+      "Document": ["SOP-014", "the cleaning log"],
+      "Process": ["batch release review", "equipment cleaning"],
+      "System": ["the ERP system", "LIMS"],
+      "Project": ["the Building A retrofit"],
+      "Event": ["the quarterly audit"],
+      "Asset": ["mixer M-3", "the labeler"],
+      "Communication": ["the recall notice email"],
+      "Location": ["Building A", "the wash station"],
+      "StatuteProvision": [
+        "section 162",
+        "section 163(j)",
+        "subsection (n)(1) of section 274",
+        "26 U.S.C. 263",
+        "this paragraph",
+        "the preceding subsection"
+      ],
+      "Regulation": [
+        "Treas. Reg. 1.162-4",
+        "26 CFR 1.263(a)-1",
+        "the proposed regulations under section 163(j)"
+      ],
+      "AdministrativeGuidance": [
+        "Rev. Rul. 2004-18",
+        "Rev. Proc. 2019-38",
+        "Notice 2018-28",
+        "a private letter ruling",
+        "the Notice"
+      ],
+      "CourtCase": [
+        "United States v. Gilmore",
+        "Commissioner v. Tellier",
+        "INDOPCO, Inc. v. Commissioner",
+        "the Tellier decision"
+      ],
+      "Court": [
+        "the Tax Court",
+        "the Ninth Circuit",
+        "the Supreme Court",
+        "the Court of Federal Claims"
+      ],
+      "LegislativeAct": [
+        "Public Law 119-99",
+        "the Tax Cuts and Jobs Act",
+        "the Revenue Act of 1962"
+      ],
+      "DefinedTerm": [
+        "trade or business",
+        "adjusted taxable income",
+        "applicable financial statement",
+        "covered employee",
+        "business interest expense",
+        "tax shelter"
+      ],
+      "Doctrine": [
+        "the origin of the claim doctrine",
+        "substance over form",
+        "the step transaction doctrine",
+        "the ordinary and necessary requirement"
+      ],
+      "TaxpayerClass": [
+        "a C corporation",
+        "an S corporation",
+        "a partnership",
+        "an individual",
+        "a tax shelter",
+        "a publicly held corporation"
+      ],
+      "TaxForm": [
+        "Form 1120",
+        "Schedule M-3",
+        "Form 4562"
+      ],
+      "Jurisdiction": [
+        "the United States",
+        "federal",
+        "Missouri",
+        "the State of Florida"
+      ]
+    },
+    "predicates": {
+      "authored_by": ["SOP-014 authored_by Dana Reyes (Document authored_by Person)"],
+      "mentions": [
+        "the audit report mentions mixer M-3",
+        "a NON-operative aside: section 61 mentions gross income in passing. Use references for an operative cross-reference"
+      ],
+      "part_of": [
+        "the labeler part_of Building A; a step part_of a process",
+        "section 163(j) part_of section 163 (a subsection part_of its section)",
+        "STRUCTURAL: prefer NOT to extract statute hierarchy by reading — it is supplied deterministically from the source XML"
+      ],
+      "supersedes": [
+        "SOP-015 supersedes SOP-014 (newer Document supersedes older)",
+        "Rev. Rul. 2004-18 supersedes Rev. Rul. 71-137"
+      ],
+      "reports_to": ["a line operator reports_to the shift supervisor"],
+      "owns": ["the QA Team owns SOP-014 (owner is the SUBJECT, owned thing is the OBJECT)"],
+      "governs": ["SOP-014 governs the batch release process"],
+      "participated_in": ["Dana Reyes participated_in the quarterly audit"],
+      "references": [
+        "SOP-014 references the cleaning log",
+        "OPERATIVE cross-reference: section 1(a)(1) references section 7703 (as in 'as defined in section 7703')",
+        "STRUCTURAL: statute-to-statute cross-references are supplied deterministically from the source XML — do not hand-extract them"
+      ],
+      "derived_from": ["the summary sheet derived_from the batch record"],
+      "defines": [
+        "section 7701(a)(1) defines person (the SUBJECT is the provision, the OBJECT is the DefinedTerm)",
+        "section 163(j)(8) defines adjusted taxable income",
+        "trigger phrasing: 'the term X means', 'for purposes of this section, X includes'"
+      ],
+      "allows": [
+        "section 162(a) allows a deduction for ordinary and necessary business expenses",
+        "section 243 allows the dividends received deduction",
+        "the OBJECT may be a DefinedTerm or a literal description of what is permitted"
+      ],
+      "disallows": [
+        "section 162(f) disallows fines and penalties paid to a government",
+        "section 274(a) disallows entertainment expenses",
+        "section 262 disallows personal living expenses"
+      ],
+      "limits": [
+        "section 163(j) limits business interest expense (a cap, ceiling, threshold or percentage limitation)",
+        "section 274(n) limits the deduction for meals to 50 percent",
+        "section 170(b)(2) limits the charitable contribution deduction to 10 percent of taxable income"
+      ],
+      "requires": [
+        "section 274(d) requires substantiation for travel expenses",
+        "section 263 requires capitalization of amounts paid for permanent improvements",
+        "use this for an obligation or a condition the taxpayer must satisfy"
+      ],
+      "grants_election": [
+        "section 163(j)(7) grants_election out of the interest limitation for an electing real property trade or business",
+        "the OBJECT is a literal description of the election"
+      ],
+      "provides_exception_to": [
+        "section 162(f)(2) provides_exception_to section 162(f) (restitution is not a disallowed fine)",
+        "trigger phrasing: 'shall not apply', 'except as provided in', 'subparagraph (A) shall not apply to'"
+      ],
+      "applies_to": [
+        "section 243 applies_to a C corporation (the OBJECT is a TaxpayerClass)",
+        "section 163(j) applies_to a tax shelter",
+        "a state disclosure statute applies_to Missouri (the OBJECT is a Jurisdiction)"
+      ],
+      "interpreted_by": [
+        "section 162 interpreted_by Commissioner v. Tellier (the SUBJECT is the provision, the OBJECT is the CourtCase or AdministrativeGuidance)",
+        "section 263 interpreted_by INDOPCO, Inc. v. Commissioner"
+      ],
+      "amended_by": [
+        "section 163(j) amended_by Public Law 119-99",
+        "section 274(n) amended_by the Tax Cuts and Jobs Act"
+      ],
+      "effective_for": [
+        "section 163(j) effective_for taxable years beginning after December 31, 2025",
+        "the OBJECT is a literal period or date description"
+      ],
+      "decided_by": [
+        "United States v. Gilmore decided_by the Supreme Court",
+        "the SUBJECT is the CourtCase, the OBJECT is the Court"
+      ],
+      "applies_doctrine": [
+        "United States v. Gilmore applies_doctrine the origin of the claim doctrine",
+        "the SUBJECT is the CourtCase, the OBJECT is the Doctrine"
+      ]
+    }
+  },
+  "predicate_aliases": {
+    "owned_by": {"predicate": "owns", "swap": true},
+    "owner_of": "owns",
+    "authored": {"predicate": "authored_by", "swap": true},
+    "wrote": {"predicate": "authored_by", "swap": true},
+    "written_by": "authored_by",
+    "belongs_to": "part_of",
+    "member_of": "part_of",
+    "contains": {"predicate": "part_of", "swap": true},
+    "sub_provision_of": "part_of",
+    "subsection_of": "part_of",
+    "paragraph_of": "part_of",
+    "refers_to": "references",
+    "cross_references": "references",
+    "cited_in": {"predicate": "references", "swap": true},
+    "mentioned_in": {"predicate": "mentions", "swap": true},
+    "governed_by": {"predicate": "governs", "swap": true},
+    "replaces": "supersedes",
+    "superseded_by": {"predicate": "supersedes", "swap": true},
+    "replaced_by": {"predicate": "supersedes", "swap": true},
+    "derives_from": "derived_from",
+    "participates_in": "participated_in",
+    "defined_in": {"predicate": "defines", "swap": true},
+    "defines_the_term": "defines",
+    "means": "defines",
+    "permits": "allows",
+    "authorizes": "allows",
+    "allows_a_deduction_for": "allows",
+    "allows_deduction_for": "allows",
+    "prohibits": "disallows",
+    "bars": "disallows",
+    "denies": "disallows",
+    "denies_deduction_for": "disallows",
+    "caps": "limits",
+    "imposes_limitation_on": "limits",
+    "limits_deduction_for": "limits",
+    "limited_by": {"predicate": "limits", "swap": true},
+    "mandates": "requires",
+    "requires_capitalization_of": "requires",
+    "requires_substantiation_of": "requires",
+    "exception_to": "provides_exception_to",
+    "excepts": "provides_exception_to",
+    "does_not_apply_to": "provides_exception_to",
+    "applicable_to": "applies_to",
+    "scoped_to": "applies_to",
+    "interprets": {"predicate": "interpreted_by", "swap": true},
+    "construed_by": "interpreted_by",
+    "construes": {"predicate": "interpreted_by", "swap": true},
+    "amends": {"predicate": "amended_by", "swap": true},
+    "enacted_by": "amended_by",
+    "effective_date": "effective_for",
+    "decided_in": {"predicate": "decided_by", "swap": true},
+    "held_by": "decided_by",
+    "applies_the_doctrine_of": "applies_doctrine",
+    "invokes_doctrine": "applies_doctrine"
+  },
+  "notes": "SUPERSET of baseline-0.1 (all 10 entity types + all 10 predicates + all 15 aliases retained unchanged), plus a statutory/regulatory-law tier for the Tax Agent corpus. Superset because ontology_active is a single global row: activating a tax-only set would strand the msgraph-files and QBO sources on vocabulary that no longer exists. Once per-job ontology binding lands (d.s Stage 2), a leaner tax-only set becomes possible; until then this is the additive path. TIERING (naming convention only, the contract is flat by design): the 10 baseline names are the general ops tier; StatuteProvision/Regulation/AdministrativeGuidance/CourtCase/Court/LegislativeAct/DefinedTerm/Doctrine/Jurisdiction + defines/allows/disallows/limits/requires/grants_election/provides_exception_to/applies_to/interpreted_by/amended_by/effective_for/decided_by/applies_doctrine are the reusable regulatory-corpus tier (they fit any code-of-law body: Title 26, state kratom statutes for Judicial Sentinel, FOIA statutes); TaxpayerClass/TaxForm are the tax-domain tier. REUSE was preferred over invention: statute hierarchy uses part_of, operative statute-to-statute cross-references use references, and IRS/Treasury are Organization -- no duplicate vocabulary. DELIBERATELY OMITTED: a general 'TaxConcept' type (untestable boundary against DefinedTerm and Doctrine, so it would produce garbage extraction; add later if the quarantine log asks for it), and anything resembling the Tax Agent's TAX_SCHEMA determination vocabulary (expense.deductible_amount and friends) -- those are TYPED taxpayer facts from intake, not document facts, and this contract is an allowlist with no type system to validate them. IMPORTANT: statute hierarchy and cross-references are already derived deterministically by the Tax Agent's USLM XML parser for all 19,015 chunks; the part_of/references examples above tell the extractor NOT to re-derive them by reading. Feeding them in deterministically needs a seam d.s does not have yet (the prose track routes all facts through the LLM extractor)."
+}

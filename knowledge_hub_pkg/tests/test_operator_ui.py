@@ -67,7 +67,7 @@ from knowledge_hub.service_http import (
 
 @pytest.fixture(scope="module")
 def db(test_dsn: str) -> psycopg.Connection:
-    conn = psycopg.connect(test_dsn, autocommit=True, row_factory=dict_row)
+    conn = psycopg.connect(test_dsn, autocommit=True, row_factory=dict_row, connect_timeout=10)
     yield conn
     conn.close()
 

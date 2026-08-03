@@ -95,7 +95,17 @@ class PostgresFactStore(FactStore):
             # autocommit=True + explicit conn.transaction() blocks: bare reads
             # don't linger idle-in-transaction, and every write below runs in
             # an explicit BEGIN/COMMIT.
-            conn = psycopg.connect(dsn, row_factory=dict_row, autocommit=True)
+            # connect_timeout is LOAD-BEARING, not politeness: a dual-stack
+            # "localhost" resolves ::1 first on Windows, and Docker Desktop's
+            # port proxy can ACCEPT the IPv6 connection and then never
+            # answer the Postgres handshake (observed live: an operator
+            # server thread wedged forever in wait_conn). The timeout is
+            # per-address, so psycopg abandons the black hole and falls
+            # through to 127.0.0.1, which answers instantly — bounded
+            # first-connect stall instead of an infinite hang. 10s matches
+            # the choke point's connection (choke_point.py).
+            conn = psycopg.connect(dsn, row_factory=dict_row, autocommit=True,
+                                   connect_timeout=10)
             # ag_catalog LAST — otherwise objects land in the wrong schema
             # (gotcha from the pilot practice run, see NOTES.md).
             conn.execute('SET search_path = public, ag_catalog, "$user";')

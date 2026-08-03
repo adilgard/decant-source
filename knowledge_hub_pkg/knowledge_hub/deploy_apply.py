@@ -531,7 +531,10 @@ def phase_schema(ctx: ApplyContext) -> list[str]:
                 f"{ctx.env.get('POSTGRES_PORT', '5432')}"]
     import psycopg
     lines = []
-    with psycopg.connect(dsn, autocommit=True) as conn:
+    # connect_timeout: same dual-stack localhost black-hole class as
+    # factstore_pg._conn — bounded fall-through beats an infinite wedge
+    # inside the self-closing deploy window (SANITY_CHECK_FINDINGS §apply).
+    with psycopg.connect(dsn, autocommit=True, connect_timeout=10) as conn:
         tables = conn.execute(
             "SELECT count(*) FROM pg_tables WHERE schemaname='public'"
         ).fetchone()[0]

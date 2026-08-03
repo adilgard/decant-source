@@ -50,13 +50,18 @@ def mix_vec(a: int, b: int, wa: float = 0.9, wb: float = 0.1) -> list[float]:
 @pytest.fixture(scope="session")
 def test_dsn() -> str:
     admin_dsn = settings.postgres_dsn
-    with psycopg.connect(admin_dsn, autocommit=True) as conn:
+    # connect_timeout on every suite connection: Docker Desktop's dual-stack
+    # localhost proxy can black-hole one address family under load (see
+    # factstore_pg._conn) — a bounded per-address timeout falls through to
+    # the working address instead of wedging the whole session.
+    with psycopg.connect(admin_dsn, autocommit=True,
+                         connect_timeout=10) as conn:
         conn.execute(f"DROP DATABASE IF EXISTS {TEST_DB} WITH (FORCE)")
         conn.execute(f"CREATE DATABASE {TEST_DB}")
     dsn = admin_dsn.rsplit("/", 1)[0] + "/" + TEST_DB
 
     schema = (INFRA_DIR / "knowledge_hub_baseline_schema.sql").read_text(encoding="utf-8")
-    with psycopg.connect(dsn, autocommit=True) as conn:
+    with psycopg.connect(dsn, autocommit=True, connect_timeout=10) as conn:
         # ag_catalog must be ON the search_path for create_graph()/create_vlabel()
         # to resolve, and LAST so new objects land in public (NOTES.md gotcha).
         conn.execute("SET search_path = public, ag_catalog;")

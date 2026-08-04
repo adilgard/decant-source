@@ -47,6 +47,7 @@ from typing import Callable, Optional
 from pydantic import BaseModel
 
 from knowledge_hub.dispatch_pg import PostgresDispatcher
+from knowledge_hub.extraction_parser_supplied import ParserSuppliedStrategy
 from knowledge_hub.grounding import find_span
 from knowledge_hub.interfaces import (
     CandidateFact,
@@ -61,7 +62,6 @@ from knowledge_hub.interfaces import (
     RawStore,
 )
 from knowledge_hub.models import (
-    PROSE_TRACK,
     Chunk,
     Document,
     EntityMention,
@@ -70,10 +70,54 @@ from knowledge_hub.models import (
     RawDocument,
 )
 from knowledge_hub.pipeline import Pipeline
+from knowledge_hub.plugins import (
+    LLM_STRATEGY,
+    PARSER_SUPPLIED_STRATEGY,
+    STRUCTURED_STRATEGY,
+    build_fact_parser,
+    fact_parser_ref_for,
+    source_config,
+    strategy_name_for,
+)
 
 logger = logging.getLogger(__name__)
 
 GROUNDING_PENALTY = 0.5  # confidence multiplier on a failed grounding check
+
+
+def document_text_from_chunks(parents: list[Chunk]) -> str:
+    """Rebuild the document's extracted text from its persisted parent
+    chunks, at their original offsets.
+
+    Extraction needs the extracted text to verify a producer's declared
+    spans, but the Parser lives one stage upstream in ProcessingService and
+    this service has never held one. Re-parsing here would mean two parses
+    that can disagree, and the one that matters is the one chunks were cut
+    from — so reconstruct from exactly that.
+
+    Parents tile the text by construction (SectionChunker emits contiguous
+    section spans), except that whitespace-only sections are dropped. Those
+    gaps are refilled with spaces, which keeps every surviving character at
+    its original index. That is the only property this function owes: an
+    offset that was valid against the parser's output is valid against
+    this string.
+    """
+    pieces: list[str] = []
+    cursor = 0
+    for chunk in sorted(parents, key=lambda c: (c.char_start or 0, c.seq)):
+        start = chunk.char_start or 0
+        if start > cursor:
+            pieces.append(" " * (start - cursor))  # a dropped blank section
+            cursor = start
+        content = chunk.content
+        if start < cursor:
+            # Overlapping parents should be impossible; if the chunker ever
+            # emits them, keep offsets honest by dropping the overlap rather
+            # than shifting everything after it.
+            content = content[cursor - start:]
+        pieces.append(content)
+        cursor += len(content)
+    return "".join(pieces)
 
 
 class ExtractSummary(BaseModel):
@@ -156,6 +200,14 @@ class ExtractionService:
         self._trios: dict[str, tuple[OntologyBinding, ExtractionStrategy,
                                      ExtractionStrategy]] = {
             binding.version: (binding, llm_strategy, structured_strategy)}
+        # parser_supplied strategies, cached per (ontology version, plugin
+        # reference). Cached rather than rebuilt per document because the
+        # instance carries the idempotency ledger's key material
+        # (extractor name + plugin version) and constructing a plugin may
+        # be expensive; keyed on the plugin ref because two sources may use
+        # two different plugins under the same ontology.
+        self._parser_strategies: dict[tuple[str, str],
+                                      ParserSuppliedStrategy] = {}
 
     def _trio_for(self, raw: RawDocument,
                   ontology_version: Optional[str] = None) -> tuple[
@@ -236,15 +288,49 @@ class ExtractionService:
 
         binding, llm_strategy, structured_strategy = self._trio_for(
             raw, ontology_version)
-        if document.data_track == PROSE_TRACK:
+
+        # THE ROUTING SEAM. This used to be `if data_track == PROSE_TRACK`,
+        # which conflated two questions: what SHAPE is this content (which
+        # drives parsing and chunking) and WHO produces its facts. A source
+        # can now answer them independently, by config. With no
+        # `extraction_strategy` declared, strategy_name_for reproduces the
+        # old branch exactly, so nothing that predates this changes.
+        config = source_config(self.store, raw)
+        strategy_name = strategy_name_for(config, document.data_track)
+        if strategy_name == LLM_STRATEGY:
             summary = self._extract_prose(raw, document, binding,
                                           llm_strategy)
-        else:
+        elif strategy_name == STRUCTURED_STRATEGY:
             summary = self._extract_structured(raw, document, binding,
-                                               structured_strategy)
+                                               structured_strategy, config)
+        else:  # PARSER_SUPPLIED_STRATEGY
+            summary = self._extract_parser_supplied(
+                raw, document, binding,
+                self._parser_supplied_strategy(raw, binding, config))
 
         self._mark_extracted(tenant_id, raw_document_id)
         return summary
+
+    def _parser_supplied_strategy(self, raw: RawDocument,
+                                  binding: OntologyBinding,
+                                  config: dict) -> ParserSuppliedStrategy:
+        """Build (or reuse) the conformance gate around this source's
+        plugin. The plugin arrives as a STRING from config and is resolved
+        through the registry, which is what keeps core's import graph free
+        of every domain package that will ever exist."""
+        ref = fact_parser_ref_for(config)
+        if ref is None:
+            raise ExtractionError(
+                raw.tenant_id, None, None,
+                f"raw_document id={raw.id} selects the "
+                f"{PARSER_SUPPLIED_STRATEGY!r} strategy but its source "
+                f"config names no {PARSER_SUPPLIED_STRATEGY} plugin — set "
+                f"'fact_parser' on the source (console: edit scope)")
+        key = (binding.version, ref)
+        if key not in self._parser_strategies:
+            self._parser_strategies[key] = ParserSuppliedStrategy(
+                binding, build_fact_parser(ref))
+        return self._parser_strategies[key]
 
     # ------------------------------------------------------- prose track --
     def _extract_prose(self, raw: RawDocument, document: Document,
@@ -282,7 +368,8 @@ class ExtractionService:
     # -------------------------------------------------- structured track --
     def _extract_structured(self, raw: RawDocument, document: Document,
                             binding: OntologyBinding,
-                            strategy: ExtractionStrategy) -> ExtractSummary:
+                            strategy: ExtractionStrategy,
+                            config: dict) -> ExtractSummary:
         tenant_id = document.tenant_id
         summary = ExtractSummary(
             tenant_id=tenant_id, raw_document_id=raw.id,
@@ -294,37 +381,85 @@ class ExtractionService:
         unit = ExtractionUnit(
             document=document, source_system=raw.source_system,
             payload=self.raw_store.get(raw.raw_uri),
-            config={"structured_map": self._structured_map(raw)})
+            # `config` is the merged source config the router already
+            # resolved (per-item native_metadata over the registry row) —
+            # the structured_map lookup that used to live here was a third
+            # copy of that same precedence rule, so it is gone.
+            config={"structured_map": config.get("structured_map")})
         result = strategy.extract(unit)
         self._finalize(unit, result, _DocDigest(), raw.content_hash,
                        strategy, binding, summary)
         return summary
 
-    def _structured_map(self, raw: RawDocument) -> Optional[dict]:
-        """The manifest's structured_map: a per-item native_metadata
-        declaration wins; otherwise the source's registry config (same
-        precedence as the data_track declaration in Stage B)."""
-        native = raw.native_metadata or {}
-        if native.get("structured_map"):
-            return native["structured_map"]
-        source_ref = native.get("source_ref")
-        if not source_ref:
-            return None
-        with self.store.transaction(raw.tenant_id) as conn:
-            row = conn.execute(
-                "SELECT config FROM source_registry"
-                " WHERE tenant_id = %s AND source_ref = %s",
-                (raw.tenant_id, source_ref)).fetchone()
-        return ((row or {}).get("config") or {}).get("structured_map")
+    # -------------------------------------------------- parser_supplied  --
+    def _extract_parser_supplied(self, raw: RawDocument, document: Document,
+                                 binding: OntologyBinding,
+                                 strategy: ParserSuppliedStrategy
+                                 ) -> ExtractSummary:
+        """One unit per document, no LLM, no chunk iteration.
+
+        A plugin reads the whole document because structure is the thing it
+        understands: a cross-reference from one section to another is not
+        visible from inside either section alone. Prose chunking and
+        embedding already happened upstream and are untouched — this
+        replaces only the fact producer, so the same document is fully
+        retrievable AND carries deterministic facts.
+
+        Facts land anchored to the parent chunk their span falls inside, so
+        retrieval's grounded-facts enrichment (which joins on
+        source_chunk_id) surfaces them exactly like LLM facts. Nothing
+        downstream has to know a plugin was involved.
+        """
+        tenant_id = document.tenant_id
+        summary = ExtractSummary(
+            tenant_id=tenant_id, raw_document_id=raw.id,
+            document_id=document.id, status="extracted", units=1)
+        # Ledger key is the document's content hash, like the structured
+        # track: one unit, one run. The strategy's extractor name carries
+        # the plugin version, so a plugin upgrade is fresh work, never a
+        # replay of the old plugin's verdict.
+        if self._already_ran(tenant_id, raw.content_hash, strategy, binding):
+            summary.units_replayed, summary.status = 1, "replayed"
+            return summary
+
+        parents = self._parents(tenant_id, document.id)
+        if not parents:
+            raise ExtractionError(
+                tenant_id, document.id, None,
+                f"document has no parent chunks, so a declared span has "
+                f"nothing to be verified against. A {PARSER_SUPPLIED_STRATEGY} "
+                f"source is expected to chunk normally for retrieval — check "
+                f"that its data_track is 'prose' and that processing finished")
+
+        unit = ExtractionUnit(
+            document=document, source_system=raw.source_system,
+            chunk=None,
+            text=document_text_from_chunks(parents),
+            payload=self.raw_store.get(raw.raw_uri))
+        result = strategy.extract(unit)
+        self._finalize(unit, result, _DocDigest(), raw.content_hash,
+                       strategy, binding, summary,
+                       span_chunks=[(p.char_start, p.char_end, p.id)
+                                    for p in parents
+                                    if p.char_start is not None
+                                    and p.char_end is not None])
+        return summary
 
     # ------------------------------------------------------ finalize/stage --
     def _finalize(self, unit: ExtractionUnit, result: ExtractionResult,
                   digest: _DocDigest, unit_hash: str,
                   strategy: ExtractionStrategy, binding: OntologyBinding,
-                  summary: ExtractSummary) -> None:
+                  summary: ExtractSummary,
+                  span_chunks: Optional[list[tuple[int, int, int]]] = None
+                  ) -> None:
         """Ground -> envelope -> intra-unit mention dedup -> stage_pending ->
         record the run, atomically. Quarantined items persist regardless —
-        they are observations, not part of the staged unit."""
+        they are observations, not part of the staged unit.
+
+        `span_chunks` is (char_start, char_end, chunk_id) for the document's
+        parent chunks, supplied by whole-document units so a fact can be
+        anchored to the chunk its span falls inside. Chunk-scoped units pass
+        nothing: they already know their chunk."""
         tenant_id = unit.document.tenant_id
         for q in result.quarantined:
             self.store.insert_quarantine(q)
@@ -352,17 +487,29 @@ class ExtractionService:
             keymap[ent.key] = ent.key
             surfaces[ent.key] = ent.surface_text
             pending_entities[ent.key] = ent
-            span = find_span(ent.surface_text, unit.text) if unit.text else None
-            base = (unit.chunk.char_start or 0) if unit.chunk else 0
+            if ent.char_start is not None and ent.char_end is not None:
+                # DECLARED (parser_supplied): the producer computed where
+                # this surface form is. Searching for it instead would take
+                # the first occurrence, which in a document that names the
+                # same thing repeatedly is usually not this one.
+                m_start, m_end = ent.char_start, ent.char_end
+            else:
+                span = (find_span(ent.surface_text, unit.text)
+                        if unit.text else None)
+                base = (unit.chunk.char_start or 0) if unit.chunk else 0
+                m_start = base + span[0] if span else None
+                m_end = base + span[1] if span else None
             mentions[ent.key] = EntityMention(
                 tenant_id=tenant_id,
                 surface_text=ent.surface_text,
                 entity_type=ent.entity_type,
                 source_system=unit.source_system,
                 source_document_id=unit.document.id,
-                source_chunk_id=unit.chunk.id if unit.chunk else None,
-                char_start=base + span[0] if span else None,
-                char_end=base + span[1] if span else None,
+                source_chunk_id=(unit.chunk.id if unit.chunk else
+                                 self._chunk_for_span(span_chunks, m_start,
+                                                      m_end)),
+                char_start=m_start,
+                char_end=m_end,
                 locator=unit.chunk.locator if unit.chunk else None,
                 extracted_keys=ent.extracted_keys)
 
@@ -406,7 +553,16 @@ class ExtractionService:
                             else {}),
                 ontology_version=binding.version,
                 source_document_id=unit.document.id,
-                source_chunk_id=unit.chunk.id if unit.chunk else None,
+                # A whole-document unit anchors each fact to the parent
+                # chunk containing its verified span, so retrieval's
+                # facts_citing enrichment (which joins on source_chunk_id)
+                # surfaces plugin facts exactly like model facts. A span
+                # straddling two parents stays document-anchored rather
+                # than being assigned to an arbitrary one of them.
+                source_chunk_id=(unit.chunk.id if unit.chunk else
+                                 self._chunk_for_span(span_chunks,
+                                                      grounding.char_start,
+                                                      grounding.char_end)),
                 char_start=grounding.char_start,
                 char_end=grounding.char_end,
                 locator=fact.locator or (unit.chunk.locator if unit.chunk
@@ -455,12 +611,38 @@ class ExtractionService:
                 if ref and ref.startswith("mention:"):
                     digest.bump(f"e{ref.split(':', 1)[1]}")
 
+    @staticmethod
+    def _chunk_for_span(span_chunks: Optional[list[tuple[int, int, int]]],
+                        start: Optional[int],
+                        end: Optional[int]) -> Optional[int]:
+        """The parent chunk wholly containing [start, end), or None. None is
+        a real answer, not a failure: a span with no home chunk (unverified,
+        or straddling a section boundary) stays anchored to the document,
+        which is a weaker citation but a true one."""
+        if not span_chunks or start is None:
+            return None
+        finish = end if end is not None else start
+        for chunk_start, chunk_end, chunk_id in span_chunks:
+            if chunk_start <= start and finish <= chunk_end:
+                return chunk_id
+        return None
+
     def _ground(self, unit: ExtractionUnit, fact: CandidateFact,
                 surfaces: dict[str, str], subject_ref: str,
                 object_ref: Optional[str]):
-        """LLM facts get deterministic span verification against the parent
-        text; SoR facts are grounded by construction (cell locator IS the
-        provenance — there is no model quote to verify)."""
+        """Three producers, three honest verdicts.
+
+        DECLARED (parser_supplied) — the producer computed offsets and named
+        the text there, so slice and compare. Checked FIRST because it is
+        the strongest available check: it can prove the producer wrong,
+        which searching for a quote cannot.
+        QUOTED (LLM) — re-find the model's quote in the parent text.
+        CONSTRUCTED (SoR) — no span and none claimed; the cell locator IS
+        the provenance and there is no assertion of position to verify.
+        """
+        if fact.char_start is not None and fact.char_end is not None:
+            return self.grounder.verify_span(
+                fact.evidence, fact.char_start, fact.char_end, unit.text)
         if unit.chunk is None:
             return GroundingResult(status="construction")
         components = [surfaces.get(subject_ref, "")]

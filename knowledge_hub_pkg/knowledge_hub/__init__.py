@@ -131,8 +131,10 @@ from knowledge_hub.interfaces import (
     Dispatcher,
     Embedder,
     EmbeddingError,
+    FactParser,
     FactStore,
     OutboundRequest,
+    ParsedFact,
     ParseError,
     Parser,
     RawStore,
@@ -147,6 +149,14 @@ from knowledge_hub.interfaces import (
     SourceAdapter,
     SourceItem,
     StagedPending,
+)
+from knowledge_hub.plugins import (
+    EXTRACTION_STRATEGIES,
+    FACT_PARSERS,
+    PARSERS,
+    BoundaryViolation,
+    PluginError,
+    PluginRegistry,
 )
 from knowledge_hub.retrieval import (
     DenseRetrievalService,
@@ -205,6 +215,9 @@ __all__ = [
     "OutboundRequest", "RawStore", "SourceAdapter", "SourceItem", "Dispatcher",
     "SourceAcl", "AclGrant", "CursorInvalid",
     "Parser", "ParseError", "Chunker", "Embedder", "EmbeddingError",
+    "FactParser", "ParsedFact",
+    "PluginRegistry", "PluginError", "BoundaryViolation",
+    "PARSERS", "FACT_PARSERS", "EXTRACTION_STRATEGIES",
     "Scorer", "BlockedCandidate", "ScoredCandidate", "ResolutionOutcome",
     "ProvenanceSpine", "EntityRef", "FactEnvelope", "EvidenceEnvelope",
     "RetrievalSignal", "UncertaintyState",

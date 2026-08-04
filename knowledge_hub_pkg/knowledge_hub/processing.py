@@ -52,6 +52,7 @@ from knowledge_hub.models import (
     RawDocument,
 )
 from knowledge_hub.pipeline import Pipeline
+from knowledge_hub.plugins import PARSER_KEY, PARSERS, source_config
 
 logger = logging.getLogger(__name__)
 
@@ -100,6 +101,11 @@ class ProcessingService:
         # experts (§8.1g note) — configured here, never hardcoded.
         self.lazy_reextract_tracks = frozenset(lazy_reextract_tracks)
         self.lazy_reextract_delay = lazy_reextract_delay
+        # Per-source parsers, resolved from config and cached by reference.
+        # `self.parser` stays THE default for every source that names none,
+        # so an injected parser (tests, benchmarks) keeps being the one used
+        # and nothing that predates this seam changes behavior.
+        self._parsers: dict[str, Parser] = {}
 
     # ------------------------------------------------------------ consume --
     def consume(self, tenant_id: str, limit: int = 10) -> list[ProcessResult]:
@@ -168,8 +174,16 @@ class ProcessingService:
         # re-fetch from the source, never bytes something wrote over later.
         content = self.raw_store.get(raw.raw_uri)
 
-        self._merge_declaration(raw)
-        document = self.parser.parse(raw, content)
+        config = source_config(self.store, raw)
+        self._merge_declaration(raw, config)
+        # THE PARSER SEAM. A format core cannot read (and should not learn
+        # to read, because knowing it would be domain knowledge) is handled
+        # by a registered plugin named in this source's config. The same
+        # plugin can also supply that document's facts, which is the only
+        # arrangement where the fact spans and the chunk spans are
+        # guaranteed to agree: one parse produced both.
+        parser = self._parser_for(config)
+        document = parser.parse(raw, content)
         if existing is not None:
             document.id = existing.id
             document.review_status = existing.review_status
@@ -188,7 +202,7 @@ class ProcessingService:
                 document_id=document.id, status="review", reason=mismatch,
                 raw_version=raw.version, data_track=document.data_track)
 
-        text = self.parser.extract_text(raw, content)
+        text = parser.extract_text(raw, content)
         chunks = self.chunker.chunk(document, text)
         if not chunks:  # non-prose track: the router's structured strategy
             self._mark_parsed(tenant_id, raw_document_id)
@@ -254,25 +268,33 @@ class ProcessingService:
                 raw_version=raw.version, data_track=document.data_track)
         return None  # document row without chunks: crashed mid-run, finish it
 
-    def _merge_declaration(self, raw: RawDocument) -> None:
+    def _parser_for(self, config: dict) -> Parser:
+        """This source's Parser: the injected default unless config names
+        one. Cached per reference — a plugin can be expensive to build and
+        a sweep touches many documents from the same source."""
+        ref = config.get(PARSER_KEY)
+        if not ref:
+            return self.parser
+        ref = str(ref)
+        if ref not in self._parsers:
+            self._parsers[ref] = PARSERS.build(ref)
+        return self._parsers[ref]
+
+    @staticmethod
+    def _merge_declaration(raw: RawDocument, config: dict) -> None:
         """Fold the manifest's declared tags into native_metadata (in memory,
         for the parser): a per-item declaration wins; otherwise the source's
         registry config (§8.1a: the manifest tag is a standing EXPECTATION
-        checked per document) fills the gap. The registry row is found via
-        the source_ref the adapter stamped into native_metadata."""
+        checked per document) fills the gap.
+
+        `config` is the already-merged source config, which applies exactly
+        that precedence. This method used to run its own registry query to
+        rebuild the same answer; it now shares the router's, so there is one
+        precedence rule in one place instead of three copies of it."""
         native = dict(raw.native_metadata or {})
-        source_ref = native.get("source_ref")
-        if source_ref and not (native.get("data_track") and native.get("doc_type")):
-            with self.store.transaction(raw.tenant_id) as conn:
-                row = conn.execute(
-                    "SELECT config FROM source_registry"
-                    " WHERE tenant_id = %s AND source_ref = %s",
-                    (raw.tenant_id, source_ref),
-                ).fetchone()
-            config = (row or {}).get("config") or {}
-            for key in ("data_track", "doc_type"):
-                if native.get(key) is None and config.get(key) is not None:
-                    native[key] = config[key]
+        for key in ("data_track", "doc_type"):
+            if native.get(key) is None and config.get(key) is not None:
+                native[key] = config[key]
         raw.native_metadata = native
 
     @staticmethod

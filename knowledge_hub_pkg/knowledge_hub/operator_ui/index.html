@@ -444,6 +444,12 @@ a:hover{color:#c3d5ff;text-decoration:underline}
                 </div>
               </div>
               <div>
+                <div style="font-size:11px;color:#8fa8d8;margin-bottom:4px">File types <span style="color:#5c6f9e">(optional — defaults to .md .txt .pdf .docx)</span></div>
+                <input id="ld-extensions" type="text" spellcheck="false" placeholder=".xml, .md"
+                       style="width:100%;box-sizing:border-box;padding:8px 11px;border-radius:10px;border:1px solid rgba(255,255,255,.18);background:rgba(0,2,12,.5);color:#e9f0ff;font-family:Consolas,monospace;font-size:11.5px;outline:none">
+                <div style="font-size:10.5px;color:#5c6f9e;margin-top:4px">set this only when a folder holds a format the defaults skip — it replaces the default set for THIS job, and leaves every other folder alone</div>
+              </div>
+              <div>
                 <div style="font-size:11px;color:#8fa8d8;margin-bottom:4px">Ontology version for this ingest</div>
                 <select id="ld-ontology" style="width:100%;box-sizing:border-box;padding:8px 11px;border-radius:10px;border:1px solid rgba(255,255,255,.18);background:rgba(0,2,12,.6);color:#e9f0ff;font-family:Consolas,monospace;font-size:12px;outline:none">
                   <option value="">active selection (default)</option>
@@ -470,6 +476,44 @@ a:hover{color:#c3d5ff;text-decoration:underline}
             <div id="ld-jobs" style="display:flex;flex-direction:column;gap:10px">
               <div style="font-size:11px;color:#5c6f9e">no jobs yet</div>
             </div>
+          </div>
+        </div>
+
+        <!-- Extraction setup: which registered components a source uses.
+             Selection is CONFIG, so it belongs to an operator, not to a
+             code change. The pickers are filled from GET /v1/components
+             (what this build actually has registered); a plugin shipped
+             separately is typed as 'package.module:Attribute' and is
+             resolved and type-checked server-side on save, so a typo or a
+             missing install fails here, visibly, instead of at 3am. -->
+        <div style="padding:16px 18px;clip-path:polygon(16px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 16px);border:1px solid rgba(255,255,255,.14);background:linear-gradient(160deg,rgba(120,150,255,.08),rgba(255,255,255,.03));backdrop-filter:blur(12px)">
+          <div style="font-family:Silkscreen,Consolas,monospace;font-size:8.5px;letter-spacing:.2em;color:#7db4e8;margin-bottom:6px">EXTRACTION SETUP : PER SOURCE</div>
+          <div style="font-size:12px;color:#8fa8d8;margin-bottom:12px;line-height:1.6">Choose how one registered source is read and where its facts come from. Leave a field blank to keep this deployment's default. <span style="color:#b9cdf5">Parser-supplied</span> means a registered plugin produces the facts deterministically — no language model runs for that source — while prose is still chunked and embedded for retrieval as usual. Everything a plugin emits is checked against the active ontology exactly like model output; whatever the vocabulary does not permit is quarantined, never stored.</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div>
+              <div style="font-size:11px;color:#8fa8d8;margin-bottom:4px">Source</div>
+              <select id="xs-source" style="width:100%;box-sizing:border-box;padding:9px 11px;border-radius:10px;border:1px solid rgba(160,190,255,.4);background:rgba(0,2,12,.6);color:#e9f0ff;font-size:12px;outline:none"></select>
+            </div>
+            <div>
+              <div style="font-size:11px;color:#8fa8d8;margin-bottom:4px">Fact producer</div>
+              <select id="xs-strategy" style="width:100%;box-sizing:border-box;padding:9px 11px;border-radius:10px;border:1px solid rgba(160,190,255,.4);background:rgba(0,2,12,.6);color:#e9f0ff;font-size:12px;outline:none"></select>
+            </div>
+            <div>
+              <div style="font-size:11px;color:#8fa8d8;margin-bottom:4px">Reader <span style="color:#5c6f9e">(turns bytes into text)</span></div>
+              <input id="xs-parser" type="text" spellcheck="false" list="xs-parser-list" placeholder="docling"
+                     style="width:100%;box-sizing:border-box;padding:9px 11px;border-radius:10px;border:1px solid rgba(255,255,255,.18);background:rgba(0,2,12,.5);color:#e9f0ff;font-family:Consolas,monospace;font-size:11.5px;outline:none">
+              <datalist id="xs-parser-list"></datalist>
+            </div>
+            <div>
+              <div style="font-size:11px;color:#8fa8d8;margin-bottom:4px">Fact plugin <span style="color:#5c6f9e">(parser-supplied only)</span></div>
+              <input id="xs-plugin" type="text" spellcheck="false" list="xs-plugin-list" placeholder="package.module:ClassName"
+                     style="width:100%;box-sizing:border-box;padding:9px 11px;border-radius:10px;border:1px solid rgba(255,255,255,.18);background:rgba(0,2,12,.5);color:#e9f0ff;font-family:Consolas,monospace;font-size:11.5px;outline:none">
+              <datalist id="xs-plugin-list"></datalist>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;margin-top:12px">
+            <div id="xs-save" style="cursor:pointer;font-size:12px;font-weight:500;color:#0a1128;padding:9px 20px;clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);background:linear-gradient(180deg,#b9cdf5,#7db4e8)">Save setup</div>
+            <div id="xs-say" style="font-size:11.5px;color:#5c6f9e"></div>
           </div>
         </div>
       </div>

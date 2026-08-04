@@ -86,7 +86,7 @@ from knowledge_hub.choke_point import (
 from knowledge_hub.config import settings
 from knowledge_hub.factstore_pg import PostgresFactStore
 from knowledge_hub.interfaces import SecretNotFound, SecretsProvider
-from knowledge_hub.models import Label, OperatorAudit
+from knowledge_hub.models import PROSE_TRACK, Label, OperatorAudit
 from knowledge_hub.ontology_registry import (
     OntologyValidationError,
     save_ontology_file,
@@ -147,6 +147,41 @@ def _parse_globs(field: str, raw: Any) -> Optional[list[str]]:
                              f"comma-separated string of glob patterns")
     patterns = [p.strip() for p in raw.split(",") if p.strip()]
     return patterns or None
+
+
+def _parse_extensions(raw: Any) -> Optional[list[str]]:
+    """Comma-separated file suffixes -> a normalized, sorted list, or None
+    for 'use the shipped default'.
+
+    Per JOB rather than a global constant, deliberately. The eligible-suffix
+    set is read by exactly one caller (console folder ingest), so widening
+    the constant would silently change what EVERY existing folder job
+    ingests: files that are skipped-and-counted today would start landing
+    and then fail in a parser that was never meant to read them. A folder
+    that needs an unusual format is one folder, and it can say so.
+
+    Accepts 'xml' or '.xml', any case — an operator typing a file extension
+    should not have to guess which spelling this field wants."""
+    if raw is None or (isinstance(raw, str) and not raw.strip()):
+        return None
+    if not isinstance(raw, str):
+        raise WriteCallError("ingest_folder: extensions must be a "
+                             "comma-separated string of file suffixes, "
+                             "e.g. '.xml, .md'")
+    suffixes = set()
+    for token in raw.split(","):
+        token = token.strip().lower()
+        if not token:
+            continue
+        if not token.startswith("."):
+            token = "." + token
+        if len(token) < 2 or "/" in token or "\\" in token or "*" in token:
+            raise WriteCallError(
+                f"ingest_folder: {token!r} is not a file suffix — this field "
+                f"takes suffixes like '.xml', not globs (use include/exclude "
+                f"for patterns)")
+        suffixes.add(token)
+    return sorted(suffixes) or None
 
 
 # ---------------------------------------------------------------- refusals --
@@ -568,10 +603,39 @@ class OperatorService:
             target=f"{p['kind']}:{p['item_id']}")
 
     # --------------------------------------------------------------- sources
+    def components(self) -> dict[str, Any]:
+        """What this deployment can be pointed at: the registered short
+        names, plus the strategy vocabulary and the config keys that select
+        them. The console reads this to build a picker instead of asking an
+        operator to remember magic strings.
+
+        Deliberately NOT tenant-scoped: a registry is a property of the
+        installed code, not of a customer. Plugins reached by dotted
+        reference cannot appear here — nothing enumerates what is
+        installable — so the console offers the known names and accepts a
+        typed reference, which is validated on save."""
+        from knowledge_hub import plugins
+
+        return {
+            "config_keys": {
+                "parser": plugins.PARSER_KEY,
+                "extraction_strategy": plugins.STRATEGY_KEY,
+                "fact_parser": plugins.FACT_PARSER_KEY,
+            },
+            "parsers": plugins.PARSERS.names(),
+            "default_parser": plugins.DEFAULT_PARSER,
+            "extraction_strategies": list(plugins.EXTRACTION_STRATEGIES),
+            "fact_parsers": plugins.FACT_PARSERS.names(),
+            "note": "a parser or fact_parser may also be given as "
+                    "'package.module:Attribute'; it is resolved and "
+                    "type-checked when the source is saved",
+        }
+
     def add_source(self, principal: Principal,
                    p: dict[str, Any]) -> WriteOutcome:
         tenant = principal.tenant_id
-        config = self._guard_config(p.get("config") or {})
+        config = self._guard_components(
+            self._guard_config(p.get("config") or {}))
         entry = self._registry.register(tenant, p["source_ref"],
                                         p["source_system"], config)
         return WriteOutcome(
@@ -586,13 +650,58 @@ class OperatorService:
                    p: dict[str, Any]) -> WriteOutcome:
         tenant = principal.tenant_id
         entry = self._require_source(tenant, p["source_ref"])
-        config = self._guard_config(p["config"])
+        config = self._guard_components(self._guard_config(p["config"]))
         # register() is the documented config upsert: refreshes config,
         # never touches health or checkpoints.
         updated = self._registry.register(tenant, entry.source_ref,
                                           entry.source_system, config)
         return WriteOutcome(
             result={"source_ref": updated.source_ref,
+                    "config": updated.config},
+            target=f"source:{updated.source_ref}")
+
+    def set_extraction_setup(self, principal: Principal,
+                             p: dict[str, Any]) -> WriteOutcome:
+        """Change ONLY which components a source uses, merging into its
+        existing config.
+
+        Deliberately not `edit_scope`. That operation REPLACES the config
+        wholesale, which is right when an operator is authoring the whole
+        thing but wrong for a form that shows three fields: a console
+        driving it would silently drop `data_track`, `structured_map`, the
+        folder root, and anything else already there. A partial update
+        should not require the client to have read and echoed back the
+        whole object, so the merge happens here where the current value
+        actually is.
+
+        An empty value CLEARS its key, which is how a source goes back to
+        this deployment's default. Clearing is explicit for the same reason
+        setting is: both are real changes and both are audited."""
+        from knowledge_hub import plugins
+
+        tenant = principal.tenant_id
+        entry = self._require_source(tenant, p["source_ref"])
+        config = dict(entry.config or {})
+        changed: dict[str, Any] = {}
+        for key, supplied in ((plugins.STRATEGY_KEY,
+                               p.get("extraction_strategy")),
+                              (plugins.PARSER_KEY, p.get("parser")),
+                              (plugins.FACT_PARSER_KEY, p.get("fact_parser"))):
+            value = supplied.strip() if isinstance(supplied, str) else supplied
+            if value:
+                config[key] = value
+                changed[key] = value
+            elif key in config:
+                config.pop(key)
+                changed[key] = None
+        # Validated as a WHOLE, not per field: 'parser_supplied with no
+        # plugin' and 'a plugin that will never run' are only visible once
+        # the merged config is looked at together.
+        config = self._guard_components(self._guard_config(config))
+        updated = self._registry.register(tenant, entry.source_ref,
+                                          entry.source_system, config)
+        return WriteOutcome(
+            result={"source_ref": updated.source_ref, "changed": changed,
                     "config": updated.config},
             target=f"source:{updated.source_ref}")
 
@@ -609,6 +718,7 @@ class OperatorService:
         folder = self._require_folder(p["path"])
         include = _parse_globs("include", p.get("include"))
         exclude = _parse_globs("exclude", p.get("exclude"))
+        extensions = _parse_extensions(p.get("extensions"))
 
         version = p.get("ontology_version")
         if version:
@@ -630,6 +740,7 @@ class OperatorService:
 
         params = {"path": str(folder), "recurse": p.get("recurse", True),
                   "include": include, "exclude": exclude,
+                  "extensions": extensions,
                   "ontology_version": version, "source_ref": source_ref}
         job_id = self._store.insert_job(tenant, "folder_ingest", params,
                                         created_by=principal.principal_id)
@@ -823,6 +934,45 @@ class OperatorService:
                 f"this API")
         return config
 
+    @staticmethod
+    def _guard_components(config: dict[str, Any]) -> dict[str, Any]:
+        """Resolve every component this config names, NOW, at save time.
+
+        Same principle as ingest_folder refusing an unimported ontology
+        version: a typo must fail where the operator can see it, not
+        silently at 3am when the first document of a sweep hits a strategy
+        that cannot be built. Resolving actually imports and constructs the
+        plugin, so 'the package is not installed on this box' is caught
+        here too, which is the failure a field deployment is most likely to
+        hit.
+
+        The build is thrown away — this is a validation, not a warm-up. The
+        pipeline builds its own instances, cached where they are used."""
+        from knowledge_hub import plugins
+
+        try:
+            strategy = plugins.strategy_name_for(config, PROSE_TRACK)
+            if config.get(plugins.PARSER_KEY):
+                plugins.PARSERS.build(str(config[plugins.PARSER_KEY]))
+            ref = plugins.fact_parser_ref_for(config)
+            if strategy == plugins.PARSER_SUPPLIED_STRATEGY:
+                if ref is None:
+                    raise WriteCallError(
+                        f"extraction_strategy "
+                        f"{plugins.PARSER_SUPPLIED_STRATEGY!r} needs a "
+                        f"{plugins.FACT_PARSER_KEY!r} naming the plugin that "
+                        f"produces this source's facts")
+                plugins.build_fact_parser(ref)
+            elif ref is not None:
+                raise WriteCallError(
+                    f"{plugins.FACT_PARSER_KEY!r} is set but "
+                    f"extraction_strategy is {strategy!r} — the plugin would "
+                    f"never run. Set extraction_strategy to "
+                    f"{plugins.PARSER_SUPPLIED_STRATEGY!r}, or drop the key")
+        except plugins.PluginError as e:
+            raise WriteCallError(str(e)) from e
+        return config
+
     def _credential_info(self, tenant: str,
                          source_ref: str) -> dict[str, Any]:
         """Where the credential BELONGS and whether one is present — never
@@ -965,6 +1115,22 @@ def register_operator_defaults(gate: OperatorGate,
                     "config": P(type="dict", required=True)},
             scope=OPERATE_SCOPE), service.edit_scope),
         (WriteOperation(
+            name="set_extraction_setup",
+            description="Point one source at the components it should use:"
+                        " a reader (bytes -> text), a fact producer, and,"
+                        " for 'parser_supplied', the plugin that produces"
+                        " the facts deterministically. Merges into the"
+                        " source's existing config — an empty value clears"
+                        " that key and restores the default. Every named"
+                        " component is resolved and type-checked NOW, so a"
+                        " typo or a plugin missing from this box fails"
+                        " here rather than mid-sweep.",
+            params={"source_ref": P(type="str", required=True),
+                    "extraction_strategy": P(type="str"),
+                    "parser": P(type="str"),
+                    "fact_parser": P(type="str")},
+            scope=OPERATE_SCOPE), service.set_extraction_setup),
+        (WriteOperation(
             name="ingest_folder",
             description="Ingest a local folder on the server (d.s Stage 2):"
                         " typed absolute path, validated server-side;"
@@ -978,6 +1144,7 @@ def register_operator_defaults(gate: OperatorGate,
                     "recurse": P(type="bool", default=True),
                     "include": P(type="str"),
                     "exclude": P(type="str"),
+                    "extensions": P(type="str"),
                     "ontology_version": P(type="str"),
                     "source_ref": P(type="str")},
             scope=OPERATE_SCOPE), service.ingest_folder),
@@ -1052,6 +1219,7 @@ class OperatorApp:
                       for name in self.gate.operations()) + [
             "GET /v1/actions",
             "GET /v1/alerts",
+            "GET /v1/components",
             "GET /v1/jobs",
             "GET /v1/monitor",
             "GET /v1/monitor/activity",
@@ -1141,6 +1309,13 @@ class OperatorApp:
             with self._store_lock:
                 jobs = self.service.jobs(principal.tenant_id)
             return 200, {"tenant_id": principal.tenant_id, **jobs}
+        if method == "GET" and path == "/v1/components":
+            # Registry contents: installed-code state, not tenant data, so
+            # no store lock and no tenant scoping. Role-gated like every
+            # other operator read.
+            if not {ROLE_REVIEWER, ROLE_OPERATOR} & set(principal.roles):
+                return 403, {"error": "forbidden"}
+            return 200, self.service.components()
         if method == "GET" and path == "/v1/reextract-preview":
             if not {ROLE_REVIEWER, ROLE_OPERATOR} & set(principal.roles):
                 return 403, {"error": "forbidden"}

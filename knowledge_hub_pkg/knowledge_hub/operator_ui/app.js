@@ -242,6 +242,7 @@ function renderMonitor() {
     " pair(s) it will not decide alone.";
 
   renderSources(m.sources);
+  renderSourcePicker(m.sources);
   renderBars(m.throughput);
   // F5: the badge counts the operator_alerts view (unacknowledged failed
   // queue items + degraded sources) — the old status='error' count was
@@ -809,6 +810,7 @@ async function startIngest() {
                    recurse: $("ld-recurse").checked };
   if ($("ld-include").value.trim()) params.include = $("ld-include").value.trim();
   if ($("ld-exclude").value.trim()) params.exclude = $("ld-exclude").value.trim();
+  if ($("ld-extensions").value.trim()) params.extensions = $("ld-extensions").value.trim();
   if ($("ld-ontology").value) params.ontology_version = $("ld-ontology").value;
   if (!params.path) { landSay(false, "Type the folder's absolute path first."); return; }
   let resp;
@@ -826,6 +828,109 @@ async function startIngest() {
   landSay(true, "Job " + r.job_id + " queued for " + r.path + " under ontology " +
     r.ontology_version + ". The runner picks it up within seconds; progress shows on the right.");
   await refreshJobs();
+}
+
+/* ---------------------------------------------------------------------------
+ * Extraction setup: which registered components a source uses.
+ *
+ * The pickers are filled from GET /v1/components, which reports what THIS
+ * build has registered — never a hardcoded list, so a deployment carrying an
+ * extra plugin shows it without a console change. A plugin installed as its
+ * own package is typed as 'package.module:Attribute'; nothing can enumerate
+ * what is installable, so the datalist offers the known names and the field
+ * still accepts free text. Validation is the server's either way: it
+ * resolves and type-checks every name on save.
+ *
+ * Saving goes through set_extraction_setup, not edit_scope, because this
+ * form knows three keys and a source's config holds more than three. The
+ * server merges.
+ * ------------------------------------------------------------------------ */
+let knownSources = [];
+
+async function loadComponents() {
+  let resp;
+  try {
+    resp = await api("/v1/components");
+  } catch (e) { return; }
+  if (resp.status !== 200) return;      // reviewer role, or an older server
+  const c = await resp.json();
+  const strategy = $("xs-strategy");
+  strategy.innerHTML = '<option value="">— deployment default —</option>';
+  (c.extraction_strategies || []).forEach((name) => {
+    const opt = document.createElement("option");
+    opt.value = name;
+    opt.textContent = name === "parser_supplied"
+      ? "parser_supplied — a plugin, deterministic, no model"
+      : (name === "llm" ? "llm — language model reads the prose"
+                        : "structured_map — declared column mapping");
+    strategy.appendChild(opt);
+  });
+  fillDatalist("xs-parser-list", c.parsers || []);
+  fillDatalist("xs-plugin-list", c.fact_parsers || []);
+  $("xs-parser").placeholder = c.default_parser || "docling";
+}
+
+function fillDatalist(id, names) {
+  const el = $(id);
+  el.innerHTML = "";
+  names.forEach((name) => {
+    const opt = document.createElement("option");
+    opt.value = name;
+    el.appendChild(opt);
+  });
+}
+
+function renderSourcePicker(sources) {
+  knownSources = sources || [];
+  const sel = $("xs-source");
+  const previous = sel.value;
+  sel.innerHTML = "";
+  if (!knownSources.length) {
+    sel.innerHTML = '<option value="">no sources registered yet</option>';
+    return;
+  }
+  knownSources.forEach((s) => {
+    const opt = document.createElement("option");
+    opt.value = s.source_ref;
+    opt.textContent = s.source_system + " · " + s.source_ref;
+    sel.appendChild(opt);
+  });
+  if (previous) sel.value = previous;   // a refresh must not move the cursor
+}
+
+function xsSay(ok, text) {
+  $("xs-say").style.color = ok ? "#7be0c8" : "#ff9b83";
+  $("xs-say").textContent = text;
+}
+
+async function saveExtractionSetup() {
+  const ref = $("xs-source").value;
+  if (!ref) { xsSay(false, "Register a source first."); return; }
+  const params = {
+    source_ref: ref,
+    extraction_strategy: $("xs-strategy").value,
+    parser: $("xs-parser").value.trim(),
+    fact_parser: $("xs-plugin").value.trim(),
+  };
+  let resp;
+  try {
+    resp = await api("/v1/actions/set_extraction_setup", {
+      method: "POST", body: JSON.stringify(params) });
+  } catch (e) { return; }
+  const body = await resp.json();
+  if (resp.status === 403) { xsSay(false, "Operator role required."); return; }
+  if (resp.status !== 200) {
+    // The server's message is the useful one here — it names the component
+    // that would not resolve, which is nearly always the actual mistake.
+    xsSay(false, body.detail || body.error || ("HTTP " + resp.status));
+    return;
+  }
+  const changed = Object.keys(body.result.changed || {});
+  xsSay(true, changed.length
+    ? "Saved — " + changed.join(", ") + ". Applies to the next document "
+      + "this source ingests; already-extracted documents keep their "
+      + "provenance until re-extracted."
+    : "Nothing to change.");
 }
 
 function jobRow(j) {
@@ -896,6 +1001,7 @@ function setTab(name) {
   if (name === "landing" && state.token) {
     refreshJobs().catch(() => {});
     populateOntologySelect().catch(() => {});
+    loadComponents().catch(() => {});
   }
 }
 
@@ -939,6 +1045,8 @@ document.addEventListener("DOMContentLoaded", () => {
   $("rx-all").addEventListener("change", () => {
     $("rx-scope").disabled = $("rx-all").checked;   // one or the other, like the server
   });
+
+  $("xs-save").addEventListener("click", () => saveExtractionSetup().catch(() => {}));
 
   $("ld-start").addEventListener("click", () => startIngest().catch(() => {}));
   $("ld-path").addEventListener("keydown", (e) => {

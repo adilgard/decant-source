@@ -20,6 +20,72 @@ grounding results, quarantine reasons with raw model output, per-unit token/
 wall numbers — exists to give that benchmark signal. §"What the pilot run
 shows about quality" below is observation, not something that was tuned away.
 
+## The parser_supplied seam (added after BP4; corpus-agnostic build)
+
+Routing used to be one line: `if document.data_track == PROSE_TRACK` picked
+the LLM strategy, else the structured one. That conflated two questions —
+what SHAPE the content is (which drives parsing and chunking) and WHO
+produces its facts. They are now separate, and both are source config:
+
+| key | selects | absent means |
+|---|---|---|
+| `parser` | a registered `Parser` (bytes -> text) | the injected default (Docling) |
+| `extraction_strategy` | `llm` \| `structured_map` \| `parser_supplied` | the old data_track branch, exactly |
+| `fact_parser` | a `FactParser` plugin | n/a (required by `parser_supplied`) |
+
+`plugins.py` holds the registries and the config resolution. A component is
+named either by a registered short name or by `package.module:Attribute`,
+resolved with importlib at selection time — which is why core never imports
+a plugin: the module name arrives as DATA, from a database row. A reference
+pointing back into `knowledge_hub` is REFUSED (`BoundaryViolation`), because
+a plugin inside the corpus-agnostic package is the violation the seam exists
+to prevent.
+
+**The ontology gate is why the plugin contract stops one step short of
+`ExtractionResult`.** Vocabulary validation has always lived inside the
+strategy — `_finalize` does none, and the database does none either
+(`facts.predicate` is bare TEXT; only `ontology_version` has an FK). So a
+plugin allowed to return a finished result would sit downstream of the only
+allowlist check that exists. Instead a plugin returns `ParsedFact`, and
+`extraction_parser_supplied.py` is the only thing that can turn one into a
+candidate. It applies the same three checks the LLM path applies, and
+quarantines rejects into the same review queue with the plugin's raw output
+attached. A parser gets no more trust than a model.
+
+**Spans are verified, not trusted.** A plugin declares character offsets and
+names the text there; `Grounder.verify_span` slices and compares
+(`declared_span` on success, `span_mismatch` on failure, which takes the
+usual confidence penalty and review flag). This is the reverse of the quote
+path and strictly better where it applies: searching for a quote returns the
+FIRST occurrence, which for a phrase that recurs is usually the wrong one.
+Whitespace and case differences are tolerated — right characters, different
+rendering. Offsets with no text named are treated as unverified, not as a
+free pass.
+
+Offsets anchor into the document's **extracted text** (what `extract_text`
+returned and what chunks were cut from), never into the raw bytes; byte
+offsets would not line up with any chunk. Extraction holds no Parser, so it
+rebuilds that text from the persisted parent chunks at their original
+offsets (`document_text_from_chunks`) rather than re-parsing and risking two
+parses that disagree. Each verified span is then anchored to the parent
+chunk containing it, so retrieval's `facts_citing` enrichment surfaces
+plugin facts exactly like model facts; a span straddling two parents stays
+document-anchored rather than being assigned to an arbitrary one.
+
+Provenance names the producer: `extractor = "parser_supplied:<plugin>"` and
+`extractor_version = <plugin version>`. Because the idempotency ledger keys
+on both, shipping a new plugin version makes the same document fresh work
+instead of replaying the old plugin's verdict.
+
+Console: `GET /v1/components` reports what this build has registered, and
+the `set_extraction_setup` write op MERGES the three keys into a source's
+config. It is deliberately not `edit_scope`, which replaces the config
+wholesale — a three-field form driving that would silently drop
+`data_track`, `structured_map` and the folder root.
+
+No migration was needed: `pending_facts.grounding` is bare TEXT, and the
+quarantine reasons reused here already exist in `chk_quarantine_reason`.
+
 ## Where facts go (and don't)
 
 Extraction stages into `pending_facts` via `stage_pending`, never into

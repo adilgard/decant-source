@@ -225,6 +225,10 @@ class JobRunner:
           path              absolute folder, exists/dir/readable
           recurse           bool
           include, exclude  glob lists over the relative path (or null)
+          extensions        eligible file suffixes, or null for the shipped
+                            default. Per job so that a folder needing an
+                            unusual format says so itself, instead of every
+                            folder job quietly widening with it
           ontology_version  RESOLVED at creation — never 'whatever is
                             active now'; stamped on every landed document
           source_ref        registry key (stable per path by default)
@@ -235,11 +239,12 @@ class JobRunner:
         svc = self._stack()
         extraction, resolution = self._stage_services()
 
+        extensions = frozenset(p.get("extensions") or ELIGIBLE_EXTENSIONS)
         adapter = FilesystemSourceAdapter(
             source_ref=p["source_ref"], root=p["path"],
             recurse=p.get("recurse", True),
             include=p.get("include"), exclude=p.get("exclude"),
-            extensions=ELIGIBLE_EXTENSIONS,
+            extensions=extensions,
             extra_metadata={"ontology_version_override":
                             p["ontology_version"]})
 
@@ -251,6 +256,7 @@ class JobRunner:
             {"root": str(Path(p["path"]).resolve()), "job_only": True,
              "recurse": p.get("recurse", True),
              "include": p.get("include"), "exclude": p.get("exclude"),
+             "extensions": sorted(extensions),
              "ontology_version": p["ontology_version"]})
 
         result = svc["capture"].run_source(tenant, adapter)

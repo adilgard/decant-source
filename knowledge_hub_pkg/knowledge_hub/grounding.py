@@ -96,6 +96,34 @@ class SpanGrounder(Grounder):
                                char_start=base_offset + start,
                                char_end=base_offset + end)
 
+    def verify_span(self, declared_text: str, char_start: int, char_end: int,
+                    source_text: str) -> GroundingResult:
+        """The ABC's exact check, plus the same whitespace tolerance the
+        quote path already grants.
+
+        A declared span that differs from the source ONLY by collapsed
+        whitespace or letter case is a rendering difference, not a wrong
+        offset: the producer is pointing at the right characters. Refusing
+        it would flag a whole corpus for review over a reflowed newline. A
+        difference in the actual characters still fails, which is the case
+        that matters (offsets computed against a different text than the
+        one the pipeline chunked).
+        """
+        strict = super().verify_span(declared_text, char_start, char_end,
+                                     source_text)
+        if strict.status != "span_mismatch" or not declared_text:
+            return strict
+        if not (0 <= char_start < char_end <= len(source_text)):
+            return strict
+        actual_norm, _ = _normalize_with_map(source_text[char_start:char_end])
+        declared_norm, _ = _normalize_with_map(declared_text)
+        if actual_norm.strip() == declared_norm.strip():
+            return GroundingResult(status="declared_span",
+                                   char_start=char_start, char_end=char_end,
+                                   note="matched after whitespace/case "
+                                        "normalization")
+        return strict
+
     # -------------------------------------------------------------- helpers --
     @staticmethod
     def _contains(span_text: str, component: str) -> bool:

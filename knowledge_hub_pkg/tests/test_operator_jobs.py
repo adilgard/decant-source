@@ -180,6 +180,41 @@ def test_ingest_folder_validates_server_side(gate_and_service, tenant,
                                        "ontology_version": "typo-9.9"}, op)
 
 
+def test_eligible_extensions_are_per_job_not_global(gate_and_service, store,
+                                                    tenant, tmp_path):
+    """A folder holding an unusual format widens ITS OWN eligibility.
+
+    The eligible-suffix set has exactly one reader (console folder ingest),
+    so widening the shipped constant would change what every existing
+    folder job ingests — files skipped-and-counted today would start
+    landing and then fail in a parser never meant to read them. Per job,
+    the blast radius is the one folder that asked."""
+    from knowledge_hub.sources_fs import ELIGIBLE_EXTENSIONS
+
+    gate, _ = gate_and_service
+    out = gate.execute("ingest_folder",
+                       {"path": str(tmp_path), "extensions": "XML, .Md, xml"},
+                       operator(tenant))
+    job = store.get_job(tenant, out["result"]["job_id"])
+    # Normalized: dotted, lowercased, deduped, sorted — an operator typing a
+    # file extension should not have to guess the spelling.
+    assert job["params"]["extensions"] == [".md", ".xml"]
+    # And the shipped default is untouched by any of it.
+    assert ".xml" not in ELIGIBLE_EXTENSIONS
+    store.finish_job(tenant, out["result"]["job_id"], status="done",
+                     counts={})
+
+
+def test_extensions_field_refuses_globs(gate_and_service, tenant, tmp_path):
+    """It takes suffixes, not patterns. Accepting '*.xml' here would filter
+    nothing and look like it worked."""
+    gate, _ = gate_and_service
+    with pytest.raises(WriteCallError, match="not a file suffix"):
+        gate.execute("ingest_folder",
+                     {"path": str(tmp_path), "extensions": "*.xml"},
+                     operator(tenant))
+
+
 def test_ingest_folder_freezes_params_and_is_audited(gate_and_service,
                                                      store, tenant,
                                                      tmp_path):
@@ -196,6 +231,7 @@ def test_ingest_folder_freezes_params_and_is_audited(gate_and_service,
     assert p["recurse"] is False
     assert p["include"] == ["*.md", "reports/*"]    # comma-string -> list
     assert p["exclude"] is None                     # blank -> no filter
+    assert p["extensions"] is None                  # unset -> shipped default
     assert p["source_ref"].startswith("folder-")    # stable per path
     again = gate.execute("ingest_folder", {"path": str(tmp_path)},
                          operator(tenant))

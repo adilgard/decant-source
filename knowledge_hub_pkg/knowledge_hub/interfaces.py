@@ -574,11 +574,21 @@ class CandidateEntity(BaseModel):
     by an extraction-local key that facts in the same result reference.
     `extracted_keys` holds only CONFIDENTLY extracted identifiers (email/
     domain/tax_id via deterministic patterns; source-native keys for SoR
-    rows) — match-normalization stays the resolver's job."""
+    rows) — match-normalization stays the resolver's job.
+
+    `char_start`/`char_end` are a DECLARED span into the unit's text, offered
+    by strategies that compute offsets rather than quote (the parser_supplied
+    path). When absent, the flow falls back to searching the unit text for
+    the surface form, which is what the LLM path has always done. Declaring
+    is strictly better where it is possible: a search finds the FIRST
+    occurrence, which for a repeated surface form is usually the wrong one.
+    """
     key: str
     surface_text: str
     entity_type: str
     extracted_keys: dict[str, Any] = Field(default_factory=dict)
+    char_start: Optional[int] = None
+    char_end: Optional[int] = None
 
 
 class CandidateFact(BaseModel):
@@ -587,7 +597,18 @@ class CandidateFact(BaseModel):
     them to mention refs as it stages. Predicates are already normalized
     toward the ontology (unambiguous surface variants only) but NOT yet
     guaranteed bound — binding was checked by the strategy, which quarantines
-    unbound candidates instead of returning them here."""
+    unbound candidates instead of returning them here.
+
+    Three provenance flavors, one field set:
+      * QUOTED (LLM path) — `evidence` is the model's verbatim quote and no
+        span is declared; the Grounder re-finds it and derives the offsets.
+      * CONSTRUCTED (SoR path) — no span and no quote; the `locator` cell IS
+        the provenance and there is nothing to verify.
+      * DECLARED (parser_supplied path) — the producer computed the offsets
+        itself and sets char_start/char_end, with `evidence` carrying the
+        text it claims lives there. The flow VERIFIES the claim (slice the
+        span, compare) rather than trusting it or re-searching for it.
+    """
     subject_key: str
     predicate: str
     object_key: Optional[str] = None
@@ -595,6 +616,10 @@ class CandidateFact(BaseModel):
     evidence: str = ""       # exact quote from the unit text ("" for SoR facts)
     confidence: float = 1.0
     locator: Optional[dict[str, Any]] = None  # {"row":..,"col":..} for SoR
+    # Declared span into the unit's text (see the third flavor above). Both
+    # or neither; the flow treats a half-declared span as no span.
+    char_start: Optional[int] = None
+    char_end: Optional[int] = None
 
 
 class ExtractionStats(BaseModel):
@@ -663,8 +688,12 @@ class ExtractionStrategy(ABC):
     (prose/SOP/comms) and the deterministic StructuredMap strategy (SoR/
     tabular) both live behind this seam; the router picks by data_track."""
 
-    # Stamped into every fact/mention envelope this strategy produces.
-    extractor: ClassVar[str]
+    # Stamped into every fact/mention envelope this strategy produces, and
+    # part of the idempotency ledger key. A class attribute for the shipped
+    # strategies; PER-INSTANCE for parser_supplied, which names the plugin
+    # that actually produced the facts ('parser_supplied:<plugin>') rather
+    # than reporting every plugin under one indistinguishable label.
+    extractor: str
     version: str  # model digest for LLM strategies; code version otherwise
 
     @abstractmethod
@@ -674,16 +703,113 @@ class ExtractionStrategy(ABC):
         per-item problems go to ExtractionResult.quarantined instead."""
 
 
+# ------------------------------------------------------- fact-parser plugin --
+class ParsedFact(BaseModel):
+    """ONE assertion as a registered fact-parser plugin hands it over.
+
+    This is deliberately NOT an ExtractionResult. A plugin states what it
+    found in plain terms; the core parser_supplied strategy is what turns
+    that into ontology-conformant candidates, quarantining whatever the
+    active ontology does not permit. Keeping the plugin one step short of
+    the result type is what makes the ontology allowlist un-bypassable: a
+    plugin has no way to hand the pipeline a finished, unvalidated fact.
+
+    Entity identity within one document is by (text, type): emit the same
+    pair twice and it becomes one mention, referenced by both facts. That
+    rule lives in the core strategy, not in plugins, so every plugin gets
+    it for free and none can implement it differently.
+
+    Spans are character offsets into the document's EXTRACTED TEXT (what
+    `Parser.extract_text` returned and what chunks were cut from), never
+    into the raw stored bytes. Offsets into the bytes would not line up
+    with any chunk, so a citation built from them would point nowhere.
+    """
+    model_config = ConfigDict(extra="forbid")
+
+    subject_text: str
+    subject_type: str
+    predicate: str
+    # Exactly one of object_text (an edge to another entity) or
+    # object_literal (an attribute value). Both or neither is a plugin bug
+    # and the core strategy quarantines it rather than guessing.
+    object_text: Optional[str] = None
+    object_type: Optional[str] = None
+    object_literal: Optional[str] = None
+    # The declared span, and the text the plugin claims is at it. Core
+    # slices and compares; a mismatch flags for review, it does not silently
+    # pass and does not silently drop.
+    char_start: Optional[int] = None
+    char_end: Optional[int] = None
+    span_text: str = ""
+    subject_keys: dict[str, Any] = Field(default_factory=dict)
+    object_keys: dict[str, Any] = Field(default_factory=dict)
+    # Optional per-entity spans, same rule as the fact span. When absent the
+    # flow falls back to searching the text for the surface form.
+    subject_char_start: Optional[int] = None
+    subject_char_end: Optional[int] = None
+    object_char_start: Optional[int] = None
+    object_char_end: Optional[int] = None
+    locator: Optional[dict[str, Any]] = None
+    confidence: float = 1.0
+
+
+class FactParser(ABC):
+    """A registered, DETERMINISTIC fact producer for one document. No LLM,
+    ever — that is the whole point of the seam.
+
+    Domain knowledge lives in implementations of this ABC, which live
+    OUTSIDE knowledge_hub_pkg and are reached only through source config
+    (see plugins.py). Nothing in this contract names a corpus, a format, or
+    a vocabulary: it is "bytes and text in, stated assertions out".
+
+    A plugin that also knows how to turn its format into readable text
+    should implement `Parser` as well and be selected for both roles on the
+    same source. One internal parse then serves both, which is the only way
+    the fact spans and the chunk spans are guaranteed to agree.
+    """
+
+    # Stamped into the extractor envelope as 'parser_supplied:<name>', so a
+    # fact's provenance names the plugin that produced it, not just the
+    # generic strategy.
+    name: ClassVar[str]
+    version: str  # code version; part of the idempotency ledger key
+
+    @abstractmethod
+    def parse_facts(self, document: Document, text: str,
+                    content: bytes) -> Sequence[ParsedFact]:
+        """Assertions found in ONE document. `text` is the extracted text
+        that spans anchor into; `content` is the exact landed bytes. Raise
+        ExtractionError when the document cannot be processed at all;
+        per-item problems are the core strategy's to quarantine, so return
+        what you are sure of and leave the rest out."""
+
+
+# Grounding verdicts, and which of them count as grounded. Three producers,
+# three honest stories about where a span came from:
+#   pass / span_missing / components_missing — a QUOTE was re-found (or not)
+#     in the source text (LLM path).
+#   construction                            — there is no span and none is
+#     claimed; the locator is the provenance (SoR path).
+#   declared_span / span_mismatch           — the producer computed offsets
+#     and named the text there; we sliced the source at those offsets and
+#     compared (parser_supplied path). This is the only verdict that can
+#     falsify a producer's own arithmetic, which is exactly why a
+#     deterministic parser gets it instead of a free pass.
+GROUNDING_STATUSES = ("pass", "span_missing", "components_missing",
+                      "construction", "declared_span", "span_mismatch")
+GROUNDED_STATUSES = ("pass", "construction", "declared_span")
+
+
 class GroundingResult(BaseModel):
     """Deterministic verdict on one fact's evidence span."""
-    status: str  # pass | span_missing | components_missing | construction
+    status: str  # one of GROUNDING_STATUSES
     char_start: Optional[int] = None  # into the DOCUMENT's extracted text
     char_end: Optional[int] = None
     note: Optional[str] = None
 
     @property
     def passed(self) -> bool:
-        return self.status in ("pass", "construction")
+        return self.status in GROUNDED_STATUSES
 
 
 class Grounder(ABC):
@@ -699,6 +825,48 @@ class Grounder(ABC):
         literal) appears within it. Offsets in the result are source-local
         positions shifted by `base_offset` (the unit's char_start in the
         document text)."""
+
+    def verify_span(self, declared_text: str, char_start: int, char_end: int,
+                    source_text: str) -> GroundingResult:
+        """Verify a DECLARED span: slice `source_text` at the offsets the
+        producer computed and check it is the text the producer named.
+
+        The opposite direction from `ground`, and better where it applies.
+        `ground` searches for a quote and takes the first hit, which for a
+        phrase that recurs in a document lands on the wrong occurrence.
+        Here the producer already knows where it is, so the only open
+        question is whether its arithmetic is right, and slicing answers
+        that exactly.
+
+        `declared_text` is REQUIRED. Offsets with no text named at them are
+        an unverifiable claim, and an unverifiable claim is reported as
+        unverified rather than waved through: a plugin already has the text
+        it sliced, so declaring it costs nothing and the alternative is a
+        provenance number nobody ever checked.
+
+        Concrete default (exact comparison). Implementations may loosen it —
+        SpanGrounder tolerates reflowed whitespace, since that means the
+        offsets are right and only the rendering differs.
+        """
+        if not (0 <= char_start < char_end <= len(source_text)):
+            return GroundingResult(
+                status="span_mismatch",
+                note=f"declared span [{char_start}:{char_end}] is outside "
+                     f"the source text (length {len(source_text)})")
+        if not declared_text:
+            return GroundingResult(
+                status="span_mismatch", char_start=char_start,
+                char_end=char_end,
+                note="a declared span must name the text it points at; "
+                     "nothing was named, so nothing could be verified")
+        if source_text[char_start:char_end] != declared_text:
+            return GroundingResult(
+                status="span_mismatch", char_start=char_start,
+                char_end=char_end,
+                note=f"declared span holds {source_text[char_start:char_end]!r}, "
+                     f"producer named {declared_text!r}")
+        return GroundingResult(status="declared_span", char_start=char_start,
+                               char_end=char_end)
 
 
 # =============================================================================

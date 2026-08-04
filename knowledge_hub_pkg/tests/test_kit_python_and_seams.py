@@ -17,6 +17,7 @@ and the locality sentence.
 from __future__ import annotations
 
 import io
+import os
 import shutil
 import subprocess
 import tarfile
@@ -209,8 +210,45 @@ def test_launcher_bootstraps_from_the_kit_python_not_the_host(tmp_path):
         < script.index('"$VENV/bin/khctl" launch')
 
 
-needs_bash = pytest.mark.skipif(shutil.which("bash") is None,
-                                reason="no bash on this bench")
+def _bash() -> str | None:
+    """The bash these tests must run under, or None if there is none.
+
+    NOT `shutil.which("bash")`. On Windows that finds whichever bash is
+    first on PATH, and on a machine with WSL installed that is usually
+    `WindowsApps\\bash.exe` — the Microsoft Store app-execution alias, which
+    launches bash INSIDE the WSL distro. Two independent reasons that is the
+    wrong interpreter here:
+
+      * `_posix()` below converts paths with `cygpath`, so a Windows temp
+        directory becomes `/tmp/pytest-of-.../...`. Under Git Bash `/tmp`
+        IS the Windows temp directory and that path resolves. Under WSL
+        `/tmp` is the distro's own filesystem, where the harness script does
+        not exist. The path convention and the interpreter have to agree.
+      * the alias needs the ambient Windows environment to activate, and
+        these tests deliberately strip the environment to a bare PATH to
+        simulate a hostile host. Stripped, the alias fails to launch at all
+        and prints a Windows RPC error where the script's output should be.
+
+    So: pick the bash that agrees with `cygpath`, which is its own sibling.
+    One rule, and it is the rule that makes the paths valid. Elsewhere
+    (Linux CI, the deploy target) `cygpath` does not exist, there is no
+    alias to trip over, and plain PATH resolution is already correct.
+    """
+    cygpath = shutil.which("cygpath")
+    if cygpath:
+        sibling = Path(cygpath).with_name("bash.exe")
+        if sibling.is_file():
+            return str(sibling)
+    found = shutil.which("bash")
+    if found and "WindowsApps" in found:
+        return None  # the alias only; see above — skip rather than mislead
+    return found
+
+
+BASH = _bash()
+needs_bash = pytest.mark.skipif(BASH is None,
+                                reason="no POSIX bash on this bench (a WSL "
+                                       "app-execution alias does not count)")
 
 
 @needs_bash
@@ -218,7 +256,7 @@ def test_rendered_launcher_is_valid_bash():
     # A launcher that does not parse is a client-site failure, and the string
     # assertions above cannot see a syntax error.
     script = render_launch_sh()
-    out = subprocess.run(["bash", "-n"], input=script, text=True,
+    out = subprocess.run([BASH, "-n"], input=script, text=True,
                          capture_output=True, timeout=60)
     assert out.returncode == 0, out.stderr
 
@@ -231,6 +269,27 @@ def _python_selection_harness(script: str) -> str:
     return ('set -euo pipefail\nKIT="$1"\nWORK="$2"\n'
             'hold_open() { :; }\n' + script[start:end] +
             '\necho "SELECTED=$PY"\n')
+
+
+def _hostile_env() -> dict[str, str]:
+    """A host with no python3.12 anywhere on PATH — the Ubuntu 26.04
+    situation the launcher exists to survive.
+
+    PATH is the whole hypothesis; everything else the environment carries is
+    incidental and only ever removed as collateral. On an MSYS bash (Git for
+    Windows) one piece of that collateral is load-bearing for the bench:
+    MSYS resolves `/tmp` from TMP/TEMP, so dropping them silently moves
+    `/tmp` off the Windows temp directory that `_posix()` just translated
+    paths into, and the harness script stops existing. That is a bench
+    artifact with nothing to say about the launcher, so keep those two and
+    strip the rest. On Linux the environment is bare, which is the point.
+    """
+    env = {"PATH": "/usr/bin:/bin"}
+    for name in ("TMP", "TEMP", "SYSTEMROOT"):
+        value = os.environ.get(name)
+        if value:
+            env[name] = value
+    return env
 
 
 def _posix(path: Path) -> str:
@@ -272,18 +331,18 @@ def test_launcher_actually_picks_the_kit_python_on_a_hostile_host(tmp_path):
     harness.write_text(_python_selection_harness(render_launch_sh()),
                        encoding="utf-8", newline="\n")
     out = subprocess.run(
-        ["bash", _posix(harness), _posix(kit), _posix(work)],
+        [BASH, _posix(harness), _posix(kit), _posix(work)],
         capture_output=True, text=True, timeout=120,
-        env={"PATH": "/usr/bin:/bin"})     # no python3.12 anywhere
+        env=_hostile_env())     # no python3.12 anywhere
     assert out.returncode == 0, out.stderr
     assert "unpacking the kit's portable python" in out.stdout
     assert (f"SELECTED={_posix(work)}/.python3.12/python/bin/python3.12"
             in out.stdout)
     # and it is idempotent: a second run reuses the unpacked interpreter
     again = subprocess.run(
-        ["bash", _posix(harness), _posix(kit), _posix(work)],
+        [BASH, _posix(harness), _posix(kit), _posix(work)],
         capture_output=True, text=True, timeout=120,
-        env={"PATH": "/usr/bin:/bin"})
+        env=_hostile_env())
     assert again.returncode == 0
     assert "unpacking" not in again.stdout
 
@@ -297,9 +356,9 @@ def test_launcher_refuses_honestly_with_no_kit_python_and_no_host_python(tmp_pat
     harness.write_text(_python_selection_harness(render_launch_sh()),
                        encoding="utf-8", newline="\n")
     out = subprocess.run(
-        ["bash", _posix(harness), _posix(kit), _posix(work)],
+        [BASH, _posix(harness), _posix(kit), _posix(work)],
         capture_output=True, text=True, timeout=120,
-        env={"PATH": "/usr/bin:/bin"})
+        env=_hostile_env())
     assert out.returncode == 1
     assert "no usable python 3.12" in out.stdout
     assert "rebuild the kit WITH its python component" in out.stdout

@@ -373,7 +373,11 @@ def test_shape_b_verify_swaps_gpu_checks_for_the_remote_endpoint():
     plan = resolve_plan(PROFILES, "hosted", make_probe(vram=0),
                         use=["inference=remote:https://infer.example.com"])
     names = _check_names(plan)
-    assert names == ["version integrity", "remote inference"]
+    # 'core boundary' rides along with 'version integrity': both inspect the
+    # PACKAGE rather than the deployment, so both hold for a plan that
+    # reaches nothing.
+    assert names == ["version integrity", "core boundary (corpus-agnostic)",
+                     "remote inference"]
     # no client-side DB stack in a connector-agent footprint -> no DB
     # checks, no side-door audit target
 

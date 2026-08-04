@@ -15,6 +15,13 @@ Two checks exist only for the field verifier:
   check_side_doors        — the §8.8 rider: pg_stat_activity must show no
                             non-pipeline clients, else isolation is void.
                             Run on EVERY visit, not just install day.
+  check_core_boundary     — the corpus-agnostic rule: knowledge_hub_pkg
+                            must never IMPORT a domain plugin. Same family
+                            as the side-door check — an invariant that
+                            holds only while nobody quietly breaks it, so
+                            it is verified rather than remembered. Static
+                            (ast over source), so it needs no services and
+                            no plugin installed.
   check_remote_inference  — Shape B: the inference endpoint answers and
                             serves the required models. Auth/TLS hardening
                             is §8.9 net-new item 2 (not built); until then
@@ -27,6 +34,7 @@ Two checks exist only for the field verifier:
 """
 from __future__ import annotations
 
+import ast
 import json
 import urllib.error
 import urllib.request
@@ -615,6 +623,153 @@ def check_side_doors(dsn: Optional[str] = None,
     total = sum(n for *_, n in rows)
     return (f"side doors: {total} client connection(s), all under allowed "
             f"users ({', '.join(sorted(allowed))})")
+
+
+CORE_PACKAGE = "knowledge_hub"
+PLUGIN_ROOT_DIR = "plugins"
+
+
+def _repo_root(pkg_dir: Optional[Path] = None) -> Path:
+    """The repository containing both the core package and plugins/. This
+    file lives at <repo>/knowledge_hub_pkg/knowledge_hub/checks.py."""
+    pkg_dir = pkg_dir or Path(__file__).resolve().parents[1]
+    return pkg_dir.parent
+
+
+def plugin_package_names(repo_root: Optional[Path] = None) -> set[str]:
+    """Importable package names under `plugins/`.
+
+    Discovered, never listed. A hardcoded list is a list somebody forgets
+    to extend, and the plugin they forget is exactly the one that gets
+    imported into core by accident."""
+    root = (repo_root or _repo_root()) / PLUGIN_ROOT_DIR
+    if not root.is_dir():
+        return set()
+    names: set[str] = set()
+    for plugin in root.iterdir():
+        if not plugin.is_dir() or plugin.name.startswith("."):
+            continue
+        for candidate in plugin.iterdir():
+            if candidate.is_dir() and (candidate / "__init__.py").is_file():
+                names.add(candidate.name)
+    return names
+
+
+def core_import_roots(pkg_dir: Optional[Path] = None
+                      ) -> dict[str, set[str]]:
+    """Every top-level module name the core package imports -> the files
+    importing it.
+
+    STATIC, via `ast`. Importing the package to inspect it would only see
+    what a particular run happened to execute, and core defers its heaviest
+    imports into function bodies precisely so they do not run — which is
+    also where an illicit plugin import would most plausibly hide. Parsing
+    sees them all, executes nothing, and needs nothing installed."""
+    pkg_dir = pkg_dir or Path(__file__).resolve().parents[1]
+    roots: dict[str, set[str]] = {}
+    for path in sorted((pkg_dir / CORE_PACKAGE).rglob("*.py")):
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"),
+                             filename=str(path))
+        except SyntaxError as e:
+            raise RuntimeError(f"{path.name} does not parse: {e}") from e
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import):
+                names = [alias.name for alias in node.names]
+            elif isinstance(node, ast.ImportFrom):
+                # level > 0 is a relative import, which by definition stays
+                # inside the core package.
+                names = [node.module] if node.level == 0 and node.module else []
+            else:
+                continue
+            for name in names:
+                roots.setdefault(name.split(".")[0], set()).add(path.name)
+    return roots
+
+
+def check_core_boundary(pkg_dir: Optional[Path] = None,
+                        repo_root: Optional[Path] = None) -> str:
+    """decant.Source's corpus-agnostic rule, enforced mechanically.
+
+    `knowledge_hub_pkg` serves every corpus and must contain no
+    domain-specific logic. Domain lives in ontology sets, in operator
+    config, and in external plugins that config points at — and the one
+    structural way that rule breaks is core importing a plugin. After that
+    the package no longer builds without the domain installed, and the
+    separation is over whether or not anyone notices.
+
+    Two nets, because they fail differently:
+      * BY NAME — core imports something that matches a package under
+        `plugins/`. Catches the ordinary mistake (an editor auto-import, a
+        quick fix that reached for the class it could see).
+      * BY LOCATION — an imported name resolves, in this environment, to a
+        file inside `plugins/`. Catches a plugin installed under a name
+        that does not match its directory, which the first net cannot see.
+
+    Deliberately NOT a general dependency check. Core imports several
+    third-party roots it does not declare (transitives it uses directly,
+    plus an optional benchmark engine); tightening that is real work with
+    its own tradeoffs, and bundling it here would mean the boundary rule
+    goes red for reasons that have nothing to do with the boundary. One
+    check, one claim.
+
+    Runs on SOURCE, so it holds on a dev bench, in the field, and in a kit,
+    whether or not any plugin is installed."""
+    pkg_dir = pkg_dir or Path(__file__).resolve().parents[1]
+    repo_root = repo_root or _repo_root(pkg_dir)
+
+    plugins = plugin_package_names(repo_root)
+    imports = core_import_roots(pkg_dir)
+
+    offenders: dict[str, tuple[set[str], str]] = {}
+    for root, files in imports.items():
+        if root in plugins:
+            offenders[root] = (files, f"is a package under {PLUGIN_ROOT_DIR}/")
+    for root, files in imports.items():
+        if root in offenders or root == CORE_PACKAGE:
+            continue
+        location = _module_location(root)
+        if location is not None and _is_within(location,
+                                               repo_root / PLUGIN_ROOT_DIR):
+            offenders[root] = (files, f"resolves to {location}")
+
+    if offenders:
+        listing = "; ".join(
+            f"{root!r} ({why}) imported by {', '.join(sorted(files))}"
+            for root, (files, why) in sorted(offenders.items()))
+        raise RuntimeError(
+            f"{CORE_PACKAGE} imports domain plugin code, which breaks the "
+            f"corpus-agnostic contract — a plugin must be reached through "
+            f"registered config (knowledge_hub.plugins), never imported: "
+            f"{listing}")
+
+    return (f"core boundary: {CORE_PACKAGE} imports none of "
+            f"{len(plugins)} plugin package(s) "
+            f"({', '.join(sorted(plugins)) or 'none installed in-tree'}) "
+            f"across {len(imports)} import root(s)")
+
+
+def _module_location(root: str) -> Optional[Path]:
+    """Where an importable top-level name lives, or None if it is not
+    importable here. Uses find_spec, which for a TOP-LEVEL name locates
+    without executing the module."""
+    import importlib.util
+
+    try:
+        spec = importlib.util.find_spec(root)
+    except (ImportError, ValueError, AttributeError):
+        return None
+    if spec is None or not spec.origin:
+        return None
+    return Path(spec.origin).resolve()
+
+
+def _is_within(path: Path, parent: Path) -> bool:
+    try:
+        path.relative_to(parent.resolve())
+        return True
+    except (ValueError, OSError):
+        return False
 
 
 def check_remote_inference(endpoint: str,

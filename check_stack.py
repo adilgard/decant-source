@@ -60,6 +60,10 @@ _version_triple = version_triple
 # and earliest.
 PILOT_CHECKS = [
     ("version integrity", checks.check_version),
+    # Static and service-free, so it runs early and cheaply: if core has
+    # imported a domain plugin, that is worth knowing before spending
+    # minutes on live inference checks.
+    ("core boundary (corpus-agnostic)", checks.check_core_boundary),
     ("postgres", checks.check_postgres),
     ("seaweedfs (s3)", checks.check_s3_worm),
     ("openbao", checks.check_openbao),

@@ -234,7 +234,11 @@ def verify_checks_for(plan: DeployPlan) -> list[tuple[str, object]]:
     from knowledge_hub import checks
 
     selected: list[tuple[str, object]] = [
-        ("version integrity", checks.check_version)]
+        ("version integrity", checks.check_version),
+        # Unconditional, like version integrity: it depends on no seam and
+        # no service, and the invariant it guards is true of the package
+        # itself rather than of anything this deployment happens to run.
+        ("core boundary (corpus-agnostic)", checks.check_core_boundary)]
     has_db = "postgres" in plan.seams
     inference = plan.seams.get("inference")
 

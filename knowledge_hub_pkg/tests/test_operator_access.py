@@ -133,6 +133,22 @@ def test_dry_run_bootstrap_mentions_the_operator_credential(tmp_path,
 
 
 # ---------------------------------------------------------------------------
+# POSTURE (d.s Stage 3): this whole module is about the VAULT credential path —
+# custody as the provisioning gate, the dev-mint branch, the deployed-context
+# refusal. In local posture none of that applies: provisioning writes the local
+# store, the console logs itself in, and there is no custody to refuse. So the
+# deployed posture is pinned once here rather than in each test.
+#
+# The local-posture behavior of these same commands is covered in
+# test_posture_credentials.py. Nothing here was weakened to accommodate it.
+# ---------------------------------------------------------------------------
+@pytest.fixture(autouse=True)
+def _deployed_posture(monkeypatch):
+    from knowledge_hub.config import POSTURE_DEPLOYED, settings
+    monkeypatch.setattr(settings, "posture", POSTURE_DEPLOYED)
+
+
+# ---------------------------------------------------------------------------
 # 2. Issue-more: provision-operator (reviewer stays reviewer-scoped)
 # ---------------------------------------------------------------------------
 

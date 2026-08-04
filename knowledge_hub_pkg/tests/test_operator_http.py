@@ -452,7 +452,7 @@ def test_no_op_can_mint_an_unscoped_or_identity_asserting_write(
 
 
 def test_pause_source_actually_pauses_capture_and_resume_resumes(
-        op_client, resolver, store, db, capture, tenant, tmp_path):
+        op_client, resolver, secrets, store, db, capture, tenant, tmp_path):
     (tmp_path / "sop.txt").write_text("Standard operating procedure text.",
                                       encoding="utf-8")
     ref = f"fs-{uuid.uuid4().hex[:8]}"
@@ -464,7 +464,16 @@ def test_pause_source_actually_pauses_capture_and_resume_resumes(
                        headers=bearer(tok))
     assert r.status_code == 200
     cred = r.json()["result"]["credential"]
-    assert cred["vault_path"] == f"tenants/{tenant}/sources/{ref}"
+    # The contract is "point at where the credential BELONGS, never carry the
+    # value" — true in both postures with a different string (d.s Stage 3), so
+    # this asserts against the active provider rather than a hardcoded vault
+    # layout. It stays a real assertion: `path_for` is what the console shows an
+    # operator, and it answered HTTP 500 in local posture until the local
+    # provider grew one. The vault layout LITERAL (tenants/<t>/sources/<ref>)
+    # is pinned by test_posture_credentials.test_the_vault_path_layout_is_exact
+    # — it had no assertion anywhere before this line stopped carrying it.
+    assert cred["vault_path"] == secrets.path_for(tenant, ref)
+    assert tenant in cred["vault_path"] and ref in cred["vault_path"]
     assert cred["present"] is False       # pointer + presence, NEVER a value
 
     adapter = FilesystemSourceAdapter(ref, root=tmp_path)

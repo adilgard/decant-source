@@ -355,7 +355,14 @@ def _check_names(plan) -> list[str]:
     return [name for name, _ in verify_checks_for(plan)]
 
 
-def test_shape_a_verify_runs_the_full_pilot_gate_plus_side_doors():
+def test_shape_a_verify_runs_the_full_pilot_gate_plus_side_doors(monkeypatch):
+    """DEPLOYED posture (d.s Stage 3): a plan's verify selection swaps the
+    `openbao` check for the posture-agnostic `credential seam` check in local
+    posture, because a local box has no vault to authenticate against. This test
+    asserts the deployed selection, which is the one a kit-shipped plan runs;
+    the local selection has its own test in test_posture_credentials.py."""
+    from knowledge_hub.config import POSTURE_DEPLOYED, settings
+    monkeypatch.setattr(settings, "posture", POSTURE_DEPLOYED)
     plan = resolve_plan(PROFILES, "appliance", make_probe(), tenants=["ops"])
     names = _check_names(plan)
     assert names[0] == "version integrity"          # drift fails first
@@ -725,10 +732,16 @@ def test_defaulted_make_kit_resolves_models_from_kit_data(tmp_path,
                                                           monkeypatch,
                                                           capsys):
     """khctl make-kit without --models must build the profile-pinned set
-    (and say so) — never the pilot bench's runtime extraction setting."""
-    from knowledge_hub import deploy_cli
-    from knowledge_hub.config import settings
+    (and say so) — never the pilot bench's runtime extraction setting.
 
+    Pins the DEPLOYED posture (d.s Stage 2): make-kit refuses outright in local
+    posture, which is now the bench default. This test is about model
+    resolution, so it asserts from the posture where a kit build is legal at
+    all; the refusal itself is tested in test_posture_ceremony.py."""
+    from knowledge_hub import deploy_cli
+    from knowledge_hub.config import POSTURE_DEPLOYED, settings
+
+    monkeypatch.setattr(settings, "posture", POSTURE_DEPLOYED)
     captured = {}
     monkeypatch.setattr(
         "knowledge_hub.deploy_kit.run_make_kit",

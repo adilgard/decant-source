@@ -1104,7 +1104,7 @@ def run_ingest(tenants: list[str], add_sources: list[str],
     from knowledge_hub.rawstore_s3 import S3RawStore
     from knowledge_hub.resolution import ResolutionService
     from knowledge_hub.scoring_tiered import TieredScorer
-    from knowledge_hub.secrets_openbao import OpenBaoSecretsProvider
+    from knowledge_hub.credentials import make_secrets_provider
 
     store = PostgresFactStore()
     pipeline = Pipeline(store=store)
@@ -1113,7 +1113,7 @@ def run_ingest(tenants: list[str], add_sources: list[str],
     ext_dispatcher = PostgresDispatcher(store, table="extraction_queue")
     embedder = OllamaEmbedder()
     capture = CaptureService(pipeline, raw_store, dispatcher,
-                             secrets=OpenBaoSecretsProvider())
+                             secrets=make_secrets_provider())
     from knowledge_hub.processing import ProcessingService
     processing = ProcessingService(pipeline, raw_store, DoclingParser(),
                                    SectionChunker(), embedder,

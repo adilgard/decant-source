@@ -179,7 +179,20 @@ def test_run_apply_hvac_auth_failure_names_env_bak_not_a_traceback(
 # ---------------------------------------------------------------------------
 # B2 — print-once secrets never scroll away unacknowledged
 # ---------------------------------------------------------------------------
-def test_confirm_recorded_blocks_until_recorded_is_typed(capsys):
+# POSTURE (d.s Stage 2): confirm_recorded is a DEPLOYED-posture gate — local
+# posture skips it, because the value it protects is recoverable from the local
+# secrets file rather than print-once. These tests are about the gate itself, so
+# they pin the deployed posture explicitly instead of inheriting the bench's
+# (which now defaults to local). The local-posture behavior has its own tests in
+# test_posture_ceremony.py; nothing here was weakened to accommodate it.
+@pytest.fixture()
+def _deployed_posture(monkeypatch):
+    from knowledge_hub.config import POSTURE_DEPLOYED, settings
+    monkeypatch.setattr(settings, "posture", POSTURE_DEPLOYED)
+
+
+def test_confirm_recorded_blocks_until_recorded_is_typed(capsys,
+                                                         _deployed_posture):
     answers = iter(["nope", "", "  recorded  "])
     confirm_recorded("unseal shares",
                      input_fn=lambda _prompt: next(answers), is_tty=True)
@@ -187,14 +200,14 @@ def test_confirm_recorded_blocks_until_recorded_is_typed(capsys):
     assert out.count("not confirmed") == 2
 
 
-def test_confirm_recorded_skips_without_a_tty():
+def test_confirm_recorded_skips_without_a_tty(_deployed_posture):
     confirm_recorded(
         "anything",
         input_fn=lambda _p: pytest.fail("must never prompt off-tty"),
         is_tty=False)
 
 
-def test_confirm_recorded_survives_a_lying_tty(capsys):
+def test_confirm_recorded_survives_a_lying_tty(capsys, _deployed_posture):
     """Windows null-device stdin still reports a console handle: isatty()
     says True, input() raises EOFError. The gate must degrade gracefully,
     never crash the ceremony that just printed the secrets (found live on
@@ -601,7 +614,11 @@ def test_operator_health_reports_sealed_distinctly():
 
 
 def test_console_sealed_vault_names_the_real_cause(tmp_path, capsys,
-                                                   monkeypatch):
+                                                   monkeypatch,
+                                                   _deployed_posture):
+    # DEPLOYED posture (d.s Stage 3): local posture has no vault, so there is no
+    # seal to diagnose and this whole failure class does not exist there. The
+    # diagnosis itself is unchanged and still fires wherever a vault is in play.
     monkeypatch.setattr(dc, "_vault_status", lambda addr: "sealed")
     monkeypatch.setattr(
         dl, "ensure_operator",
@@ -617,7 +634,11 @@ def test_console_sealed_vault_names_the_real_cause(tmp_path, capsys,
 
 
 def test_provision_sealed_vault_is_not_a_custody_refusal(tmp_path, capsys,
-                                                         monkeypatch):
+                                                         monkeypatch,
+                                                         _deployed_posture):
+    # DEPLOYED posture (d.s Stage 3): in local posture both provision-* commands
+    # mint into the local store and never consult a vault, so "sealed" cannot
+    # arise. The F1 distinction being tested here is a vault-custody concern.
     monkeypatch.setattr(dc, "_vault_status", lambda addr: "sealed")
     monkeypatch.chdir(tmp_path)
     for command in (["provision-operator", "--tenant", "t"],

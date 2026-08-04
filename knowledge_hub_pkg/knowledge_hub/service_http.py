@@ -609,7 +609,12 @@ def build_serving_app(*, dsn: Optional[str] = None,
     if embedder is None:
         from knowledge_hub.embedding_ollama import OllamaEmbedder
         embedder = OllamaEmbedder()
-    resolver = resolver or OpenBaoCredentialResolver()
+    if resolver is None:
+        # d.s Stage 3: posture picks the implementation (local file vs OpenBao).
+        # The choke point downstream is unchanged either way — this decides
+        # where an identity is looked up, never whether one is enforced.
+        from knowledge_hub.credentials import make_credential_resolver
+        resolver = make_credential_resolver()
     choke = PostgresChokePoint(dsn=dsn, resolver=resolver)
     catalog = InProcessOperationCatalog(choke, embedder)
     for tenant_id in tenants:
@@ -631,6 +636,11 @@ def main(argv: Optional[list[str]] = None) -> None:
                         help="tenant to register the default op surface for"
                              " (repeatable; default: settings.serving_tenants)")
     args = parser.parse_args(argv)
+
+    # d.s Stage 1: the posture goes out BEFORE anything is built, so it is on
+    # screen even if assembly then fails.
+    from knowledge_hub.config import print_posture_banner
+    print_posture_banner()
 
     tenants = args.tenant if args.tenant else [
         t.strip() for t in settings.serving_tenants.split(",") if t.strip()]

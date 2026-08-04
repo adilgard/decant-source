@@ -58,29 +58,66 @@ _version_triple = version_triple
 # The pilot gate: every check, all-ours targets (library defaults ==
 # settings == the pilot .env). Order matters — version drift fails loudest
 # and earliest.
-PILOT_CHECKS = [
-    ("version integrity", checks.check_version),
-    # Static and service-free, so it runs early and cheaply: if core has
-    # imported a domain plugin, that is worth knowing before spending
-    # minutes on live inference checks.
-    ("core boundary (corpus-agnostic)", checks.check_core_boundary),
-    ("postgres", checks.check_postgres),
-    ("seaweedfs (s3)", checks.check_s3_worm),
-    ("openbao", checks.check_openbao),
-    ("ollama", checks.check_ollama),
-    ("processing (parse·chunk·embed)", checks.check_processing),
-    ("extraction (ontology·llm·ground)", checks.check_extraction),
-    ("resolution (policy·splink·adjudicate)", checks.check_resolution),
-    ("benchmark harness", checks.check_benchmark),
-    ("serving service (S5)", checks.check_serving),
-    ("operator write API (BP19)", checks.check_operator),
-]
+def _credential_check() -> tuple[str, object]:
+    """The credential seam check for the ACTIVE posture (d.s Stage 3).
+
+    Local posture has no vault to authenticate against, so asking for one would
+    fail a perfectly healthy box. The claim that matters — a credential can be
+    stored, injected, and never leaked into a repr — is proven either way,
+    against whichever backend the factory returns.
+
+    Resolved when the list is BUILT, not at import: main() prints the posture
+    banner by reading settings at call time, and a check list frozen at import
+    could in principle disagree with the banner directly above it. Nothing in
+    this script reloads settings today, so the two can only differ if that
+    changes — which is exactly the kind of quiet divergence worth not leaving
+    available.
+    """
+    from knowledge_hub.config import settings
+    if settings.is_local:
+        return ("credential seam", checks.check_credential_seam)
+    return ("openbao", checks.check_openbao)
+
+
+def pilot_checks() -> list[tuple[str, object]]:
+    """The pilot gate: every check, all-ours targets (library defaults ==
+    settings == the pilot .env). Order matters — version drift fails loudest
+    and earliest."""
+    return [
+        ("version integrity", checks.check_version),
+        # Static and service-free, so it runs early and cheaply: if core has
+        # imported a domain plugin, that is worth knowing before spending
+        # minutes on live inference checks.
+        ("core boundary (corpus-agnostic)", checks.check_core_boundary),
+        ("postgres", checks.check_postgres),
+        ("seaweedfs (s3)", checks.check_s3_worm),
+        _credential_check(),
+        ("ollama", checks.check_ollama),
+        ("processing (parse·chunk·embed)", checks.check_processing),
+        ("extraction (ontology·llm·ground)", checks.check_extraction),
+        ("resolution (policy·splink·adjudicate)", checks.check_resolution),
+        ("benchmark harness", checks.check_benchmark),
+        ("serving service (S5)", checks.check_serving),
+        ("operator write API (BP19)", checks.check_operator),
+    ]
+
+
+# Kept as a module attribute: test_core_boundary asserts the pilot gate carries
+# check_core_boundary by reading this, and the field verifier's equivalent
+# assertion reads verify_checks_for. Evaluated once at import for that reader;
+# main() calls pilot_checks() itself so a run always reflects the live posture.
+PILOT_CHECKS = pilot_checks()
 
 
 def main() -> int:
+    # d.s Stage 1: which posture these checks are proving. It matters here
+    # more than anywhere — the OpenBao check is posture-dependent, so a green
+    # run means different things in the two postures and the header says which.
+    from knowledge_hub.config import print_posture_banner
+    print_posture_banner()
     print("Knowledge Hub — stack reachability check\n" + "-" * 44)
     failures: list[str] = []
-    for name, fn in PILOT_CHECKS:
+    for name, fn in pilot_checks():
         result = checks.run_check(name, fn)
         if result.passed:
             print(f"{PASS} {result.detail}")

@@ -64,6 +64,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import logging
 import os
 import re
 import threading
@@ -102,6 +103,8 @@ from knowledge_hub.service_http import (
     installed_version,
     make_server,
 )
+
+logger = logging.getLogger(__name__)
 
 # The operator UI ships INSIDE the package (BP20): rebuilt from Design's
 # .dc.html spec (markup + inline styles verbatim, the design-tool runtime
@@ -1196,11 +1199,18 @@ class OperatorApp:
     def __init__(self, gate: OperatorGate, service: OperatorService,
                  resolver: CredentialResolver, *,
                  reads: Optional[OperatorReadService] = None,
-                 stats: Optional[LatencyStats] = None):
+                 stats: Optional[LatencyStats] = None,
+                 local_session: Optional[Callable[[], Optional[str]]] = None):
         self.gate = gate
         self.service = service
         self.reads = reads
         self._resolver = resolver
+        # d.s Stage 3. A callable, not a token: the value is fetched per request
+        # so a store rewritten underneath us (khctl minting a second identity,
+        # the file deleted and recreated) is picked up without a restart. None
+        # means the route is not registered — see _route and
+        # _local_session_provider.
+        self._local_session = local_session
         self.stats = stats or LatencyStats()
         # EVERY store-touching request is serialized — writes AND reads.
         # The store is ONE psycopg connection, and psycopg transaction
@@ -1211,6 +1221,46 @@ class OperatorApp:
         # Operator traffic is UI-click + 5s-poll volume; one-at-a-time is
         # invisible here and keeps the audit trail strictly ordered.
         self._store_lock = threading.Lock()
+
+    def _local_session_response(self) -> tuple[int, Any]:
+        """Hand the local console its own credential (d.s Stage 3).
+
+        The requirement: in local posture a human records and types nothing but
+        real connector credentials. Today the console shows a lock screen and
+        waits for a pasted token, which is exactly such a step, so this removes
+        it — app.js calls this on boot and unlocks itself if it answers.
+
+        WHY THIS IS NOT AN AUTH BYPASS. It issues a credential; it does not skip
+        authentication. The token it returns goes back through
+        resolve_principal() like any other, resolves to a real Principal with
+        real roles, and every downstream request is gated and audited exactly as
+        before. What is removed is a human retyping a secret that the process on
+        the other end of the socket already has on disk.
+
+        WHY IT IS SAFE TO ANSWER UNAUTHENTICATED. It only exists when
+        build_operator_app determined BOTH that the posture is local AND that
+        this service is bound to loopback, so the only clients that can reach it
+        are processes on this machine — which can read the credential file
+        directly anyway. It grants nothing that local filesystem access does not
+        already grant. The bind check is the load-bearing half and is made once
+        at assembly, not per request, because the peer address is not threaded
+        through handle() and widening that signature to add a runtime check
+        would be a worse trade than deciding it up front.
+
+        The token is returned in a RESPONSE BODY, never a URL or query string,
+        so it stays out of browser history and out of any access log that
+        records request lines.
+        """
+        token = self._local_session()
+        if not token:
+            # Posture moved under a running process (reload_settings can do
+            # that), or the store became unwritable. Say so as a normal
+            # negative: the console then shows its lock screen, which is a
+            # working fallback rather than an error state.
+            return 404, {"error": "no local session available"}
+        return 200, {"credential": token,
+                     "posture": settings.posture,
+                     "note": "local posture: this box's own console identity"}
 
     def endpoints(self) -> list[str]:
         """The registry spelled as URLs — one POST per registered write op
@@ -1247,6 +1297,17 @@ class OperatorApp:
         # preview); everywhere else the exact-match routing below sees the
         # bare path, unchanged.
         raw_path, _, raw_query = raw_path.partition("?")
+        # d.s Stage 3: the local-posture session handoff. Registered ONLY when
+        # build_operator_app decided this process qualifies (local posture AND a
+        # loopback bind) — in deployed posture `self._local_session` is None and
+        # this route does not exist at all, so the console falls through to
+        # today's paste-the-credential lock screen, byte for byte.
+        #
+        # Checked BEFORE _static so '/ui/local-session' is never mistaken for a
+        # request for a file named 'local-session'.
+        if (method == "GET" and raw_path == "/ui/local-session"
+                and self._local_session is not None):
+            return self._local_session_response()
         if method == "GET" and (raw_path in ("/", "/ui")
                                 or raw_path.startswith("/ui/")):
             # Static UI shell only — it renders nothing until the operator
@@ -1467,6 +1528,16 @@ class OperatorApp:
             "postgres": postgres_ok,
             "vault": vault_ok,
             "vault_status": vault_status,
+            # d.s Stage 3: WHAT was actually checked. `vault`/`vault_status`
+            # keep their names and meanings — app.js branches on them and a
+            # deployed monitor may scrape them — but in local posture there is
+            # no vault, and a surface reporting "vault: true" when the answer
+            # came from a JSON file on disk is telling a small lie about its own
+            # evidence. Added beside them rather than renaming: extend, never
+            # modify. `vault_status` still carries the sealed/unreachable
+            # distinction; "sealed" simply cannot occur for a file.
+            "credential_store": type(self._resolver).__name__,
+            "posture": settings.posture,
             "actions": len(self.gate.operations()),
         }
 
@@ -1481,6 +1552,45 @@ def _json_object(body: bytes) -> dict[str, Any]:
 
 
 # ------------------------------------------------------------------ assembly --
+# Hosts that mean "only this machine can reach me". A service bound to one of
+# these is unreachable from the network, which is what makes the local-session
+# handoff safe to answer without a credential.
+LOOPBACK_HOSTS = frozenset({"127.0.0.1", "::1", "localhost",
+                            "127.0.0.0/8", "0:0:0:0:0:0:0:1"})
+
+
+def _local_session_provider() -> Optional[Callable[[], Optional[str]]]:
+    """The callable behind /ui/local-session, or None to not register the route.
+
+    TWO conditions, both required, both evaluated ONCE here rather than per
+    request:
+
+      1. local posture — deployed posture mints only through the print-once
+         ceremony, and that is the point of it;
+      2. the operator service is bound to LOOPBACK — settings.operator_host.
+         An operator who has deliberately exposed the console beyond this box
+         has changed the threat model, and an unauthenticated credential
+         endpoint must not survive that change silently.
+
+    Assembly-time rather than per-request because the peer address is not
+    threaded through OperatorApp.handle(), and widening that signature — shared
+    with the read boundary and a lot of tests — to support a check that the bind
+    already answers would be the worse trade. A bind is also a stronger
+    guarantee than a peer check: it means the packets cannot arrive at all.
+    """
+    if not settings.is_local:
+        return None
+    if settings.operator_host not in LOOPBACK_HOSTS:
+        logger.warning(
+            "local posture, but the operator service is bound to %s (not "
+            "loopback) — the /ui/local-session handoff is NOT registered; the "
+            "console will ask for a credential. Bind to 127.0.0.1 for the "
+            "self-login path.", settings.operator_host)
+        return None
+    from knowledge_hub.credentials import local_session_token
+    return local_session_token
+
+
 def build_operator_app(*, dsn: Optional[str] = None,
                        resolver: Optional[CredentialResolver] = None,
                        embedder=None,
@@ -1496,8 +1606,9 @@ def build_operator_app(*, dsn: Optional[str] = None,
         from knowledge_hub.embedding_ollama import OllamaEmbedder
         embedder = OllamaEmbedder()
     if secrets is None:
-        from knowledge_hub.secrets_openbao import OpenBaoSecretsProvider
-        secrets = OpenBaoSecretsProvider()
+        # d.s Stage 3: posture picks the implementation (local file vs OpenBao).
+        from knowledge_hub.credentials import make_secrets_provider
+        secrets = make_secrets_provider()
     store = store or PostgresFactStore(dsn=dsn)
     pipeline = Pipeline(store=store)
     from knowledge_hub.scoring_tiered import TieredScorer
@@ -1506,9 +1617,12 @@ def build_operator_app(*, dsn: Optional[str] = None,
                               secrets)
     gate = OperatorGate(store)
     register_operator_defaults(gate, service)
-    resolver = resolver or OpenBaoCredentialResolver()
+    if resolver is None:
+        from knowledge_hub.credentials import make_credential_resolver
+        resolver = make_credential_resolver()
     return OperatorApp(gate, service, resolver,
-                       reads=OperatorReadService(store))
+                       reads=OperatorReadService(store),
+                       local_session=_local_session_provider())
 
 
 def main(argv: Optional[list[str]] = None) -> None:
@@ -1521,6 +1635,12 @@ def main(argv: Optional[list[str]] = None) -> None:
                         help="serve the API without the background job "
                              "runner (jobs queue up untouched)")
     args = parser.parse_args(argv)
+
+    # d.s Stage 1: the posture goes out BEFORE anything is built. This is the
+    # process the console talks to, so this banner is the one an operator
+    # tailing operator.log sees.
+    from knowledge_hub.config import print_posture_banner
+    print_posture_banner()
 
     app = build_operator_app(dsn=args.dsn)
     if not app.service.ping_postgres():

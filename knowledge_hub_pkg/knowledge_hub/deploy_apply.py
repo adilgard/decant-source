@@ -48,6 +48,7 @@ from pathlib import Path
 from typing import Callable, Optional
 from urllib.parse import quote
 
+from knowledge_hub.config import settings
 from knowledge_hub.deploy_profiles import DeployPlan
 
 MIN_DISK_GB = 25
@@ -181,7 +182,39 @@ def confirm_recorded(what: str,
     until a human types RECORDED. Print-once values exist NOWHERE else —
     scrolling past them in a self-closing terminal is unrecoverable.
     Non-interactive runs (tests, pipes) skip the gate: there is no human to
-    hold, and holding would hang automation."""
+    hold, and holding would hang automation.
+
+    LOCAL POSTURE SKIPS IT (d.s Stage 2). This is the one function every
+    print-once path funnels through — vault unseal shares, the operator console
+    credential, the agent serving credential — so gating it here covers all
+    three at one site instead of three.
+
+    WHY IT IS RIGHT TO SKIP, stated carefully, because the obvious reason is
+    wrong. It is NOT that the value is recoverable from the local store: that
+    store keeps sha256 DIGESTS of credentials, exactly as the vault keeps them
+    in its paths, so a token cannot be read back out in either posture.
+
+    The real reason is that what the gate protects against is not losing a
+    value, it is losing a value that is EXPENSIVE to replace. In deployed
+    posture, losing the unseal shares means re-initializing the vault and
+    re-entering every source credential, and losing an operator credential means
+    a site visit or a custody ceremony to issue another. In local posture
+    replacing anything is one command with no ceremony attached
+    (`khctl provision-operator` / `provision-agent`), and the console does not
+    need a credential at all — it logs itself in. A blocking prompt guarding a
+    loss that costs one command is ceremony in the pure sense.
+
+    What this does NOT do is stop the value from being PRINTED. The record of
+    what was minted still goes to stdout and into operator.log, and the callers
+    still say "record NOW". Skipping a human-attention prompt is not the same as
+    dropping the audit line, and only the first is ceremony.
+    """
+    if settings.is_local:
+        print(f"      (local posture — not holding for an acknowledgment: "
+              f"the {what} above is NOT stored anywhere and cannot be "
+              f"recovered, but re-issuing one is a single command with no "
+              f"ceremony)")
+        return
     if is_tty is None:
         try:
             is_tty = sys.stdin.isatty()
@@ -667,13 +700,33 @@ def phase_openbao(ctx: ApplyContext) -> list[str]:
     # requests.ConnectionError past every friendly handler.
     lines = [_await_vault_ready(ctx, addr)]
     if not client.sys.is_initialized():
-        ceremony = ceremony_text(custody)  # before init: auto fails cleanly
+        # d.s Stage 2: the CUSTODY CEREMONY is the skippable part, not the
+        # init. Initializing and unsealing are mechanical — the vault does not
+        # work without them. What is ceremony is the custody script: print five
+        # shares, seal them in envelopes, hand them to someone, have them
+        # test-unseal before you leave. That whole apparatus answers a question
+        # local posture does not ask — who besides us can bring this back up —
+        # because the answer is "the one person on this box".
+        #
+        # Note this branch is dormant on the bench anyway: dev-mode OpenBao
+        # (`server -dev`, docker-compose.yml) comes up already initialized and
+        # unsealed, so is_initialized() is True and none of this runs. The gate
+        # is here for the case that made it worth writing — someone running the
+        # prod raft compose locally, who would otherwise be walked through a
+        # client-custody ceremony for their own laptop.
+        ceremony = (ceremony_text(custody) if settings.is_deployed else None)
         result = client.sys.initialize(secret_shares=BAO_SHARES,
                                        secret_threshold=BAO_THRESHOLD)
         # Shares + root token go to STDOUT ONCE and are never written to
         # disk — writing them anywhere durable defeats the custody model.
         print("\n" + "=" * 70)
-        print(ceremony)
+        if ceremony:
+            print(ceremony)
+        else:
+            print("VAULT INITIALIZED — custody ceremony skipped (local "
+                  "posture).\nSingle-user internal box: no share handoff, no "
+                  "envelopes, no witness.\nThe shares below are still your "
+                  "only way to unseal after a restart.")
         print("-" * 70)
         for i, key in enumerate(result["keys_base64"], 1):
             print(f"  unseal share {i}/{BAO_SHARES}: {key}")

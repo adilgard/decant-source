@@ -1,6 +1,12 @@
 # --- Secrets and local environment (never commit; see .env.example) ---
 .env
 .env.deploy
+# Local-posture credentials (d.s Stage 2): source credentials AND the console
+# principal registry live here. The .example.json companion IS tracked and
+# carries no real values. Both are also refused by the kit's no-secrets guard
+# (deploy_kit.FORBIDDEN_NAMES), so neither can ride to another machine.
+.secrets.local.json
+!.secrets.local.example.json
 
 # --- Per-box rendered state (khctl regenerates these; commit the inputs, not the renders) ---
 deploy_plan.json

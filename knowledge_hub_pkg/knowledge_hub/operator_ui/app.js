@@ -1077,6 +1077,33 @@ document.addEventListener("DOMContentLoaded", () => {
     else if (e.key === " ") { e.preventDefault(); decide("skipped"); }
   });
 
-  const saved = sessionStorage.getItem(TOKEN_KEY);
-  if (saved) unlock(saved); else $("token-input").focus();
+  bootAuth();
 });
+
+/* Boot order: a session token this tab already holds, then the local-posture
+   handoff, then the lock screen (d.s Stage 3).
+
+   The handoff endpoint only EXISTS when the server decided this process
+   qualifies — local posture, bound to loopback. In a deployed console it 404s,
+   this falls through, and the lock screen appears exactly as it always has. So
+   there is no posture logic in the browser: the UI asks, and the server's
+   answer is the whole decision. Nothing here can weaken a deployed console,
+   because a deployed console never answers.
+
+   The credential arrives in a response BODY, so it never touches the URL,
+   browser history, or a request line in a log. */
+async function bootAuth() {
+  const saved = sessionStorage.getItem(TOKEN_KEY);
+  if (saved) { unlock(saved); return; }
+  try {
+    const resp = await fetch("/ui/local-session");
+    if (resp.ok) {
+      const body = await resp.json();
+      if (body && body.credential) { unlock(body.credential); return; }
+    }
+  } catch (e) {
+    /* Offline or no such route — the lock screen is the correct fallback, and
+       unlock() already owns every "can't reach the system" message. */
+  }
+  $("token-input").focus();
+}

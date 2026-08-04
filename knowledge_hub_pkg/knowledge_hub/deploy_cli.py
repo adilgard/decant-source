@@ -97,6 +97,58 @@ LOCAL_CANDIDATES = {
 }
 
 
+# ---------------------------------------------------------------------------
+# Posture banner verbosity (d.s Stage 2)
+# ---------------------------------------------------------------------------
+# Which commands get the FULL four-line banner and which get one line. The rule
+# is one question: can this command change state on this box, mint a credential,
+# or produce an artifact that LEAVES this box? If yes, the posture changes what
+# it does and the operator reads the whole thing. If it only reports, the
+# one-line form still makes the posture impossible to mistake, which is the
+# actual safety property — the four-line form is for where it costs a decision.
+#
+# Names are the argparse command strings; `migrations` is keyed on its
+# subcommand ("migrations mark-applied") because its two halves land on
+# opposite sides of that question. Both sets are enumerated rather than one
+# being "everything else": a subcommand added later is UNCLASSIFIED and
+# test_posture.py fails until someone decides which side it is on. A default
+# would have quietly answered that for them.
+FULL_BANNER_COMMANDS = frozenset({
+    "plan",                     # writes deploy_plan.json + .env.deploy
+    "apply",                    # changes the box
+    "make-kit",                 # artifact for ANOTHER machine (the hard gate)
+    "launch",                   # deploys, or starts the ingestion program
+    "ingest",                   # writes documents, facts, raw objects
+    "make-ssd",                 # writes the SSD root
+    "console",                  # starts a service; may mint a credential
+    "provision-operator",       # mints a credential
+    "provision-agent",          # mints a credential
+    "migrations mark-applied",  # writes the ledger
+})
+
+BRIEF_BANNER_COMMANDS = frozenset({
+    "probe",                    # read-only sweep -> a local report
+    "verify",                   # read-only proof of a deployed plan
+    "verify-kit",               # read-only arrival gate
+    "alerts",                   # lists; --retry/--ack are small acts on it
+    "migrations status",        # explicitly READ-ONLY
+})
+
+
+def banner_key(args: argparse.Namespace) -> str:
+    """The name to classify this invocation under: the command, plus the
+    subcommand where one exists (only `migrations` has one today)."""
+    sub = getattr(args, "migrations_command", None)
+    return f"{args.command} {sub}" if sub else args.command
+
+
+def wants_full_banner(args: argparse.Namespace) -> bool:
+    """True for the full banner. An UNCLASSIFIED command gets the full one:
+    if nobody has decided yet, the verbose side is the safe side, and the test
+    that requires a decision fails on the next run either way."""
+    return banner_key(args) not in BRIEF_BANNER_COMMANDS
+
+
 def _cmd_probe(args: argparse.Namespace) -> int:
     profiles_path = Path(args.profiles)
     egress = []
@@ -232,6 +284,7 @@ def verify_checks_for(plan: DeployPlan) -> list[tuple[str, object]]:
       - the side-door audit (§8.8 rider) on EVERY visit that has a DB.
     """
     from knowledge_hub import checks
+    from knowledge_hub.config import settings
 
     selected: list[tuple[str, object]] = [
         ("version integrity", checks.check_version),
@@ -251,7 +304,13 @@ def verify_checks_for(plan: DeployPlan) -> list[tuple[str, object]]:
     if "object_store" in plan.seams:
         selected.append(("seaweedfs (s3)", checks.check_s3_worm))
     if "secrets" in plan.seams:
-        selected.append(("openbao", checks.check_openbao))
+        # d.s Stage 3: prove the seam THIS posture actually uses. A local run
+        # has no vault to authenticate against, so asking for one would fail a
+        # healthy box; the credential claim — store it, inject it, never leak
+        # it — is proven either way, against whichever backend is live.
+        selected.append(
+            ("credential seam", checks.check_credential_seam)
+            if settings.is_local else ("openbao", checks.check_openbao))
     if inference and inference.choice == "local":
         selected.append(("ollama", checks.check_ollama))
         selected.append(("processing (parse·chunk·embed)",
@@ -313,6 +372,48 @@ def _cmd_make_kit(args: argparse.Namespace) -> int:
     from knowledge_hub.deploy_kit import (KitContext, default_kit_models,
                                           run_make_kit)
 
+    # THE HARD GATE (d.s Stage 2) — the load-bearing item of the whole posture
+    # build, and the reason internal-by-default is safe rather than merely
+    # convenient. Every other ceremony can be skipped locally because nothing
+    # leaves this box. A kit is the one artifact that DOES: it is built here and
+    # run somewhere else, on hardware we do not watch, by someone who will trust
+    # whatever we handed them. So the softness that is correct for a single-user
+    # internal tool becomes a defect the moment it is packaged for another
+    # machine — and the way that defect would actually happen is not a bad
+    # decision, it is FORGETTING. Nobody chooses to ship unsigned; they build a
+    # kit on a Tuesday having never set KH_POSTURE and hand over a drive.
+    #
+    # This makes forgetting impossible, because the build itself refuses. It is
+    # a REFUSAL, not a warning: a warning is something you scroll past, and
+    # there is no --force. Hardening is a deliberate act with a name.
+    #
+    # FIRST in the function, before default_kit_models() reads profiles.toml
+    # and long before any staging: a local-posture build must abort in
+    # milliseconds, having touched neither the SSD nor a minute of hashing.
+    if settings.is_local:
+        print(f"[FAIL] make-kit REFUSES to run in the {settings.posture} "
+              f"posture.")
+        print("")
+        print("       A kit is built HERE and run on ANOTHER machine, so it "
+              "must carry the")
+        print("       hardened posture: signed manifest, arrival gate, real "
+              "credential custody.")
+        print("       Local posture skips exactly those, which is right for "
+              "internal use and")
+        print("       wrong for anything that leaves this box.")
+        print("")
+        print("       Build a kit by hardening on purpose:")
+        print("")
+        print("           $env:KH_POSTURE = \"deployed\"        # PowerShell, "
+              "this session")
+        print("           KH_POSTURE=deployed khctl make-kit …  # bash, this "
+              "command")
+        print("")
+        print("       There is deliberately no override flag. Shipping soft "
+              "should cost a")
+        print("       decision, not a keystroke.")
+        return 1
+
     infra_dir = Path(args.infra_dir).resolve()
     if args.models:
         models = [m.strip() for m in args.models.split(",") if m.strip()]
@@ -339,8 +440,27 @@ def _cmd_make_kit(args: argparse.Namespace) -> int:
 
 
 def _cmd_verify_kit(args: argparse.Namespace) -> int:
+    from knowledge_hub.config import settings
     from knowledge_hub.deploy_apply import ApplyError
     from knowledge_hub.deploy_kit import verify_kit_strict
+
+    # d.s Stage 2: the arrival gate is a DEPLOYED-posture concern — it exists to
+    # prove a kit survived the trip to a site. Running d.s locally never needs
+    # it, so local skips with a one-line notice.
+    #
+    # A skip, not a refusal, and the difference is deliberate: make-kit PRODUCES
+    # something dangerous, so it refuses. verify-kit only READS, so refusing
+    # would be theater — and worse, it would block the one legitimate local use,
+    # which is checking a kit somebody handed you. Hence --anyway: no state
+    # changes, no artifact leaves, so an operator who explicitly asks for the
+    # gate gets it in either posture.
+    if settings.is_local and not args.anyway:
+        print(f"[SKIP] kit arrival gate — skipped (local posture). This gate "
+              f"proves a kit")
+        print(f"       survived the trip to another machine; running d.s here "
+              f"does not need it.")
+        print(f"       Run it anyway with --anyway, or set KH_POSTURE=deployed.")
+        return 0
 
     kit_dir = Path(args.kit).resolve()
     print(f"Knowledge Hub — kit arrival gate: {kit_dir}\n" + "-" * 44)
@@ -595,11 +715,13 @@ def _cmd_console(args: argparse.Namespace) -> int:
 
     # F1: a sealed vault refuses every login as "credential not
     # recognized" — say the real cause BEFORE opening a console nobody
-    # can log into.
+    # can log into. Local posture has no vault, so there is no seal to
+    # diagnose and this whole class of failure does not exist (d.s Stage 3).
     from knowledge_hub.config import settings
-    if _vault_status(env.get("BAO_ADDR", settings.bao_addr)) == "sealed":
-        _refuse_sealed(env.get("BAO_ADDR", settings.bao_addr))
-        return 1
+    if settings.is_deployed:
+        if _vault_status(env.get("BAO_ADDR", settings.bao_addr)) == "sealed":
+            _refuse_sealed(env.get("BAO_ADDR", settings.bao_addr))
+            return 1
 
     # F6: honor the supervisor — a dead service must not get a browser
     # opened onto connection-refused under a success message.
@@ -611,7 +733,18 @@ def _cmd_console(args: argparse.Namespace) -> int:
               f"compose ps` in {work}, then `khctl verify`.")
         return 1
 
-    if deployed:
+    if settings.is_local:
+        # d.s Stage 3: nothing to mint, print, record, or paste. The console
+        # asks the service for this box's own identity over /ui/local-session
+        # and logs itself in. No credential is printed HERE precisely because
+        # printing one would put a human back in the loop for no benefit —
+        # the browser and the service are both on this machine, and the
+        # credential file is readable by both.
+        print("\nLocal posture: the console logs itself in with this box's "
+              "own identity.\nNothing to record or paste. (Connector "
+              "credentials are the one thing you\nstill enter — those are "
+              "real third-party secrets.)")
+    elif deployed:
         print("\nDeployed context: no credential is minted here (by "
               "design). Log in with the print-once operator credential "
               "from deploy bootstrap, or issue one with "
@@ -651,6 +784,40 @@ def _cmd_console(args: argparse.Namespace) -> int:
     return 0
 
 
+def _provision_locally(tenant: str, roles: tuple[str, ...], label: str,
+                       actor: str) -> int:
+    """Mint one credential into the local store (d.s Stage 3).
+
+    Both provision-* commands land here in local posture. They survive rather
+    than being switched off because handing a token to an EXTERNAL agent is a
+    real integration need, not ceremony — something outside this process has to
+    be given a credential somehow. What does not survive is the custody gate
+    around it: in deployed posture the vault refusing your token IS the gate,
+    and locally the equivalent gate is being able to write the file at all,
+    which is the same boundary the .env already relies on.
+
+    Still printed once, because the value genuinely has to reach a human here —
+    it is going into some other program's config. confirm_recorded skips its
+    "type RECORDED" hold in local posture (Stage 2), so there is a record on
+    screen without a prompt to answer: the token is not recoverable, but
+    re-issuing one costs a single command with no ceremony, which is the
+    difference that made the hold worth skipping.
+    """
+    from knowledge_hub.config import settings
+    from knowledge_hub.deploy_apply import _print_once_credential
+    from knowledge_hub.secrets_local import provision_local_credential
+
+    token, pid = provision_local_credential(tenant, roles, actor, label)
+    _print_once_credential(label, tenant, token, pid)
+    reissue = ("provision-agent" if not roles else "provision-operator")
+    print(f"registered (digest only) in {settings.local_secrets_file}; "
+          f"attributed to {actor!r}. Local posture: no vault, no custody "
+          f"ceremony. The store holds digests, so the value above cannot be "
+          f"read back — but `khctl {reissue} --tenant {tenant}` issues another "
+          f"whenever you need one.")
+    return 0
+
+
 def _cmd_provision_operator(args: argparse.Namespace) -> int:
     """Issue-more (BP23): mint + register + print ONCE an additional
     console credential. Vault custody IS the gate — this only works where
@@ -669,6 +836,10 @@ def _cmd_provision_operator(args: argparse.Namespace) -> int:
     env = (parse_env_file(work / ".env")
            if (work / ".env").exists() else {})
     from knowledge_hub.config import settings
+    if settings.is_local:
+        return _provision_locally(
+            args.tenant, (args.role,),
+            f"{args.role.upper()} console credential", getpass.getuser())
     addr = env.get("BAO_ADDR", settings.bao_addr)
     mount = env.get("BAO_KV_MOUNT", settings.bao_kv_mount)
     bao_token = env.get("BAO_ROOT_TOKEN", settings.bao_root_token)
@@ -714,6 +885,11 @@ def _cmd_provision_agent(args: argparse.Namespace) -> int:
     env = (parse_env_file(work / ".env")
            if (work / ".env").exists() else {})
     from knowledge_hub.config import settings
+    if settings.is_local:
+        return _provision_locally(
+            args.tenant, (),
+            "AGENT SERVING credential (for the read boundary, :8080)",
+            getpass.getuser())
     addr = env.get("BAO_ADDR", settings.bao_addr)
     mount = env.get("BAO_KV_MOUNT", settings.bao_kv_mount)
     bao_token = env.get("BAO_ROOT_TOKEN", settings.bao_root_token)
@@ -1046,6 +1222,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--allow-unsigned", action="store_true",
                    help="dev bench ONLY: accept an unsigned kit "
                         "(the acceptance is printed as a recorded override)")
+    p.add_argument("--anyway", action="store_true",
+                   help="run the gate even in local posture, where it is "
+                        "skipped by default (it only reads — use this to "
+                        "check a kit someone handed you)")
     p.set_defaults(fn=_cmd_verify_kit)
 
     p = sub.add_parser("launch",
@@ -1155,6 +1335,14 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(fn=_cmd_alerts)
 
     args = parser.parse_args(argv)
+    # d.s Stage 1: EVERY khctl invocation announces its posture, before the
+    # subcommand runs. argparse has already exited for --help/-h and for a bad
+    # command line, so this prints exactly when real work is about to happen.
+    # Full banner where the posture changes what the command DOES, one line
+    # where it only colors a report (see FULL_BANNER_COMMANDS).
+    from knowledge_hub.config import print_posture_banner
+    print_posture_banner(brief=not wants_full_banner(args))
+    print("")
     return args.fn(args)
 
 

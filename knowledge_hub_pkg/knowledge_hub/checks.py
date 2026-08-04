@@ -225,10 +225,51 @@ def check_s3_worm(dsn: Optional[str] = None,
 
 
 # ---------------------------------------------------------------------------
-# 3. OpenBao — auth + the per-tenant credential-injection seam
+# 3. Credential seam — auth + the per-tenant credential-injection seam
 # ---------------------------------------------------------------------------
+def check_credential_seam() -> str:
+    """The credential seam THIS posture uses, exercised end to end.
+
+    d.s Stage 3. Deliberately not "skip the OpenBao check in local posture":
+    the claim worth proving is that credentials can be stored and injected at
+    all, and that claim is true in both postures with a different backend. So
+    the check follows the factory and proves whichever seam is live.
+
+    What it proves is identical either way — put a credential, inject it into an
+    OutboundRequest, confirm the value arrived AND that repr() masks it. That
+    masking assertion is the one that matters most and it is backend-agnostic:
+    it is the invariant keeping credential values out of logs and exception
+    messages, and it must hold on the local file exactly as on the vault.
+    """
+    from knowledge_hub.credentials import make_secrets_provider
+    from knowledge_hub.interfaces import OutboundRequest
+
+    provider = make_secrets_provider()
+    provider.put_secret("_smoketest", "e2e-check", {"status": "reachable"})
+    request = OutboundRequest()
+    provider.inject_credential("_smoketest", "e2e-check", request)
+    assert request.params["status"] == "reachable"
+    assert "reachable" not in repr(request)  # injected values are masked
+
+    if settings.is_local:
+        store = getattr(provider, "_store", None)
+        where = getattr(store, "path", settings.local_secrets_file)
+        return (f"credential seam (local posture): store + inject ok via "
+                f"{where}, injected values masked — no vault required")
+    return (f"credential seam (deployed posture): OpenBao authenticated, "
+            f"per-tenant KV v2 inject ok "
+            f"({provider.path_for('<tenant>', '<source>')})")
+
+
 def check_openbao(addr: Optional[str] = None,
                   token: Optional[str] = None) -> str:
+    """OpenBao specifically — unchanged, and still selected by a deployed plan.
+
+    Kept as its own check rather than folded into check_credential_seam: a
+    deployed verify must be able to say "the VAULT answered", not just "some
+    credential store answered". check_stack.py and verify_checks_for choose
+    between the two by posture.
+    """
     import hvac
 
     from knowledge_hub.interfaces import OutboundRequest
@@ -450,11 +491,15 @@ def check_serving(dsn: Optional[str] = None) -> str:
     import threading
     import uuid
 
-    from knowledge_hub.choke_point import OpenBaoCredentialResolver
+    from knowledge_hub.credentials import make_credential_resolver
     from knowledge_hub.serving import Principal
     from knowledge_hub.service_http import build_serving_app, make_server
 
-    resolver = OpenBaoCredentialResolver()
+    # d.s Stage 3: the resolver the POSTURE uses. These checks prove the
+    # enforcement boundary (401 unauthenticated, the deny-by-default role
+    # gate, tenant scoping) — claims worth proving in BOTH postures, so they
+    # follow the factory rather than being skipped when there is no vault.
+    resolver = make_credential_resolver()
     token = f"smoketest-{uuid.uuid4().hex}"
     resolver.register_principal(token, Principal(
         tenant_id="_smoketest", principal_id="check-stack", roles=[]))
@@ -513,12 +558,16 @@ def check_operator(dsn: Optional[str] = None) -> str:
     import threading
     import uuid
 
-    from knowledge_hub.choke_point import OpenBaoCredentialResolver
+    from knowledge_hub.credentials import make_credential_resolver
     from knowledge_hub.operator_http import build_operator_app
     from knowledge_hub.serving import Principal
     from knowledge_hub.service_http import make_server
 
-    resolver = OpenBaoCredentialResolver()
+    # d.s Stage 3: the resolver the POSTURE uses. These checks prove the
+    # enforcement boundary (401 unauthenticated, the deny-by-default role
+    # gate, tenant scoping) — claims worth proving in BOTH postures, so they
+    # follow the factory rather than being skipped when there is no vault.
+    resolver = make_credential_resolver()
     agent_tok = f"smoketest-{uuid.uuid4().hex}"
     op_tok = f"smoketest-{uuid.uuid4().hex}"
     resolver.register_principal(agent_tok, Principal(

@@ -26,10 +26,41 @@ from knowledge_hub.dispatch_pg import PostgresDispatcher
 from knowledge_hub.factstore_pg import PostgresFactStore
 from knowledge_hub.pipeline import Pipeline
 from knowledge_hub.rawstore_s3 import S3RawStore
-from knowledge_hub.secrets_openbao import OpenBaoSecretsProvider
 
 INFRA_DIR = Path(__file__).resolve().parents[2]
 TEST_DB = "kh_factstore_test"
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _local_secrets_in_tmp(tmp_path_factory):
+    """No test may write the REPO's local credential store (d.s Stage 3).
+
+    In local posture — now the default — anything that touches the credential
+    seam resolves `settings.local_secrets_file` against the CWD, which for the
+    suite is the infra root. Left alone, a capture test would quietly create a
+    real `.secrets.local.json` next to the developer's `.env`, and a later run
+    would inherit whatever the previous one left in it. Tests that share
+    credential state through a file in the source tree are exactly the kind of
+    cross-run coupling this suite works hard to avoid elsewhere (per-test tenant
+    ids, a dedicated test database, a dedicated bucket).
+
+    Set as an ENV VAR as well as on the singleton, deliberately: env vars
+    outrank a .env in pydantic-settings, so this survives the several tests that
+    call reload_settings() — which would otherwise reset the field to its
+    relative class default and point it back at the repo.
+    """
+    from _pytest.monkeypatch import MonkeyPatch
+
+    from knowledge_hub.config import settings
+
+    mp = MonkeyPatch()
+    path = tmp_path_factory.mktemp("kh-secrets") / ".secrets.local.json"
+    mp.setenv("KH_LOCAL_SECRETS_FILE", str(path))
+    original = settings.local_secrets_file
+    settings.local_secrets_file = str(path)
+    yield path
+    settings.local_secrets_file = original
+    mp.undo()
 
 DIM = settings.embedding_dim
 ONTOLOGY = "baseline-0.1"
@@ -103,8 +134,21 @@ def raw_store(store: PostgresFactStore) -> S3RawStore:
 
 
 @pytest.fixture(scope="session")
-def secrets() -> OpenBaoSecretsProvider:
-    return OpenBaoSecretsProvider()
+def secrets():
+    """The SecretsProvider for the ACTIVE posture (d.s Stage 3).
+
+    Goes through the factory rather than naming OpenBao, so the capture-path
+    tests that consume this fixture run on a bench with no vault (local posture,
+    the default) and against the real vault when the suite is run with
+    KH_POSTURE=deployed. The tests themselves are unchanged and cannot tell the
+    difference — which is the property the ABC was for.
+
+    Tests that specifically prove the VAULT implementation construct
+    OpenBaoSecretsProvider directly (test_secrets_openbao.py); they are about
+    the backend, not the seam.
+    """
+    from knowledge_hub.credentials import make_secrets_provider
+    return make_secrets_provider()
 
 
 @pytest.fixture(scope="session")
@@ -114,8 +158,7 @@ def dispatcher(store: PostgresFactStore) -> PostgresDispatcher:
 
 @pytest.fixture()
 def capture(pipeline: Pipeline, raw_store: S3RawStore,
-            dispatcher: PostgresDispatcher,
-            secrets: OpenBaoSecretsProvider) -> CaptureService:
+            dispatcher: PostgresDispatcher, secrets) -> CaptureService:
     return CaptureService(pipeline, raw_store, dispatcher, secrets=secrets)
 
 

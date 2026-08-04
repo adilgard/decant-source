@@ -38,7 +38,7 @@ def _ingest(corpus_dir: Path, scale: str) -> None:
     from knowledge_hub.factstore_pg import PostgresFactStore
     from knowledge_hub.pipeline import Pipeline
     from knowledge_hub.rawstore_s3 import S3RawStore
-    from knowledge_hub.secrets_openbao import OpenBaoSecretsProvider
+    from knowledge_hub.credentials import make_secrets_provider
     from knowledge_hub.sources_fs import FilesystemSourceAdapter
     from knowledge_hub.processing import ProcessingService
     from knowledge_hub.extraction import ExtractionService
@@ -56,7 +56,7 @@ def _ingest(corpus_dir: Path, scale: str) -> None:
     dispatcher = PostgresDispatcher(store)
     ext_dispatcher = PostgresDispatcher(store, table="extraction_queue")
     capture = CaptureService(pipeline, raw_store, dispatcher,
-                             secrets=OpenBaoSecretsProvider())
+                             secrets=make_secrets_provider())
     processing = ProcessingService(pipeline, raw_store, DoclingParser(),
                                    SectionChunker(), OllamaEmbedder(),
                                    dispatcher=dispatcher,

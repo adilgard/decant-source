@@ -160,7 +160,7 @@ class JobRunner:
             from knowledge_hub.processing import ProcessingService
             from knowledge_hub.rawstore_s3 import S3RawStore
             from knowledge_hub.scoring_tiered import TieredScorer
-            from knowledge_hub.secrets_openbao import OpenBaoSecretsProvider
+            from knowledge_hub.credentials import make_secrets_provider
 
             store = self._store
             pipeline = Pipeline(store=store)
@@ -177,7 +177,7 @@ class JobRunner:
                 "embedder": embedder,
                 "scorer": TieredScorer(store),
                 "capture": CaptureService(pipeline, raw_store, dispatcher,
-                                          secrets=OpenBaoSecretsProvider()),
+                                          secrets=make_secrets_provider()),
                 "processing": ProcessingService(
                     pipeline, raw_store, DoclingParser(), SectionChunker(),
                     embedder, dispatcher=dispatcher,

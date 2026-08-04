@@ -733,7 +733,7 @@ Restore the build machine's pilot afterwards — rehearsal must be gone first or
 ports collide:
 
 ```powershell
-docker compose -f "C:\Users\<you>\Documents\Documents Workspace\knowledge_hub_infra\docker-compose.yml" up -d
+docker compose -f "C:\Users\<you>\Documents\Documents Workspace\decant-source\docker-compose.yml" up -d
 ```
 
 …then restart Windows-native Ollama.

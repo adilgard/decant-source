@@ -587,7 +587,7 @@ check — the round-trip re-verifies because the launcher never writes
 into the kit. For future rebuilds, the signed-build command is:
 
 ```powershell
-cd "C:\Users\<you>\Documents\Documents Workspace\knowledge_hub_infra"
+cd "C:\Users\<you>\Documents\Documents Workspace\decant-source"
 $env:KH_SIGN_KEY = "C:\Users\<you>\Secure\kh-org-2026.key"
 .venv\Scripts\khctl.exe make-kit --out "..\KH_SSD_STAGING\kit" --infra-dir . --models "bge-m3,qwen3.6:27b-bf16"
 ```

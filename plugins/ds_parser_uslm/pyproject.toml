@@ -1,0 +1,22 @@
+[project]
+name = "ds-parser-uslm"
+version = "0.1.0"
+description = "USLM (US Code XML) parser plugin for decant.Source — domain code, deliberately outside the corpus-agnostic core package"
+requires-python = ">=3.12"
+# knowledge_hub is the ONLY dependency, and the direction matters: a plugin
+# depends on core's contracts, core never depends on a plugin. Everything
+# else this needs (xml.etree) is stdlib, so installing a corpus does not
+# drag a parsing stack onto the box with it.
+dependencies = [
+    "knowledge_hub",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["ds_parser_uslm"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"ds_parser_uslm/ontology" = "ds_parser_uslm/ontology"

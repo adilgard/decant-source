@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  A small USLM 1.0 excerpt for testing the parser.
+
+  HAND-AUTHORED, not downloaded. It is faithful to the USLM element
+  structure the House publishes (uscDoc / main / title / subtitle / chapter
+  / section / subsection, with <num value>, <heading>, <content>, <ref
+  href>, <sourceCredit> and <notes>), and the provision numbering mirrors
+  the real Title 26 layout, but the statutory prose is paraphrased and
+  shortened. A fixture only has to exercise the SHAPE; using a verbatim
+  slice of the Code would make it longer without testing anything more.
+
+  Deliberately included, because each one is a case the parser must get
+  right rather than a case it is likely to meet by luck:
+    * three nesting depths above a section (title / subtitle / chapter);
+    * subsections and a nested paragraph, which must stay INSIDE the
+      section's chunk rather than becoming headings of their own;
+    * two cross-references, one to a section present in this document and
+      one to a section that is not (the common case: the target lives in
+      another file and resolves later);
+    * a repeated phrase, so a parser that located spans by searching for
+      text instead of computing them would pick the wrong occurrence;
+    * a <sourceCredit> and a <note>, which are document furniture and must
+      never be mistaken for provisions.
+-->
+<uscDoc xmlns="http://xml.house.gov/schemas/uslm/1.0"
+        identifier="/us/usc/t26">
+  <meta>
+    <docTitle>United States Code, Title 26</docTitle>
+  </meta>
+  <main>
+    <title identifier="/us/usc/t26">
+      <num value="26">Title 26</num>
+      <heading>Internal Revenue Code</heading>
+
+      <subtitle identifier="/us/usc/t26/stA">
+        <num value="A">Subtitle A</num>
+        <heading>Income Taxes</heading>
+
+        <chapter identifier="/us/usc/t26/stA/ch1">
+          <num value="1">CHAPTER 1</num>
+          <heading>Normal Taxes and Surtaxes</heading>
+
+          <section identifier="/us/usc/t26/s1">
+            <num value="1">§ 1.</num>
+            <heading>Tax imposed</heading>
+
+            <subsection identifier="/us/usc/t26/s1/a">
+              <num value="a">(a)</num>
+              <heading>Married individuals filing joint returns</heading>
+              <content>A tax is imposed on the taxable income of every
+                married couple filing a joint return, determined under
+                <ref href="/us/usc/t26/s63">section 63</ref>, in accordance
+                with the table set out in this subsection.</content>
+            </subsection>
+
+            <subsection identifier="/us/usc/t26/s1/b">
+              <num value="b">(b)</num>
+              <heading>Heads of households</heading>
+              <content>A tax is imposed on the taxable income of every
+                head of a household, as defined in
+                <ref href="/us/usc/t26/s2">section 2</ref>.</content>
+              <paragraph identifier="/us/usc/t26/s1/b/1">
+                <num value="1">(1)</num>
+                <content>For purposes of this subsection, the taxable
+                  income of every head of a household is reduced by the
+                  amounts allowed under this paragraph.</content>
+              </paragraph>
+            </subsection>
+
+            <sourceCredit>(Aug. 16, 1954, ch. 736, 68A Stat. 5.)</sourceCredit>
+            <notes>
+              <note topic="effectiveDate">
+                <heading>Effective Date</heading>
+                <content>This section applies to taxable years beginning
+                  after the date of enactment.</content>
+              </note>
+            </notes>
+          </section>
+
+          <section identifier="/us/usc/t26/s63">
+            <num value="63">§ 63.</num>
+            <heading>Taxable income defined</heading>
+            <content>Except as otherwise provided, taxable income means
+              gross income minus the deductions allowed by this
+              chapter.</content>
+          </section>
+        </chapter>
+      </subtitle>
+    </title>
+  </main>
+</uscDoc>

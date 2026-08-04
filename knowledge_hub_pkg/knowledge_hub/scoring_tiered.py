@@ -46,6 +46,7 @@ from typing import Any, Optional, Sequence
 import ollama
 
 from knowledge_hub.config import settings
+from knowledge_hub.ollama_client import make_ollama_client
 from knowledge_hub.factstore_pg import PostgresFactStore
 from knowledge_hub.interfaces import (
     BlockedCandidate,
@@ -135,7 +136,7 @@ class _Adjudicator:
     def __init__(self, model: Optional[str] = None, host: Optional[str] = None,
                  client: Optional[ollama.Client] = None):
         self.model = model or settings.adjudication_model
-        self._client = client or ollama.Client(host=host or settings.ollama_host)
+        self._client = client or make_ollama_client(host)
 
     def judge(self, surface: str, entity_type: str, context: str,
               candidate: BlockedCandidate) -> Optional[tuple[bool, float]]:

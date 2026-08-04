@@ -42,6 +42,7 @@ from knowledge_hub.models import SourceRegistryEntry
 from test_deploy_plan import make_probe, qualified_pg
 
 INFRA_DIR = Path(__file__).resolve().parents[2]
+INFRA_ENV = INFRA_DIR / ".env"
 PROFILES = load_profiles(INFRA_DIR / "profiles.toml")
 
 
@@ -851,8 +852,13 @@ def test_reload_settings_rereads_env_from_cwd(tmp_path, monkeypatch):
     finally:
         monkeypatch.chdir(tmp_path)
         (home / ".env").unlink()
-        reload_settings()
+        # Restore from a NAMED file, never from "whatever .env is in CWD":
+        # there is none here, and reload_settings() is now a no-op in that
+        # case (it used to silently reset every field to its class default,
+        # putting the rest of the suite on `localhost`).
+        assert reload_settings(INFRA_ENV) == INFRA_ENV
         assert settings.s3_access_key == before
+        assert settings.postgres_host == "127.0.0.1"
 
 
 def test_guided_flow_reloads_settings_after_wet_apply(kit_dir, work_dir):
@@ -880,8 +886,11 @@ def test_guided_flow_reloads_settings_after_wet_apply(kit_dir, work_dir):
         assert settings.s3_access_key == "kh_minted_by_apply"
     finally:
         (work_dir / ".env").unlink(missing_ok=True)
-        reload_settings()
+        # run_launch chdir'd into work_dir and the autouse _restore_cwd fixture
+        # only runs at teardown, so name the file explicitly (see INFRA_ENV).
+        assert reload_settings(INFRA_ENV) == INFRA_ENV
         assert settings.s3_access_key == before
+        assert settings.postgres_host == "127.0.0.1"
 
 
 def test_deployed_launch_reloads_settings_from_work_env(kit_dir, work_dir,
@@ -908,8 +917,11 @@ def test_deployed_launch_reloads_settings_from_work_env(kit_dir, work_dir,
         assert settings.s3_access_key == "kh_deployed_home"
     finally:
         (work_dir / ".env").unlink(missing_ok=True)
-        reload_settings()
+        # run_launch chdir'd into work_dir and the autouse _restore_cwd fixture
+        # only runs at teardown, so name the file explicitly (see INFRA_ENV).
+        assert reload_settings(INFRA_ENV) == INFRA_ENV
         assert settings.s3_access_key == before
+        assert settings.postgres_host == "127.0.0.1"
 
 
 def test_start_program_waits_for_vault_and_reports_sealed(kit_dir, work_dir,

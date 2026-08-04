@@ -5,11 +5,23 @@ box locally and is overridable by environment variables on the Ubuntu boxes.
 """
 from __future__ import annotations
 
+import logging
+from pathlib import Path
+from typing import Optional
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
+
+# The one filename both the class config below and reload_settings() honour —
+# they must never disagree about what "the .env" means.
+DEFAULT_ENV_FILE = ".env"
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(env_file=DEFAULT_ENV_FILE,
+                                      env_file_encoding="utf-8",
+                                      extra="ignore")
 
     # --- Postgres (host connection; the DB runs in Docker, exposed on localhost) ---
     postgres_user: str = "kh"
@@ -59,6 +71,19 @@ class Settings(BaseSettings):
     # the premises. Read it rather than inferring locality from ollama_host —
     # a local-external deploy and a remote one both carry an endpoint.
     inference_seam: str = "local"
+    # HTTP budget for EVERY Ollama call (see ollama_client.make_ollama_client).
+    # The client library defaults to httpx Timeout(None) — unbounded on connect
+    # AND read — which is how one stalled generate hung a whole test run
+    # indefinitely (2026-08-03): TCP established, zero bytes, zero CPU, no end.
+    # Split because the two failure modes are nothing alike:
+    #   connect — a listener that accepts and never answers is Docker Desktop's
+    #     dual-stack ::1 black hole (see factstore_pg._conn), not slow work.
+    #     Fail fast so the next address family gets its turn.
+    #   read — real generation on a 36B MoE legitimately runs minutes, so this
+    #     is deliberately generous. The goal is BOUNDED, not fast: an operator
+    #     waiting 10 minutes has a slow box, one waiting forever has no signal.
+    ollama_connect_timeout_s: float = 5.0
+    ollama_read_timeout_s: float = 600.0
     embedding_model: str = "bge-m3"
     extraction_model: str = "qwen3.6"
     # Gray-band ER adjudication (Stage D, Tier 1b). Defaults to the extraction
@@ -102,8 +127,9 @@ class Settings(BaseSettings):
 settings = Settings()
 
 
-def reload_settings() -> None:
-    """Re-read environment + ./.env into the EXISTING singleton, in place.
+def reload_settings(env_file: Optional[Path | str] = None) -> Optional[Path]:
+    """Re-read environment + an .env into the EXISTING singleton, in place.
+    Returns the file actually read, or None when there was none to read.
 
     The singleton binds when knowledge_hub.config is first imported — for
     khctl that is process start, in whatever directory khctl was invoked
@@ -113,7 +139,34 @@ def reload_settings() -> None:
     consumer holds a reference to the singleton object, so rebinding the
     module attribute would fix nothing: refresh the object itself.
     (BP33 rehearsal finding: the launcher's step-6 verify and start_program's
-    ingest sweep ran against pilot defaults on a healthy deploy.)"""
-    fresh = Settings()
+    ingest sweep ran against pilot defaults on a healthy deploy.)
+
+    A MISSING .ENV IS A NO-OP, NOT A RESET (2026-08-03). This used to call
+    `Settings()` unconditionally, so calling it from a directory with no .env
+    silently reverted EVERY field to its class default — which for a deployed
+    process means the PILOT credentials and `localhost`. "Reload from .env"
+    with no .env to read is nothing to do, not a reset nobody asked for.
+
+    Found via the test suite, where it was doing real damage: three tests
+    restored themselves with `reload_settings()` while still chdir'd into a
+    temp home, so from that point on the whole process was on `localhost`
+    instead of the `.env`'s pinned `127.0.0.1`. Every later test then paid
+    Docker Desktop's dual-stack stall on each fresh connection (~10s), which
+    is what made a full run take hours. Their restore assertions passed
+    throughout because they checked `s3_access_key`, whose .env value is
+    identical to its class default — the one field that could not reveal the
+    problem. Pass `env_file` explicitly to restore from a known file rather
+    than relying on CWD.
+    """
+    path = Path(env_file) if env_file is not None else Path(DEFAULT_ENV_FILE)
+    if not path.is_file():
+        logger.warning(
+            "reload_settings(): no %s found (cwd=%s) — leaving the current "
+            "configuration in place. Reverting to class defaults here would "
+            "silently swap a deployment's config for the pilot ones.",
+            path, Path.cwd())
+        return None
+    fresh = Settings(_env_file=str(path))
     for name in Settings.model_fields:
         setattr(settings, name, getattr(fresh, name))
+    return path

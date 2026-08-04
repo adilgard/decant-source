@@ -43,6 +43,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from knowledge_hub.config import settings
+from knowledge_hub.ollama_client import make_ollama_client
 from knowledge_hub.factstore_pg import PostgresFactStore
 from knowledge_hub.goldsets import GoldSetStore
 from knowledge_hub.models import BENCHMARK_AXES, BenchmarkRun, GoldSet, GoldSetItem
@@ -180,8 +181,7 @@ def hardware_fingerprint(store: PostgresFactStore, tenant_id: str) -> dict[str, 
 
 def resolve_model_digests(models: list[str],
                           host: Optional[str] = None) -> dict[str, str]:
-    import ollama
-    client = ollama.Client(host=host or settings.ollama_host)
+    client = make_ollama_client(host)
     digests: dict[str, str] = {}
     served = {}
     try:
@@ -202,8 +202,7 @@ def resolve_model_digests(models: list[str],
 def detect_embedding_dim(model: str, host: Optional[str] = None) -> int:
     """Probe the served model for its native dimension — challenger embedders
     differ (nomic 768, bge-m3 1024, …) and configs shouldn't hardcode it."""
-    import ollama
-    client = ollama.Client(host=host or settings.ollama_host)
+    client = make_ollama_client(host)
     try:
         return len(client.embed(model=model, input=["dimension probe"]).embeddings[0])
     except Exception as e:

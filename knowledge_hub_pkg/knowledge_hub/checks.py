@@ -249,12 +249,12 @@ def check_ollama(host: Optional[str] = None,
                  embedding_model: Optional[str] = None,
                  embedding_dim: Optional[int] = None,
                  extraction_model: Optional[str] = None) -> str:
-    from ollama import Client
+    from knowledge_hub.ollama_client import make_ollama_client
 
     embedding_model = embedding_model or settings.embedding_model
     embedding_dim = embedding_dim or settings.embedding_dim
     extraction_model = extraction_model or settings.extraction_model
-    client = Client(host=host or settings.ollama_host)
+    client = make_ollama_client(host)
     emb = client.embeddings(model=embedding_model, prompt="knowledge hub")
     dim = len(emb["embedding"])
     if dim != embedding_dim:

@@ -23,6 +23,7 @@ import ollama
 
 from knowledge_hub.config import settings
 from knowledge_hub.interfaces import Embedder, EmbeddingError
+from knowledge_hub.ollama_client import make_ollama_client
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +42,7 @@ class OllamaEmbedder(Embedder):
         self.model = model or settings.embedding_model
         self.dim = dim or settings.embedding_dim
         self._batch_size = batch_size
-        self._client = client or ollama.Client(host=host or settings.ollama_host)
+        self._client = client or make_ollama_client(host)
         self._version: Optional[str] = None
 
     @property

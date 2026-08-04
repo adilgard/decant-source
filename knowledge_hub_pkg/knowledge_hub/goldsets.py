@@ -32,6 +32,7 @@ import re
 from typing import Any, Optional, Sequence
 
 from knowledge_hub.config import settings
+from knowledge_hub.ollama_client import make_ollama_client
 from knowledge_hub.factstore_pg import PostgresFactStore
 from knowledge_hub.interfaces import Embedder
 from knowledge_hub.models import GoldSet, GoldSetItem
@@ -263,9 +264,8 @@ class LLMQueryGenerator:
 
     def __init__(self, model: Optional[str] = None, host: Optional[str] = None,
                  max_attempts: int = 3):
-        import ollama
         self.model = model or settings.extraction_model
-        self._client = ollama.Client(host=host or settings.ollama_host)
+        self._client = make_ollama_client(host)
         self._max_attempts = max_attempts
 
     def generate_query(self, chunk_text: str) -> dict[str, Any]:

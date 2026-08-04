@@ -36,6 +36,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from knowledge_hub.config import settings
+from knowledge_hub.ollama_client import make_ollama_client
 
 GENERATOR_VERSION = "0.1.0"
 
@@ -307,9 +308,8 @@ _SOP_SECTIONS = ["Purpose", "Scope", "Responsibilities", "Definitions",
 
 class NarrativeGenerator:
     def __init__(self, model: Optional[str] = None, host: Optional[str] = None):
-        import ollama
         self.model = model or settings.extraction_model
-        self._client = ollama.Client(host=host or settings.ollama_host)
+        self._client = make_ollama_client(host)
 
     def _write(self, instruction: str, max_words: int = 180) -> str:
         # Retry transient serving errors (a llama-server hiccup mid-way must

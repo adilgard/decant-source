@@ -37,6 +37,63 @@ Design rules encoded in `deploy_profiles.py`:
 - **Secrets are never "theirs"** — see the note in profiles.toml (S2
   principal-registry isolation).
 
+## DONE (2026-08-03) — two unbounded-wait bugs, found by running the full suite
+
+Both surfaced while getting a clean full-suite result after the ledger work
+below. Neither was caused by it. Together they made a full run take hours and
+then hang; fixed, the suite is **563 passed in 5:06**.
+
+**1. `ollama.Client` had no HTTP timeout.** The library defaults to
+`httpx.Timeout(None)` — unbounded on connect AND read. A run wedged for 45
+minutes on two ESTABLISHED connections to 127.0.0.1:11434 with zero bytes and
+zero CPU on either side: a read that would never return and never give up.
+`khctl` had already bounded every `psycopg.connect` after the same class of
+hang (fe30871) and every `urllib.request.urlopen` passes a timeout — the
+inference seam was the one that got missed.
+
+New `knowledge_hub/ollama_client.py` is the ONLY place a client is built
+(`make_ollama_client(host)`); eight call sites across seven modules went
+through it, and four dead lazy `import ollama` lines went with them. Two
+budgets, because the failure modes are unrelated:
+`ollama_connect_timeout_s = 5.0` (a listener that accepts and never answers is
+the dual-stack ::1 black hole, not slow work — fail fast so the next address
+family gets its turn) and `ollama_read_timeout_s = 600.0` (a 36B MoE
+legitimately generates for minutes; the goal is BOUNDED, not fast). Read from
+settings per call, not captured at import, so a deployment's tuning survives
+`reload_settings()`.
+
+The guard is an AST walk over the package, not a grep, so neither
+`ollama.Client(...)` nor `from ollama import Client` can slip past — without it
+an eighth unbounded client is one convenient line away. It also asserts that
+upstream STILL defaults to an unbounded read, so if that ever changes the test
+says the factory's rationale moved instead of quietly passing.
+
+**2. `reload_settings()` reset what it could not reload.** It called
+`Settings()` unconditionally, so running it from a directory with no `.env`
+silently reverted EVERY field to its class default. For a deployed process that
+means swapping the real config for the PILOT credentials and `localhost`. A
+missing `.env` is now a no-op with a warning; it also takes an explicit path and
+returns what it read.
+
+It was doing real damage in the suite. Three tests in `test_deploy_launch.py`
+restored themselves with a bare `reload_settings()` while still chdir'd into a
+temp deployment home (`run_launch` pins CWD there, and the `_restore_cwd`
+fixture only unwinds at teardown — after the test body's `finally`). From that
+point the whole process was on `localhost` instead of the `.env`'s pinned
+`127.0.0.1`, and every later test paid Docker Desktop's ~10s dual-stack stall
+per fresh connection. One test took **160s in that state versus 0.78s clean**.
+
+Their restore assertions passed the entire time because they checked
+`s3_access_key`, whose `.env` value (`kh_s3_admin`) is identical to its class
+default — the one field that could not reveal the problem. They now restore
+from a NAMED file and assert on `postgres_host`, which is the field that
+differs. `tests/test_bounded_io.py` documents that blind spot explicitly, so
+the next person does not re-learn it.
+
+**Run pytest from the INFRA ROOT.** From `knowledge_hub_pkg/` there is no
+`.env`, so settings fall back to `localhost` and the same stall applies to the
+whole run.
+
 ## DONE (2026-08-03) — the migration ledger gets a real model (`migrations.py`)
 
 Found on the pilot DB: migrations 011/012/013 had every object present and

@@ -41,6 +41,7 @@ import ollama
 from pydantic import BaseModel, Field, ValidationError
 
 from knowledge_hub.config import settings
+from knowledge_hub.ollama_client import make_ollama_client
 from knowledge_hub.interfaces import (
     CandidateEntity,
     CandidateFact,
@@ -122,7 +123,7 @@ class LLMJointExtractionStrategy(ExtractionStrategy):
                  client: Optional[ollama.Client] = None):
         self.binding = binding
         self.model = model or settings.extraction_model
-        self._client = client or ollama.Client(host=host or settings.ollama_host)
+        self._client = client or make_ollama_client(host)
         self._version: Optional[str] = None
 
     @property

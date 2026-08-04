@@ -112,20 +112,67 @@ def read_apply_progress(work_dir: Path) -> Optional[dict]:
 
 def stack_alive(env_file: Path) -> bool:
     """Live signal: the Postgres the installed .env points at answers within
-    2s and has our schema_migrations ledger. Any failure = not live (the
-    guided flow is idempotent, so a false negative only re-walks it)."""
+    2s and has a NON-EMPTY schema_migrations ledger. Any failure = not live
+    (the guided flow is idempotent, so a false negative only re-walks it).
+
+    Non-empty, not merely present: the table is created by phase_schema before
+    the replay loop runs, so an existing-but-empty ledger means the schema
+    phase died at its first migration — a state this function used to report
+    as fully deployed. It is a liveness probe and stays one; whether the
+    ledger's CONTENTS match the schema is start_program's gate and
+    checks.check_migrations, which can afford to read the bundle."""
     try:
         import psycopg
 
         from knowledge_hub.deploy_apply import dsn_from_env, parse_env_file
+        from knowledge_hub.migrations import LEDGER_TABLE
         dsn = dsn_from_env(parse_env_file(env_file))
         with psycopg.connect(dsn, connect_timeout=2) as conn:
-            n = conn.execute(
+            present = conn.execute(
                 "SELECT count(*) FROM pg_tables WHERE schemaname='public'"
-                " AND tablename='schema_migrations'").fetchone()[0]
-        return bool(n)
+                " AND tablename=%s", (LEDGER_TABLE,)).fetchone()[0]
+            if not present:
+                return False
+            rows = conn.execute(
+                f"SELECT count(*) FROM {LEDGER_TABLE}").fetchone()[0]
+        return bool(rows)
     except Exception:
         return False
+
+
+def ledger_state(work: Path, env: dict[str, str]) -> list:
+    """Per-migration ledger-vs-database state for the deployment home.
+
+    A SEAM (LaunchConfig.ledger_check) for the same reason stack_check is one:
+    the launcher's gate tests prove what runs and what refuses without a live
+    stack, and a gate that could only be tested wet would not be tested.
+
+    Raises with an operator-facing sentence rather than returning something
+    empty — "no migrations found" must never read as "nothing wrong", which is
+    the whole failure mode this gate exists to close.
+    """
+    import psycopg
+
+    from knowledge_hub import migrations as mig
+    from knowledge_hub.deploy_apply import dsn_from_env
+
+    migrations_dir = work / "migrations"
+    if not migrations_dir.is_dir():
+        raise RuntimeError(
+            f"no migrations/ in the deployment home ({work}) — the bundle is "
+            f"incomplete, so the schema cannot be checked against it. "
+            f"Re-seed from the kit before ingesting.")
+    with psycopg.connect(dsn_from_env(env), connect_timeout=5) as conn:
+        if not mig.ledger_exists(conn):
+            raise RuntimeError(
+                f"no {mig.LEDGER_TABLE} table — this database has never been "
+                f"through khctl apply")
+        statuses = mig.status(conn, migrations_dir, work / mig.BASELINE_SCHEMA)
+    if not statuses:
+        raise RuntimeError(
+            f"migrations/ in {work} contains no .sql files — the bundle is "
+            f"incomplete; re-seed from the kit")
+    return statuses
 
 
 def gather_signals(work_dir: Path,
@@ -431,6 +478,7 @@ class LaunchConfig:
     input_fn: Callable[[str], str] = input
     print_fn: Callable[[str], None] = print
     stack_check: Callable[[Path], bool] = stack_alive
+    ledger_check: Callable[[Path, dict], list] = ledger_state
 
 
 def _step(n: int, total: int, title: str) -> str:
@@ -771,6 +819,30 @@ def start_program(cfg: LaunchConfig, kit: Path, work: Path) -> int:
             "`docker compose ps` in the deployment home")
         return 1
     say("   postgres answering")
+
+    # THE LEDGER GATE (2026-08-03 pilot finding). Never ingest onto a schema
+    # whose ledger and objects disagree: ingest would write facts under a
+    # half-known schema, and the drift that produced this state was invisible
+    # to every other signal here — the stack answered, the tables existed, and
+    # the ledger was three migrations behind them.
+    from knowledge_hub import migrations as mig
+    try:
+        statuses = cfg.ledger_check(work, env)
+    except Exception as e:
+        say(f"[FAIL] migration ledger: {e}")
+        return 1
+    if mig.broken(statuses):
+        say(f"[FAIL] {mig.drift_message(statuses)}")
+        say("       Ingest is NOT started: it would write facts onto a "
+            "schema nobody has reconciled.")
+        return 1
+    if mig.pending(statuses):
+        say("[FAIL] the deployed schema is BEHIND the bundle — not applied: "
+            + ", ".join(s.filename for s in mig.pending(statuses)))
+        say("       Run `khctl apply` before ingesting.")
+        return 1
+    say(f"   migration ledger agrees with the schema "
+        f"({len(statuses)} applied)")
 
     if "secrets" in plan.seams:
         addr = env.get("BAO_ADDR", "http://localhost:8200")

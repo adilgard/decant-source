@@ -134,6 +134,60 @@ def check_postgres(dsn: Optional[str] = None,
             f"ontology={onto[0]}, graph={graph_name}")
 
 
+def check_migrations(dsn: Optional[str] = None,
+                     migrations_dir: Optional[Path] = None,
+                     baseline: Optional[Path] = None) -> str:
+    """The migration ledger agrees with the database, per migration.
+
+    Added after the 2026-08-03 pilot finding: 011/012/013 had every object
+    present and no ledger row, and NOTHING in the verification surface looked
+    at the ledger's CONTENTS — check_postgres asserts `ontology_active`
+    exists, which was true, and stack_alive asked only whether the ledger
+    table existed. So a schema at 013 with a ledger at 010 verified green.
+
+    This check fails on ANY disagreement in either direction. It deliberately
+    does not repair: reconciling drift is a decision, and
+    `khctl migrations mark-applied` is where a human records one.
+
+    Relative paths resolve against the working directory — the deployment home
+    under khctl, the infra root on the dev bench — the same convention as
+    settings.ontology_dir and bge_m3_tokenizer_json.
+    """
+    import psycopg
+
+    from knowledge_hub import migrations as mig
+
+    dsn = dsn or settings.postgres_dsn
+    migrations_dir = Path(migrations_dir or "migrations")
+    if not migrations_dir.is_dir():
+        # Never pass by default: an unfindable bundle is the same blind spot
+        # this check exists to close.
+        raise RuntimeError(
+            f"cannot verify the ledger — no migrations/ at "
+            f"{migrations_dir.resolve()} (run from the deployment home, or "
+            f"pass migrations_dir)")
+    with psycopg.connect(dsn, connect_timeout=5) as conn:
+        if not mig.ledger_exists(conn):
+            raise RuntimeError(
+                f"no {mig.LEDGER_TABLE} table — this database has never been "
+                f"through khctl apply")
+        statuses = mig.status(conn, migrations_dir, baseline)
+    bad = mig.broken(statuses)
+    if bad:
+        raise RuntimeError(mig.drift_message(statuses))
+    todo = mig.pending(statuses)
+    if todo:
+        raise RuntimeError(
+            f"{len(todo)} migration(s) NOT applied: "
+            f"{', '.join(s.filename for s in todo)} — the deployed schema is "
+            f"behind the bundle; run khctl apply")
+    unverified = [s for s in statuses if s.state == mig.APPLIED_UNVERIFIED]
+    caveat = (f", {len(unverified)} by ledger row only (creates nothing "
+              f"unique to verify)" if unverified else "")
+    return (f"migrations: ledger agrees with the database — "
+            f"{len(statuses)} applied{caveat}")
+
+
 # ---------------------------------------------------------------------------
 # 2. Object store — the WORM enforcement PROOF (writes a sacrificial object;
 #    on an adopted client store, agree before running)

@@ -35,6 +35,7 @@ from knowledge_hub.deploy_launch import (
     run_plan_pause,
     seed_work_dir,
 )
+from knowledge_hub import migrations as mig
 from knowledge_hub.deploy_profiles import load_profiles
 from knowledge_hub.models import SourceRegistryEntry
 
@@ -127,10 +128,40 @@ class FakeRunner:
         return 0
 
 
+def clean_ledger(state: str = mig.APPLIED, n: int = 3) -> list:
+    """A ledger-check result with nothing wrong — the shape start_program's
+    gate accepts. Built through the real classify() so a change to the state
+    vocabulary breaks these tests instead of silently passing them."""
+    files = [mig.MigrationFile(filename=f"{i:03d}_x.sql", path=Path("x"),
+                               creates=(f"t{i}",), verifiable=(f"t{i}",),
+                               unverified=())
+             for i in range(1, n + 1)]
+    live = {f"t{i}" for i in range(1, n + 1)}
+    ledger = {f.filename: mig.LedgerRow(filename=f.filename, applied_at=None,
+                                        note=None) for f in files}
+    statuses = mig.classify(files, ledger, live)
+    assert all(s.state == state for s in statuses)
+    return statuses
+
+
+def drifted_ledger() -> list:
+    """The pilot's shape: objects present, no ledger row."""
+    files = [mig.MigrationFile(filename="011_ontology_registry.sql",
+                               path=Path("x"), creates=("ontology_active",),
+                               verifiable=("ontology_active",),
+                               unverified=())]
+    statuses = mig.classify(files, {}, {"ontology_active"})
+    assert statuses[0].state == mig.OBJECTS_NO_LEDGER
+    return statuses
+
+
 def launch_config(work: Path, kit: Path, console: Console,
                   runner: FakeRunner, **kw) -> LaunchConfig:
     kw.setdefault("tenants", "")          # skip the tenant prompt by default
     kw.setdefault("stack_check", lambda _env: False)
+    # A clean ledger by default, so the pure-logic tests stay pure. The gate's
+    # own refusals are proven explicitly in the two tests below.
+    kw.setdefault("ledger_check", lambda _work, _env: clean_ledger())
     return LaunchConfig(kit_dir=kit, work_dir=work, runner=runner,
                         input_fn=console.ask, print_fn=console.say, **kw)
 
@@ -720,6 +751,56 @@ def test_start_program_starts_serving_and_operator_and_prints_ui_watchpoint(
     assert "operator.log" in out
 
 
+def _deployed_home(work_dir: Path) -> None:
+    plan = {
+        "plan_version": "1", "profile": "appliance", "shape": "A",
+        "placement": "single_box", "secrets_custody": "operator",
+        "custody_overridden": False, "seams": {},
+        "extraction_tier": "fp16", "extraction_model": "qwen3.6",
+        "tenants": [],
+    }
+    (work_dir / "deploy_plan.json").write_text(json.dumps(plan),
+                                               encoding="utf-8")
+    (work_dir / ".env").write_text("SERVING_PORT=8080\nOPERATOR_PORT=8081\n",
+                                   encoding="utf-8")
+
+
+@pytest.mark.parametrize("check,expected", [
+    # The pilot's drift: objects without a ledger row.
+    (lambda _w, _e: drifted_ledger(), "BROKEN"),
+    # Schema behind the bundle — apply has not run the newest migrations.
+    (lambda _w, _e: mig.classify(
+        [mig.MigrationFile("014_new.sql", Path("x"), ("t14",), ("t14",), ())],
+        {}, set()), "BEHIND"),
+    # The ledger cannot be read at all: never a silent pass.
+    (lambda _w, _e: (_ for _ in ()).throw(RuntimeError("no migrations/")),
+     "migration ledger"),
+])
+def test_start_program_refuses_to_ingest_on_a_bad_ledger(
+        work_dir, kit_dir, monkeypatch, check, expected):
+    """The 2026-08-03 gate: ingest must not start onto a schema whose ledger
+    and objects disagree. Before this, every other signal here said the box
+    was healthy — the stack answered and the tables existed."""
+    import knowledge_hub.deploy_launch as dl
+
+    _deployed_home(work_dir)
+    started: list[str] = []
+    monkeypatch.setattr(dl, "ensure_serving",
+                        lambda w, e, s: started.append("serving") or True)
+    monkeypatch.setattr(dl, "ensure_operator",
+                        lambda w, e, s: started.append("operator") or True)
+
+    console = Console([])
+    cfg = launch_config(work_dir, kit_dir, console, FakeRunner(work_dir),
+                        stack_check=lambda _env: True, ledger_check=check)
+    rc = dl.start_program(cfg, kit_dir, work_dir)
+    assert rc == 1
+    assert expected in console.text()
+    # It stops BEFORE starting anything — a refusal that already launched the
+    # services would be a warning, not a gate.
+    assert started == []
+
+
 def test_ensure_operator_spawns_the_operator_module(work_dir, monkeypatch):
     """The launcher supervises `python -m knowledge_hub.operator_http` —
     the exact process OPERATOR_API_NOTES documents, nothing bespoke."""
@@ -863,7 +944,11 @@ def test_start_program_waits_for_vault_and_reports_sealed(kit_dir, work_dir,
     cfg = LaunchConfig(kit_dir=kit_dir, work_dir=work_dir,
                        runner=FakeRunner(work_dir), input_fn=lambda _: "",
                        print_fn=lines.append,
-                       stack_check=lambda _env: True)
+                       stack_check=lambda _env: True,
+                       # This test is about the VAULT gate; the ledger gate
+                       # sits earlier in start_program and would otherwise
+                       # refuse first (no bundle in a tmp work dir).
+                       ledger_check=lambda _w, _e: clean_ledger())
     rc = dl.start_program(cfg, kit_dir, work_dir)
     assert rc == 1
     assert waited == ["http://localhost:18200"]     # readiness gate ran

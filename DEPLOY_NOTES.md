@@ -11,6 +11,9 @@ khctl probe    read-only sweep of the environment   -> probe_report.json
 khctl plan     preset x probe x operator choices    -> deploy_plan.json + .env.deploy
 khctl apply    execute the plan                     (STUB — phases printed)
 khctl verify   prove the plan's claims live         (STUB — refactor below)
+
+khctl migrations status        ledger vs database, per migration (READ-ONLY)
+khctl migrations mark-applied  record DDL that reached the DB out-of-band
 ```
 
 `probe_report.json` + `deploy_plan.json` + `.env.deploy` are the **engagement
@@ -33,6 +36,62 @@ Design rules encoded in `deploy_profiles.py`:
   the Scenario-2 fork is surfaced as an error with the three options.
 - **Secrets are never "theirs"** — see the note in profiles.toml (S2
   principal-registry isolation).
+
+## DONE (2026-08-03) — the migration ledger gets a real model (`migrations.py`)
+
+Found on the pilot DB: migrations 011/012/013 had every object present and
+**no `schema_migrations` row**. Their DDL had been executed out-of-band (psql,
+not `khctl apply`), and nothing in the codebase could see it.
+
+Why it was invisible, and what each fix closes:
+
+| Blind spot | Fix |
+|---|---|
+| `phase_schema` trusted the ledger alone, so it would replay 011 onto its own tables and die on a raw psycopg `DuplicateTable`, aborting the phase with 012/013 unreached | classifies every file against the ledger **and** the live objects first; any disagreement raises `ApplyError` with the remediation |
+| `khctl` could not answer "what is applied?" at all — two progress docs disagreed with no way to settle it | `khctl migrations status`, read-only (`default_transaction_read_only=on`), exit 1 on drift |
+| `stack_alive` asked only whether the ledger TABLE existed, so a stack with an empty ledger read as fully deployed | requires a **non-empty** ledger |
+| `khctl verify` proved the schema was PRESENT, never that the ledger was HONEST about it (`check_postgres` asserts `ontology_active` exists — it did) | `checks.check_migrations`, selected whenever the plan has a postgres seam |
+| the launcher would happily start ingest onto a drifted schema | `start_program` gates on the ledger before anything starts (seam: `LaunchConfig.ledger_check`, so the gate is testable dry) |
+
+`knowledge_hub/migrations.py` is the single owner. States: `APPLIED`,
+`PENDING`, `APPLIED?` (ledger row only), and three BROKEN kinds —
+`objects-without-ledger`, `ledger-without-objects`, `partial`.
+
+**Verification is by name, and says what it does not cover.** Each file is
+parsed for the tables / indexes / views it creates plus the columns it adds,
+and those names are looked up in the live catalog. Two rules keep it honest:
+
+- **Objects an earlier file created are not evidence about this file.** The
+  baseline creates `review_queue`; 001/003/004 each `CREATE OR REPLACE` it. So
+  a file's verifiable set excludes everything the baseline and every earlier
+  file create — otherwise a deploy that died mid-replay would read as drift
+  instead of a resumable stop.
+- **Columns count**, because 007 only redefines 006's view: its two
+  `ADD COLUMN`s on `benchmark_runs` are the sole evidence it ran, and they
+  carry no `IF NOT EXISTS`, so replaying an applied 007 fails exactly like a
+  duplicate `CREATE TABLE`.
+
+Not verified by name: `ADD CONSTRAINT` (003 has the only one) and
+functions/triggers (this set has none). Both are reported per file as a
+coverage note rather than implied away. `test_every_bundled_migration_has_
+something_verifiable` fails if a future migration lands with nothing unique
+to check.
+
+The ledger table gained a nullable `note` column, added by `ensure_ledger`'s
+idempotent DDL rather than a numbered migration — the ledger is the migration
+system's own bookkeeping, and a migration that repairs the ledger could not
+run on a database whose ledger is the broken thing.
+
+**The repair, 2026-08-03:** `khctl migrations mark-applied` recorded 011/012/013
+with `--observed-at 2026-08-03T21:27:07.336715+00:00` (from
+`ontology_active.activated_at`, the 011 seed row that timestamps the same
+contiguous `pg_class` oid burst 231976–232027 that created all three) and a
+`--note` saying it was a backfill. A note is **mandatory**: a backfilled row
+that looks identical to a replayed one is what let this hide. `mark-applied`
+refuses any file whose objects are not verifiably all present — a pending
+migration must be replayed, and a half-applied one is a schema repair no
+ledger row can stand in for. Result: 13 applied, 0 pending, and no data row
+touched.
 
 ## DONE (2026-07-24) — checks.py refactor + `khctl verify`
 

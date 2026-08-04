@@ -523,13 +523,22 @@ def phase_services(ctx: ApplyContext) -> list[str]:
 def phase_schema(ctx: ApplyContext) -> list[str]:
     dsn = dsn_from_env(ctx.env)
     schema_file = ctx.infra_dir / "knowledge_hub_baseline_schema.sql"
-    migrations = sorted((ctx.infra_dir / "migrations").glob("*.sql"))
+    migrations_dir = ctx.infra_dir / "migrations"
+    migrations = sorted(migrations_dir.glob("*.sql"))
     if ctx.dry_run:
+        # No connection on a dry run, by contract: the walk happens with the
+        # services phase not yet run, so there may be no Postgres to ask. Real
+        # ledger-vs-database state comes from `khctl migrations status`.
         return [f"[dry-run] would ensure baseline schema + replay "
                 f"{len(migrations)} migration(s) against "
                 f"{ctx.env.get('POSTGRES_HOST', 'localhost')}:"
-                f"{ctx.env.get('POSTGRES_PORT', '5432')}"]
+                f"{ctx.env.get('POSTGRES_PORT', '5432')}",
+                "[dry-run] (ledger drift is checked wet, not here — "
+                "`khctl migrations status` reports it read-only)"]
     import psycopg
+
+    from knowledge_hub import migrations as mig
+
     lines = []
     # connect_timeout: same dual-stack localhost black-hole class as
     # factstore_pg._conn — bounded fall-through beats an infinite wedge
@@ -546,22 +555,23 @@ def phase_schema(ctx: ApplyContext) -> list[str]:
             lines.append("baseline schema applied")
         else:
             lines.append(f"schema already applied ({tables} public tables)")
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS schema_migrations ("
-            " filename TEXT PRIMARY KEY,"
-            " applied_at TIMESTAMPTZ NOT NULL DEFAULT now())")
+        mig.ensure_ledger(conn)
+        # THE GATE (added after the 2026-08-03 pilot finding): classify every
+        # file against the ledger AND the live objects BEFORE replaying
+        # anything. Previously this loop trusted the ledger alone, so a
+        # migration whose DDL had arrived out-of-band was replayed and died on
+        # a raw Postgres DuplicateTable, aborting the phase with 012/013 never
+        # reached. Drift is a state a human reconciles, not one apply patches.
+        statuses = mig.status(conn, migrations_dir, schema_file)
+        if mig.broken(statuses):
+            raise ApplyError(mig.drift_message(statuses))
         applied_n = 0
-        for migration in migrations:
-            seen = conn.execute(
-                "SELECT count(*) FROM schema_migrations WHERE filename = %s",
-                (migration.name,)).fetchone()[0]
-            if seen:
-                continue
+        for status in mig.pending(statuses):
             conn.execute("SET search_path = public, ag_catalog;")
-            conn.execute(migration.read_text(encoding="utf-8"))
+            conn.execute(status.file.path.read_text(encoding="utf-8"))
             conn.execute(
                 "INSERT INTO schema_migrations (filename) VALUES (%s)",
-                (migration.name,))
+                (status.filename,))
             applied_n += 1
         lines.append(f"migrations: {applied_n} applied, "
                      f"{len(migrations) - applied_n} already present")

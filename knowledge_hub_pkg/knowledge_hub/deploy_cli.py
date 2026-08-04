@@ -9,6 +9,13 @@ Terraform-shaped on purpose:
   khctl verify   prove the plan's claims live     (knowledge_hub.checks,
                  plan-selected — same primitives as check_stack.py)
 
+Schema state (migrations.py — the ledger's own front door):
+
+  khctl migrations status        READ-ONLY: what the ledger claims vs what
+                                the database actually has, per migration
+  khctl migrations mark-applied  record DDL that reached the database
+                                outside apply (note REQUIRED)
+
 Kit lifecycle (deploy_kit.py — the producer to apply's consumer):
 
   khctl make-kit    assemble the signed, air-gap-capable kit onto the SSD
@@ -233,6 +240,10 @@ def verify_checks_for(plan: DeployPlan) -> list[tuple[str, object]]:
 
     if has_db:
         selected.append(("postgres", checks.check_postgres))
+        # Straight after postgres: the schema being PRESENT and the ledger
+        # being HONEST about it are two different claims, and only the first
+        # one was ever verified (2026-08-03 pilot finding).
+        selected.append(("migration ledger", checks.check_migrations))
     if "object_store" in plan.seams:
         selected.append(("seaweedfs (s3)", checks.check_s3_worm))
     if "secrets" in plan.seams:
@@ -349,6 +360,161 @@ def _cmd_verify_kit(args: argparse.Namespace) -> int:
         return 1
     print("-" * 44)
     print("[ OK ] kit verified — safe to hand to khctl apply")
+    return 0
+
+
+def _migrations_target(args: argparse.Namespace) -> tuple[Path, Path, str, str]:
+    """(migrations_dir, baseline, dsn, where-the-dsn-came-from) for the
+    migrations subcommands. Same inputs apply uses — --infra-dir for the
+    bundle, --env-file for the config — so status reports on exactly the
+    database the deployed processes read, not a guess."""
+    from knowledge_hub.deploy_apply import dsn_from_env, parse_env_file
+    from knowledge_hub.migrations import BASELINE_SCHEMA
+
+    infra_dir = Path(args.infra_dir).resolve()
+    env_file = Path(args.env_file)
+    if env_file.exists():
+        env = parse_env_file(env_file)
+        return (infra_dir / "migrations", infra_dir / BASELINE_SCHEMA,
+                dsn_from_env(env),
+                f"{env_file} -> {env.get('POSTGRES_HOST', 'localhost')}:"
+                f"{env.get('POSTGRES_PORT', '5432')}/"
+                f"{env.get('POSTGRES_DB', 'knowledge_hub')}")
+    from knowledge_hub.config import settings
+    return (infra_dir / "migrations", infra_dir / BASELINE_SCHEMA,
+            settings.postgres_dsn,
+            f"config defaults ({env_file} absent) -> "
+            f"{settings.postgres_host}:{settings.postgres_port}/"
+            f"{settings.postgres_db}")
+
+
+def _cmd_migrations_status(args: argparse.Namespace) -> int:
+    """READ-ONLY: what the ledger claims vs what the database actually has.
+
+    The question khctl could not answer before 2026-08-03, which is how two
+    progress docs came to disagree about whether 011-013 were applied with no
+    way to settle it. Connects with default_transaction_read_only=on, so this
+    is safe to run against a client's production box: a write would error
+    rather than land.
+    """
+    import psycopg
+
+    from knowledge_hub import migrations as mig
+
+    migrations_dir, baseline, dsn, origin = _migrations_target(args)
+    if not migrations_dir.is_dir():
+        print(f"no migrations/ under {migrations_dir.parent} — point "
+              f"--infra-dir at the bundle folder (the kit, or the repo root)",
+              file=sys.stderr)
+        return 2
+    print(f"Knowledge Hub — migration ledger vs database\n"
+          f"  target: {origin}\n"
+          f"  files : {migrations_dir}\n" + "-" * 44)
+    try:
+        with psycopg.connect(dsn, autocommit=True, connect_timeout=10,
+                             options="-c default_transaction_read_only=on"
+                             ) as conn:
+            if not mig.ledger_exists(conn):
+                print(f"[WARN] no {mig.LEDGER_TABLE} table — this database has "
+                      f"never been through `khctl apply`")
+            statuses = mig.status(conn, migrations_dir, baseline)
+    except Exception as e:
+        print(f"[FAIL] cannot read the database: {type(e).__name__}: {e}")
+        return 1
+    for line in mig.format_report(statuses):
+        print(line)
+    print("-" * 44)
+    bad = mig.broken(statuses)
+    todo = mig.pending(statuses)
+    if bad:
+        print(f"[FAIL] {len(bad)} migration(s) BROKEN — ledger and database "
+              f"disagree:")
+        for s in bad:
+            print(f"       {s.filename}  [{s.state}]")
+        print("       Reconcile deliberately before applying or ingesting. "
+              "For DDL that reached the database outside khctl apply, "
+              "`khctl migrations mark-applied` records it (a note is "
+              "REQUIRED, so a backfilled row never looks like a replayed "
+              "one).")
+        return 1
+    print(f"[ OK ] ledger agrees with the database — "
+          f"{len(statuses) - len(todo)} applied, {len(todo)} pending")
+    return 0
+
+
+def _cmd_migrations_mark_applied(args: argparse.Namespace) -> int:
+    """Record migrations as applied WITHOUT running them.
+
+    Only legal for a file whose objects VERIFIABLY already exist (state
+    BROKEN:objects-without-ledger). Anything else is refused: a pending
+    migration must be replayed by apply, and a half-applied one
+    (BROKEN:partial) is a schema repair no ledger row can stand in for.
+    """
+    import psycopg
+
+    from knowledge_hub import migrations as mig
+
+    migrations_dir, baseline, dsn, origin = _migrations_target(args)
+    observed = None
+    if args.observed_at:
+        from datetime import datetime
+        try:
+            observed = datetime.fromisoformat(args.observed_at)
+        except ValueError:
+            print(f"--observed-at is not ISO-8601: {args.observed_at!r}",
+                  file=sys.stderr)
+            return 2
+    print(f"Knowledge Hub — ledger backfill\n  target: {origin}\n" + "-" * 44)
+    with psycopg.connect(dsn, autocommit=True, connect_timeout=10) as conn:
+        statuses = {s.filename: s
+                    for s in mig.status(conn, migrations_dir, baseline)}
+        planned = []
+        for name in args.file:
+            s = statuses.get(name)
+            if s is None:
+                print(f"[FAIL] {name} is not a bundled migration file "
+                      f"(known: {', '.join(sorted(statuses)) or 'none'})")
+                return 1
+            if s.state == mig.OBJECTS_NO_LEDGER:
+                planned.append(s)
+                continue
+            print(f"[FAIL] {name} is {s.state}, not "
+                  f"{mig.OBJECTS_NO_LEDGER} — mark-applied records DDL that "
+                  f"is already present, and this file's objects are not "
+                  f"verifiably all there. Refusing.")
+            return 1
+        if not planned:
+            print("[FAIL] nothing to do — pass --file for each migration to "
+                  "record")
+            return 1
+        for s in planned:
+            print(f"  {s.filename}")
+            print(f"    objects verified present: {', '.join(s.present)}")
+        print(f"  recorded on every row above:")
+        print(f"    applied_at: "
+              f"{observed.isoformat() if observed else 'now()'}")
+        print(f"    note      : {args.note}")
+        if not args.yes:
+            try:
+                answer = input(
+                    "\nWrite these ledger rows? [y/N] ").strip().lower()
+            except EOFError:
+                # Non-interactive and no --yes: refuse rather than traceback.
+                # Writing on an unanswerable prompt would be the wrong default.
+                print("no console to confirm on and --yes not given — "
+                      "nothing written")
+                return 1
+            if answer not in ("y", "yes"):
+                print("aborted — nothing written")
+                return 1
+        print("-" * 44)
+        for s in planned:
+            wrote = mig.mark_applied(conn, s.filename, args.note, observed)
+            print(f"[ OK ] {s.filename} recorded" if wrote
+                  else f"[WARN] {s.filename} already had a row — left alone")
+    print("-" * 44)
+    print("[ OK ] backfill complete — re-run `khctl migrations status` to "
+          "confirm the ledger now agrees with the database")
     return 0
 
 
@@ -804,6 +970,42 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("verify", help="prove a deployed plan's claims live")
     p.add_argument("--plan", default="deploy_plan.json")
     p.set_defaults(fn=_cmd_verify)
+
+    p = sub.add_parser("migrations",
+                       help="what is ACTUALLY applied: ledger vs database")
+    msub = p.add_subparsers(dest="migrations_command", required=True)
+
+    mp = msub.add_parser(
+        "status",
+        help="READ-ONLY: compare the ledger against the live objects, "
+             "per migration (exit 1 on drift)")
+    mp.add_argument("--infra-dir", default=".",
+                    help="bundle folder with migrations/ + the baseline "
+                         "schema (the kit, or the repo root)")
+    mp.add_argument("--env-file", default=".env",
+                    help="the config the deployed processes read — status "
+                         "reports on THAT database, not a guess")
+    mp.set_defaults(fn=_cmd_migrations_status)
+
+    mp = msub.add_parser(
+        "mark-applied",
+        help="record migrations whose DDL reached the database outside "
+             "khctl apply; refuses unless the objects verifiably exist")
+    mp.add_argument("--file", action="append", required=True,
+                    metavar="NNN_name.sql",
+                    help="migration filename to record (repeatable)")
+    mp.add_argument("--note", required=True,
+                    help="REQUIRED: why this row is written without a "
+                         "replay — a backfilled row must never be "
+                         "indistinguishable from a replayed one")
+    mp.add_argument("--observed-at",
+                    help="ISO-8601 timestamp the DDL actually ran, when the "
+                         "database can evidence one (else now() is recorded)")
+    mp.add_argument("--yes", action="store_true",
+                    help="skip the confirmation prompt (scripted repair)")
+    mp.add_argument("--infra-dir", default=".")
+    mp.add_argument("--env-file", default=".env")
+    mp.set_defaults(fn=_cmd_migrations_mark_applied)
 
     p = sub.add_parser("make-kit",
                        help="assemble the deployment kit (SSD image)")

@@ -180,11 +180,22 @@ class ResolutionService:
             for k, v in keys.items():
                 params += [k, str(v)]
             with self.store.transaction(tenant_id) as conn:
+                # prepare=False, ON PURPOSE. The key NAME is a bind parameter
+                # (attributes->>%s), so a prepared statement's generic plan
+                # can't use the expression index from migration 016
+                # (ix_entities_key_uslm_identifier indexes the literal
+                # expression attributes->>'uslm_identifier'). psycopg auto-
+                # prepares after 5 executions; once the generic plan kicks in,
+                # every probe seq-scans the whole registry (~7ms) instead of
+                # hitting the index. prepare=False forces a per-value custom
+                # plan (~0.15ms planning) that folds the key name to a literal
+                # and keeps the index in play. Removing this re-breaks 016.
                 rows = conn.execute(
                     f"SELECT id FROM entities"
                     f" WHERE tenant_id = %s AND entity_type = %s"
                     f"   AND valid_to IS NULL AND ({clauses})",
-                    (tenant_id, mention.entity_type, *params)).fetchall()
+                    (tenant_id, mention.entity_type, *params),
+                    prepare=False).fetchall()
             for r in rows:
                 hit(r["id"], "key")
 

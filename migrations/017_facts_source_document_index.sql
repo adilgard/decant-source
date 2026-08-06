@@ -1,0 +1,41 @@
+-- ============================================================================
+-- MIGRATION 017 — FACTS SOURCE-DOCUMENT INDEX
+-- Applies ON TOP of 016. Additive only. No table shape changes, no code
+-- lock-step required: promotion's queries are unchanged — this makes the
+-- lookups they already run index hits.
+-- ----------------------------------------------------------------------------
+-- WHY. Promotion reads the facts table BY DOCUMENT, repeatedly:
+--   * _current_ontology_versions / _current_producers — the supersession
+--     triggers' evidence — run once per (document, version) wave, filtered
+--     on source_document_id (or the chunk fallback, see 018);
+--   * promote_pending's staleness guard anti-joins every still-pending
+--     fact against the served corpus on the same columns, every call.
+-- The only index facts carries is (tenant_id), which on a one-tenant
+-- corpus selects nothing: every one of those reads is a sequential scan
+-- of a table that GROWS as the drain promotes into it. On the Title 26
+-- drain that shape ran ~2 scans x ~287 document groups x ~130 sweeps
+-- against up to ~100k rows. Same failure class as 016: the selective
+-- predicate is the one nothing indexes.
+--
+-- SINGLE STATEMENT, NO BEGIN/COMMIT, ON PURPOSE. CONCURRENTLY cannot run
+-- inside a transaction block. The runner (deploy_apply.phase_schema)
+-- executes each file over an autocommit connection via the simple query
+-- protocol; a ONE-statement file therefore runs outside any transaction
+-- and CONCURRENTLY is legal. A second statement in this file would
+-- re-wrap it in an implicit transaction and Postgres would refuse. The
+-- chunk-side sibling is therefore its own file (018).
+--
+-- IF A CONCURRENT BUILD FAILS it leaves an INVALID index behind with no
+-- ledger row — `khctl migrations status` will then report
+-- BROKEN:objects-without-ledger for this file. The repair is:
+--     DROP INDEX IF EXISTS ix_facts_source_document;
+-- then re-run apply. Do not mark-applied over an invalid index.
+--
+-- NOT PARTIAL, ON PURPOSE. Same reasoning as 016: a `WHERE valid_to IS
+-- NULL` predicate would shave the index but ties its use to
+-- predicate-implication proofs; the plain form provably serves every
+-- query shape on this column, and retired rows cost nothing material.
+-- ============================================================================
+
+CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_facts_source_document
+    ON facts (source_document_id);

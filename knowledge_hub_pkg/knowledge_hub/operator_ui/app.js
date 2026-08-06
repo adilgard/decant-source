@@ -229,8 +229,9 @@ function renderMonitor() {
   // Tile 4 — serving p95 vs the budget the SERVER declares (never a number
   // frozen into the shell).
   $("tile-p95").textContent = m.p95_ms === null ? "—" : Math.round(m.p95_ms);
+  // Stage 4: say what p95 means instead of assuming the reader knows.
   $("tile-p95-budget").textContent =
-    "budget " + m.p95_budget_ms + " ms · read-only channel";
+    "19 of 20 reads answer within this · budget " + m.p95_budget_ms + " ms";
   gauge($("tile-p95-gauge"), $("tile-p95-pct"),
     m.p95_ms === null ? 0 : 100 * m.p95_ms / m.p95_budget_ms, "#c9b8ff");
 
@@ -306,7 +307,7 @@ function sourceRow(s) {
   const note = s.status_reason
     ? s.status_reason
     : (done ? "idle between sweeps · " + lastRun
-            : "backfill in progress · " + lastRun);
+            : "first full sweep in progress · " + lastRun);
   const btnLabel = paused ? "Resume" : "Pause";
   // Stage 2: no fabricated percentage. Without a corpus total (adapters
   // don't report one yet) a determinate bar is unknowable — the old bar
@@ -349,7 +350,8 @@ function renderSources(sources) {
   const list = $("sources-list");
   list.textContent = "";
   if (!sources.length) {
-    list.innerHTML = '<div style="font-size:11px;color:#5c6f9e">no sources registered for this tenant yet</div>';
+    // Stage 4: an empty state says what to DO, not just what is absent.
+    list.innerHTML = '<div style="font-size:11px;color:#5c6f9e">no sources yet — land a folder on the Data landing tab and it appears here with live progress</div>';
     return;
   }
   sources.forEach((s) => list.appendChild(sourceRow(s)));
@@ -385,7 +387,7 @@ async function refreshActivity() {
     feed.appendChild(row);
   });
   if (!events.length) {
-    feed.innerHTML = '<div style="color:#5c6f9e;padding:5px 8px">quiet — nothing has moved yet</div>';
+    feed.innerHTML = '<div style="color:#5c6f9e;padding:5px 8px">quiet — nothing has moved yet. Start an ingest on the Data landing tab and this feed narrates every step.</div>';
     $("status-line").textContent = "watching";
   } else {
     $("status-line").textContent = events[0].text.replace(/\s+/g, " ");
@@ -418,6 +420,16 @@ const REVIEW_KINDS = {
     a: "Resolve — tag stands corrected", r: null,
     keys: "A resolve · space skip",
   },
+};
+
+/* Stage 4: plain language where a human reads, the raw code kept in
+ * parens where a human might need to quote it (to khctl, to a teammate,
+ * to a bug report). Unknown codes fall through raw — the glossary must
+ * never hide a new failure class. */
+const QUARANTINE_PLAIN = {
+  unbound_predicate: "uses a relationship the ontology does not allow",
+  unbound_entity_type: "names an entity type the ontology does not allow",
+  validation_failure: "came back in a shape that could not be checked",
 };
 async function refreshReviews(keepCurrent) {
   const resp = await api("/v1/reviews");
@@ -496,7 +508,7 @@ function renderDetail() {
 
   if (d.kind === "merge") {
     $("rv-question").textContent = d.question;
-    $("rv-blurb").textContent = "The resolver stopped here on purpose: the score fell in the gray band and it will not decide alone.";
+    $("rv-blurb").textContent = "The resolver stopped here on purpose: the score landed in the undecided middle — too high to keep separate automatically, too low to merge automatically (the gray band) — so a human makes the call.";
     $("rv-scorebar").classList.remove("kh-hide");
     $("rv-cands").classList.remove("kh-hide");
     $("rv-evidence").classList.remove("kh-hide");
@@ -518,11 +530,18 @@ function renderDetail() {
     renderPassage(d.passage, b ? b.name : null);
   } else {
     $("rv-question").textContent = d.kind === "quarantine"
-      ? "Quarantined extraction — " + (d.detail || d.reason)
+      ? "Quarantined extraction — " + (d.detail || QUARANTINE_PLAIN[d.reason] || d.reason)
       : "Flagged document — " + (d.title || "");
     $("rv-blurb").textContent = d.kind === "quarantine"
-      ? "The extractor produced something the ontology does not bind (" + d.reason + "). A = resolve · R = dismiss."
-      : "Capture detected a data-track mismatch (" + (d.review_reason || "") + "). A = resolve, tag stands corrected.";
+      ? "This fact was held out of the corpus: it "
+        + (QUARANTINE_PLAIN[d.reason] || d.reason)
+        + ". Nothing the vocabulary does not permit is ever stored. "
+        + "Resolve records the correction as extraction feedback; Dismiss "
+        + "just clears it. (reason code: " + d.reason + ")"
+      : "The document arrived labeled one way, but its content looks like "
+        + "another — a wrong label would send it down the wrong pipeline. "
+        + "Resolving records the corrected label and re-queues it. "
+        + "(capture said: " + (d.review_reason || "no detail") + ")";
     $("rv-scorebar").classList.add("kh-hide");
     $("rv-cands").classList.add("kh-hide");
     $("rv-evidence").classList.add("kh-hide");
@@ -629,7 +648,7 @@ async function decide(kind) {
     const survivor = d.candidate_a ? d.candidate_a.name : "the surviving record";
     showDecision("Merged into " + survivor + ". The change is reversible — the snapshot is " + (body.snapshot_ref || "recorded") + ". Press S to undo.");
   } else if (action === "resolve_merge") {
-    showDecision("Kept separate. Both records stand; the pair is now a labeled hard negative for the flywheel.");
+    showDecision("Kept separate. Both records stand, and the pair is remembered as a confirmed 'not the same' example that sharpens future matching.");
   } else if (action === "split_merge") {
     showDecision("Split. Both records are restored and the dependent facts re-resolved. (" + (body.target || "") + ")");
     state.lastMergeId = null;
@@ -674,7 +693,7 @@ async function refreshOntology() {
   const list = $("onto-list");
   list.textContent = "";
   if (!body.versions.length) {
-    list.innerHTML = '<div style="font-size:11px;color:#5c6f9e">no ontology versions loaded yet — import one</div>';
+    list.innerHTML = '<div style="font-size:11px;color:#5c6f9e">no ontology versions loaded yet — import one with the box on the right, then select it to make it count</div>';
     return;
   }
   body.versions.forEach((v) => list.appendChild(ontologyRow(v)));
@@ -1119,7 +1138,7 @@ async function refreshJobs() {
   const list = $("ld-jobs");
   list.textContent = "";
   if (!body.jobs.length) {
-    list.innerHTML = '<div style="font-size:11px;color:#5c6f9e">no jobs yet</div>';
+    list.innerHTML = '<div style="font-size:11px;color:#5c6f9e">no jobs yet — type a folder path on the left and Start; progress shows here and survives a page reload</div>';
     return;
   }
   body.jobs.forEach((j) => list.appendChild(jobRow(j)));

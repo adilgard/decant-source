@@ -226,6 +226,10 @@ def test_activity_feed_speaks_the_pipeline_voice(
                ("capture", "process", "extract", "resolve", "operator")
                for e in events)
     assert any("parsed · chunked · embedded" in e["text"] for e in events)
+    # Stage 4: the feed speaks plain language — the seeded llm_joint run
+    # reads "(language model)", never the raw strategy identifier.
+    assert any("(language model)" in e["text"] for e in events)
+    assert not any("llm_joint" in e["text"] for e in events)
 
 
 # ---------------------------------------------------------------------------
@@ -251,9 +255,11 @@ def test_reviews_listing_and_candidate_pair_evidence(
     merge_item = by_id[f"match:{candidate_id}"]
     assert merge_item["kind"] == "merge"
     assert "Granite Botanicals" in merge_item["title"]
-    assert merge_item["subtitle"] == "merge · 0.62 gray band"
+    # Stage 4: listing subtitles speak plain language; raw codes stay on
+    # the detail payload.
+    assert merge_item["subtitle"] == "merge · score 0.62 · in the undecided band"
     assert by_id[f"quarantine:{qid}"]["subtitle"] \
-        == "quarantine · unbound_predicate"
+        == "quarantine · uses a relationship the ontology does not allow"
 
     # The candidate-pair evidence panel.
     d = op_client.get(f"/v1/reviews/match:{candidate_id}",
@@ -1004,3 +1010,41 @@ def test_stage3_hierarchy_one_home_per_number(op_client):
                  "every fact will carry its source passage",
                  "read is safe : act is deliberate"):
         assert kept in html, f"character stripped: {kept}"
+
+
+def test_stage4_plain_language_and_guiding_empty_states(op_client):
+    """d.s Stage 4: no unexplained jargon on screen; raw codes stay in
+    parens where a human might need to quote them; empty states say what
+    to do next; primary controls carry a one-line 'what this does'."""
+    html = op_client.get("/ui/").text
+    js = op_client.get("/ui/app.js").text
+
+    # Quarantine reasons: the glossary covers every code the extractor
+    # writes today, and the raw code stays quotable in the detail blurb.
+    for code in ("unbound_predicate", "unbound_entity_type",
+                 "validation_failure"):
+        assert code in js, f"glossary lost the {code} code"
+    assert "QUARANTINE_PLAIN" in js
+    assert "(reason code: " in js
+    # The gray band is DEFINED where it appears, in plain words.
+    assert "undecided middle" in js
+    assert "fell in the gray band" not in js and "fell in the gray band" not in html
+    # Flywheel jargon is gone from the kept-separate confirmation.
+    assert "hard negative" not in js and "flywheel" not in js
+    # WORM and p95 are explained where they appear.
+    assert "never edited (WORM)" in html
+    assert "documents landed, WORM" not in html
+    assert "19 of 20 reads" in js
+    # Pause says what it does, not who may press it.
+    assert "nothing already ingested changes" in html
+    assert "pause / resume are operator actions" not in html
+    # Empty states guide the next step (both the static shell and the
+    # re-rendered versions).
+    assert "land a folder on the Data landing tab" in html
+    assert "land a folder on the Data landing tab" in js
+    assert "type a folder path on the left and Start" in html
+    assert "this feed narrates every step" in js
+    assert "import one with the box on the right" in js
+    # One-line 'what this does' under the primary controls.
+    assert "safe to re-run, files already ingested are skipped" in html
+    assert "default for future ingests — nothing re-runs by itself" in html

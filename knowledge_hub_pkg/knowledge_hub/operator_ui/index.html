@@ -156,7 +156,7 @@ a:hover{color:#c3d5ff;text-decoration:underline}
             <div style="padding:13px;clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);border:1px solid rgba(160,190,255,.25);background:rgba(120,150,255,.07)">
               <div style="display:flex;align-items:center;gap:7px;margin-bottom:7px"><div style="font-family:Silkscreen,Consolas,monospace;font-size:9px;color:#9fc0ff">→</div><div style="font-family:Silkscreen,Consolas,monospace;font-size:7.5px;letter-spacing:.16em;color:#9fc0ff">01 : CAPTURE</div></div>
               <div id="st-capture-n" style="font-size:23px;font-weight:600;color:#e9f0ff;line-height:1">—</div>
-              <div style="font-size:10.5px;color:#5c6f9e;margin:5px 0 9px">documents landed, WORM</div>
+              <div style="font-size:10.5px;color:#5c6f9e;margin:5px 0 9px">originals stored, never edited (WORM)</div>
               <div style="position:relative;height:9px;border-radius:5px;overflow:hidden;background:rgba(255,255,255,.08)">
                 <div id="st-capture-bar" style="position:absolute;inset:0 100% 0 0;border-radius:5px;background:linear-gradient(90deg,#4d6bff,#9fc0ff);box-shadow:0 0 10px rgba(120,150,255,.7)"></div>
                 <div style="position:absolute;top:0;bottom:0;left:0;width:22%;background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.5),rgba(255,255,255,0));animation:khShine 2.6s ease-in-out infinite"></div>
@@ -214,10 +214,11 @@ a:hover{color:#c3d5ff;text-decoration:underline}
           <div style="padding:16px 18px;clip-path:polygon(16px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 16px);border:1px solid rgba(255,255,255,.14);background:linear-gradient(160deg,rgba(120,150,255,.08),rgba(255,255,255,.03));backdrop-filter:blur(12px)">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
               <div style="font-size:14px;font-weight:600;letter-spacing:.04em;color:#e9f0ff">Per-source progress</div>
-              <div style="font-size:11px;color:#5c6f9e">pause / resume are operator actions</div>
+              <!-- Stage 4: what the control DOES, not who may press it. -->
+              <div style="font-size:11px;color:#5c6f9e">Pause stops future sweeps of a source — nothing already ingested changes</div>
             </div>
             <div id="sources-list" style="display:flex;flex-direction:column;gap:14px">
-              <div style="font-size:11px;color:#5c6f9e">no sources registered for this tenant yet</div>
+              <div style="font-size:11px;color:#5c6f9e">no sources yet — land a folder on the Data landing tab and it appears here with live progress</div>
             </div>
             <div id="bars" style="margin-top:15px;display:flex;align-items:flex-end;gap:3px;height:52px;padding:10px 12px;border-radius:12px;background:rgba(0,2,12,.5);border:1px solid rgba(255,255,255,.08)"></div>
             <div style="font-size:11px;color:#5c6f9e;margin-top:6px">throughput, documents/min · last 28 minutes · now <span id="permin">—</span>/min</div>
@@ -246,7 +247,7 @@ a:hover{color:#c3d5ff;text-decoration:underline}
             <div style="flex:1"></div>
             <div id="rv-keys" style="font-family:Consolas,'Lucida Console',monospace;font-size:10.5px;color:#8fa8d8;white-space:nowrap">A / R decide · space skip</div>
           </div>
-          <div style="font-size:12px;color:#8fa8d8;margin-top:6px;line-height:1.6">These are the calls the pipeline refuses to make alone: entity merges scoring in the gray band, extractions the ontology cannot bind, documents whose data track looks wrong. Nothing here has been decided yet — your call is recorded on the audit trail, and every merge is reversible. <span style="color:#b9cdf5">A</span> accepts the action named on the button, <span style="color:#b9cdf5">R</span> the alternative, <span style="color:#b9cdf5">S</span> splits the last merge you made this session, <span style="color:#b9cdf5">space</span> skips without writing anything.</div>
+          <div style="font-size:12px;color:#8fa8d8;margin-top:6px;line-height:1.6">These are the calls the pipeline refuses to make alone: possible duplicates its scorer can't settle, extracted facts the vocabulary doesn't allow, documents whose label doesn't match their content. Nothing here has been decided yet — your call is recorded on the audit trail, and every merge is reversible. <span style="color:#b9cdf5">A</span> accepts the action named on the button, <span style="color:#b9cdf5">R</span> the alternative, <span style="color:#b9cdf5">S</span> splits the last merge you made this session, <span style="color:#b9cdf5">space</span> skips without writing anything.</div>
         </div>
         <div style="padding:14px;clip-path:polygon(16px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 16px);border:1px solid rgba(255,255,255,.14);background:linear-gradient(160deg,rgba(120,150,255,.08),rgba(255,255,255,.03));backdrop-filter:blur(12px)">
           <div style="font-family:Silkscreen,Consolas,monospace;font-size:8.5px;letter-spacing:.2em;color:#7db4e8;margin-bottom:11px">QUEUE</div>
@@ -274,7 +275,7 @@ a:hover{color:#c3d5ff;text-decoration:underline}
               <div style="flex:1"></div>
               <div id="rv-itempos" style="font-family:Consolas,monospace;font-size:10px;letter-spacing:.1em;color:#5c6f9e">item — of —</div>
             </div>
-            <div id="rv-blurb" style="font-size:12px;color:#8fa8d8;margin-bottom:14px">The resolver stopped here on purpose: the score fell in the gray band and no identifier agreed.</div>
+            <div id="rv-blurb" style="font-size:12px;color:#8fa8d8;margin-bottom:14px">The resolver stopped here on purpose: the score landed in the undecided middle and no identifier settled it.</div>
 
             <div id="rv-scorebar" style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-radius:14px;background:rgba(230,215,140,.07);border:1px solid rgba(230,220,150,.3);margin-bottom:14px">
               <div id="rv-score" style="font-family:Consolas,monospace;font-size:12px;font-weight:700;color:#eadf9a">—</div>
@@ -368,7 +369,8 @@ a:hover{color:#c3d5ff;text-decoration:underline}
           <div style="padding:16px 18px;clip-path:polygon(16px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 16px);border:1px solid rgba(255,255,255,.14);background:linear-gradient(160deg,rgba(120,150,255,.08),rgba(255,255,255,.03));backdrop-filter:blur(12px)">
             <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
               <div style="font-size:14px;font-weight:600;letter-spacing:.04em;color:#e9f0ff">Loaded versions</div>
-              <div style="font-size:11px;color:#5c6f9e">importing is inert — selecting is the act</div>
+              <!-- Stage 4: what Select DOES, in one line. -->
+              <div style="font-size:11px;color:#5c6f9e">Select makes a version the default for future ingests — nothing re-runs by itself</div>
             </div>
             <div id="onto-list" style="display:flex;flex-direction:column;gap:12px">
               <div style="font-size:11px;color:#5c6f9e">loading…</div>
@@ -500,6 +502,7 @@ a:hover{color:#c3d5ff;text-decoration:underline}
                 </div>
               </div>
               <div id="ld-start" style="cursor:pointer;text-align:center;font-size:12.5px;font-weight:600;color:#ffffff;padding:11px;border-radius:17px;border:1px solid rgba(160,190,255,.6);background:linear-gradient(180deg,rgba(120,150,255,.5),rgba(70,100,235,.35));box-shadow:0 0 18px rgba(110,140,255,.45),0 1px 0 rgba(255,255,255,.35) inset">Start ingest job</div>
+              <div style="font-size:10.5px;color:#5c6f9e;text-align:center">stores the folder's files and processes them in the background — safe to re-run, files already ingested are skipped</div>
             </div>
             <div id="ld-msg-box" class="kh-hide" style="margin-top:12px;padding:12px 14px;border-radius:14px;border:1px solid rgba(123,224,200,.4);background:rgba(123,224,200,.08)">
               <div style="font-family:Silkscreen,Consolas,monospace;font-size:7.5px;letter-spacing:.18em;color:#7be0c8;margin-bottom:5px">QUEUED</div>
@@ -517,7 +520,7 @@ a:hover{color:#c3d5ff;text-decoration:underline}
               <div style="font-size:11px;color:#5c6f9e">background runner · progress refreshes with the poll</div>
             </div>
             <div id="ld-jobs" style="display:flex;flex-direction:column;gap:10px">
-              <div style="font-size:11px;color:#5c6f9e">no jobs yet</div>
+              <div style="font-size:11px;color:#5c6f9e">no jobs yet — type a folder path on the left and Start; progress shows here and survives a page reload</div>
             </div>
           </div>
         </div>

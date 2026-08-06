@@ -60,6 +60,43 @@ from knowledge_hub.factstore_pg import PostgresFactStore
 # operations._FLAGGED_GROUNDING (the serving state rule, reused for counts).
 _FLAGGED = ("span_missing", "components_missing")
 
+# ---------------------------------------------------------------------------
+# d.s Stage 4 — plain language at the display boundary. The raw codes stay
+# load-bearing everywhere else (DB rows, ops params, khctl output); ONLY the
+# console-facing strings composed here translate them. An unknown code falls
+# through raw — a translation table must never hide a new failure class.
+# ---------------------------------------------------------------------------
+_QUARANTINE_PLAIN = {
+    "unbound_predicate": "uses a relationship the ontology does not allow",
+    "unbound_entity_type": "names an entity type the ontology does not allow",
+    "validation_failure": "output did not fit the required shape",
+}
+_TIER_PLAIN = {
+    "t0": "exact identifier",
+    "t1": "name similarity",
+    "t1b": "statistical score",
+    "none": "no signal",
+}
+_DECISION_PLAIN = {
+    "resolved": "matched an existing entity",
+    "new_entity": "new entity created",
+    "review": "held for a human",
+}
+_STRATEGY_PLAIN = {
+    "llm": "language model",
+    "llm_joint": "language model",
+    "parser_supplied": "plugin",
+    "structured_map": "column mapping",
+}
+
+
+def _flag_plain(reason: Optional[str]) -> str:
+    """Flag reasons are stored PROSE (with spec citations) — translate the
+    known shape, fall through raw for anything new."""
+    if reason and reason.startswith("declared data_track"):
+        return "arrived labeled one way, content looks like another"
+    return reason or "at capture"
+
 _ACTIVITY_LIMIT = 30
 _THROUGHPUT_WINDOW_MIN = 28
 _SERVING_METRICS_TTL_S = 10.0
@@ -314,15 +351,16 @@ class OperatorReadService:
                     " strategy, status, created_at FROM extraction_runs"
                     " WHERE tenant_id = %s ORDER BY created_at DESC LIMIT %s",
                     (tenant, limit)):
+                strategy = _STRATEGY_PLAIN.get(r["strategy"], r["strategy"])
                 if r["status"] == "ok":
                     events.append((r["created_at"],
                                    f"extract  · {r['facts_staged']} facts +"
                                    f" {r['mentions_staged']} mentions staged"
                                    f" · {r['quarantined']} quarantined"
-                                   f" ({r['strategy']})"))
+                                   f" ({strategy})"))
                 else:
                     events.append((r["created_at"],
-                                   f"extract  · run failed ({r['strategy']})"))
+                                   f"extract  · run failed ({strategy})"))
             for r in conn.execute(
                     "SELECT mention_id, decision, tier, score, created_at"
                     " FROM resolution_decisions WHERE tenant_id = %s"
@@ -330,7 +368,8 @@ class OperatorReadService:
                 score = f" · {r['score']:.2f}" if r["score"] is not None else ""
                 events.append((r["created_at"],
                                f"resolve  · mention {r['mention_id']} →"
-                               f" {r['decision']} ({r['tier']}{score})"))
+                               f" {_DECISION_PLAIN.get(r['decision'], r['decision'])}"
+                               f" ({_TIER_PLAIN.get(r['tier'], r['tier'])}{score})"))
             for r in conn.execute(
                     "SELECT action, outcome, principal_id, created_at"
                     " FROM operator_audit WHERE tenant_id = %s"
@@ -377,25 +416,30 @@ class OperatorReadService:
                 " WHERE tenant_id = %s AND review_status = 'review'"
                 " ORDER BY ingested_at DESC LIMIT 100", (tenant,)).fetchall()
 
+        # Stage 4: listing subtitles speak plain language (the queue column
+        # is where a non-technical operator first meets these) — the raw
+        # codes stay on the detail payload for anyone who needs them.
         items: list[dict[str, Any]] = []
         for r in merges:
-            band = f" {r['band']} band" if r["band"] else ""
+            band = " · in the undecided band" if r["band"] == "gray" else (
+                f" · {r['band']} band" if r["band"] else "")
             items.append({
                 "id": f"match:{r['id']}", "kind": "merge",
                 "title": f"{r['left_name'] or '?'} / {r['right_name'] or '?'}",
-                "subtitle": f"merge · {r['match_score']:.2f}{band}",
+                "subtitle": f"merge · score {r['match_score']:.2f}{band}",
                 "score": r["match_score"], "at": _iso(r["created_at"])})
         for r in quarantined:
+            plain = _QUARANTINE_PLAIN.get(r["reason"], r["reason"])
             items.append({
                 "id": f"quarantine:{r['id']}", "kind": "quarantine",
-                "title": r["detail"] or r["reason"],
-                "subtitle": f"quarantine · {r['reason']}",
+                "title": r["detail"] or plain,
+                "subtitle": f"quarantine · {plain}",
                 "score": None, "at": _iso(r["created_at"])})
         for r in flagged:
             items.append({
                 "id": f"document:{r['id']}", "kind": "flagged",
                 "title": r["title"] or f"document {r['id']}",
-                "subtitle": f"flagged · {r['review_reason'] or 'at capture'}",
+                "subtitle": f"flagged · {_flag_plain(r['review_reason'])}",
                 "score": None, "at": _iso(r["ingested_at"])})
         return {"tenant_id": tenant, "counts": counts, "items": items}
 

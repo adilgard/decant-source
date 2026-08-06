@@ -975,6 +975,25 @@ class PostgresFactStore(FactStore):
         r["context_embedding"] = parse_vector(r["context_embedding"])
         return EntityMention(**r)
 
+    def get_mentions(self, tenant_id: str,
+                     mention_ids: Sequence[int]) -> list[EntityMention]:
+        """Batch get_mention: one query, ascending id order, missing ids
+        simply absent. Exists because the sweep loaded its 500-mention
+        batch one point query at a time — same rows, one round trip."""
+        if not mention_ids:
+            return []
+        rows = self._conn(tenant_id).execute(
+            "SELECT * FROM entity_mentions"
+            " WHERE tenant_id = %s AND id = ANY(%s) ORDER BY id",
+            (tenant_id, list(mention_ids))).fetchall()
+        out = []
+        for r in rows:
+            r = dict(r)
+            r.pop("created_at", None)
+            r["context_embedding"] = parse_vector(r["context_embedding"])
+            out.append(EntityMention(**r))
+        return out
+
     def get_pending_fact(self, tenant_id: str, pending_id: int) -> Optional[PendingFact]:
         r = self._fetch(tenant_id, "pending_facts", pending_id)
         if not r:

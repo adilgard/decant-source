@@ -115,8 +115,8 @@ class ResolutionService:
                     "SELECT id FROM entity_mentions"
                     " WHERE tenant_id = %s AND resolution_status = 'pending'"
                     " ORDER BY id LIMIT %s", (tenant_id, limit)).fetchall()
-            mentions = [self.store.get_mention(tenant_id, r["id"])
-                        for r in rows]
+            mentions = self.store.get_mentions(tenant_id,
+                                               [r["id"] for r in rows])
         with drain_timing.timed("prime"):
             self.scorer.prime(tenant_id, mentions)
 

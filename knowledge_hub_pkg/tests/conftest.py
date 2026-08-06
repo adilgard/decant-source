@@ -62,6 +62,34 @@ def _local_secrets_in_tmp(tmp_path_factory):
     settings.local_secrets_file = original
     mp.undo()
 
+@pytest.fixture(autouse=True)
+def _cwd_and_settings_are_test_local():
+    """Cross-suite isolation guard: CWD and the settings SINGLETON are
+    process-global, and several tests exercise code that legitimately
+    mutates both (run_launch os.chdir's into a temp deployment home and
+    reload_settings() there — an empty temp .env then resets every field
+    to its class default). Found live on 2026-08-06: the launcher tests
+    left bao_root_token reset to the pilot placeholder, and
+    test_operator_access's vault writes failed Forbidden — but ONLY once
+    the real .env carried a genuinely minted token, so the leak was
+    invisible for as long as the pilot value happened to equal the
+    default (the same masking the reload_settings() docstring documents
+    for s3_access_key). Restore both after every test so no test can see
+    another's process-global residue."""
+    import os
+
+    from knowledge_hub.config import Settings
+
+    cwd = os.getcwd()
+    snapshot = {name: getattr(settings, name)
+                for name in Settings.model_fields}
+    yield
+    os.chdir(cwd)
+    for name, value in snapshot.items():
+        if getattr(settings, name) != value:
+            setattr(settings, name, value)
+
+
 DIM = settings.embedding_dim
 ONTOLOGY = "baseline-0.1"
 

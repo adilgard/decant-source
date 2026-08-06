@@ -1,0 +1,41 @@
+{
+  "version": "tax-statute-0.2",
+  "entity_types": [
+    "Provision"
+  ],
+  "predicates": [
+    "part_of",
+    "references",
+    "has_heading"
+  ],
+  "examples": {
+    "entity_types": {
+      "Provision": [
+        "26 U.S.C. § 1",
+        "26 U.S.C. § 1(a)",
+        "26 U.S.C. ch. 1"
+      ]
+    },
+    "predicates": {
+      "part_of": [
+        "26 U.S.C. § 1(a) --part_of--> 26 U.S.C. § 1"
+      ],
+      "references": [
+        "26 U.S.C. § 1(a) --references--> 26 U.S.C. § 63"
+      ],
+      "has_heading": [
+        "26 U.S.C. § 1 --has_heading--> 'Tax imposed'"
+      ]
+    }
+  },
+  "predicate_aliases": {
+    "contained in": "part_of",
+    "contains": {
+      "predicate": "part_of",
+      "swap": true
+    },
+    "cross references": "references",
+    "cites": "references"
+  },
+  "notes": "Identical definition to tax-statute-0.1. Version bumped solely to carry the ds_parser_uslm 0.1.2 re-extract through the Stage 3 ontology-supersession cutover (2026-08-05). Vocabulary unchanged."
+}

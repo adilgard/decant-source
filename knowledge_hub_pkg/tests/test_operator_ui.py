@@ -628,9 +628,11 @@ def test_console_shell_carries_the_bp25_honesty_fixes(op_client):
     assert "screen styling pending Design" not in html
     # L7: the lock screen names the lost-token recovery.
     assert "provision-operator" in html
-    # L5: the dead search no longer advertises an unbuilt lookup.
+    # L5, superseded by Stage 2: the dead search went from a lying field to
+    # an honest NOT-YET-WIRED chip to GONE — a disabled control still
+    # spends attention. Neither form may return until search works.
     assert "Look up an entity, a document, a source" not in html
-    assert "LOOKUP : NOT YET WIRED" in html
+    assert "LOOKUP" not in html
 
     js = op_client.get("/ui/app.js").text
     # F1: login failures consult /v1/health and can name a SEALED vault.
@@ -912,3 +914,48 @@ def test_console_tab_disposition_wire_two_hide_two_defer_one(op_client):
     # A degraded SOURCE alert offers no retry button — its remedy is named
     # instead (retry_failed_item knows only dispatch/extraction queues).
     assert "Resume it " in js or "Resume it" in js
+
+
+def test_stage2_no_lying_copy_or_fabricated_status(op_client):
+    """d.s Stage 2, item by item: no dead surfaces advertised, no
+    design-tool residue, no numbers or names frozen into the shell that
+    real state can drift away from, and no fabricated progress."""
+    html = op_client.get("/ui/").text
+    js = op_client.get("/ui/app.js").text
+
+    # The Ontology header no longer denies the re-extract box that ships
+    # on the same tab.
+    assert "a later build" not in html
+    assert "re-extract box at the bottom of this tab" in html
+    # Design-tool residue is gone.
+    assert "CONCEPT 04" not in html and "VIRTUAL SELF" not in html
+    # Model names + embedding dim come from /v1/inference, never the shell.
+    for frozen in ("bge-m3", "qwen3.6", "1024-dim"):
+        assert frozen not in html, f"model claim frozen into the shell: {frozen}"
+        assert frozen not in js, f"model claim frozen into the JS: {frozen}"
+    assert "embedding_dim" in js and "state.inference" in js
+    # The p95 budget renders from the server's number.
+    assert "budget 300 ms" not in html
+    assert "p95_budget_ms" in js
+    # The footer states only what it can source: the page's own address and
+    # the health-reported posture — the static box claim is gone.
+    assert "appliance · single box" not in html
+    assert "127.0.0.1:8081" not in html
+    assert "location.host" in js and "footer-posture" in js
+    # No fabricated progress: the hardwired 60%-full source bar is dead;
+    # in-progress claims activity (animated stripe), not extent — and the
+    # served-but-never-rendered last_run_at is finally on screen.
+    assert "backfill_done ? 0 : 40" not in js
+    assert "last_run_at" in js
+    # Pre-data gauges/bars start EMPTY — no percentage exists before the
+    # first poll answers.
+    for fake in ("conic-gradient(#7be0c8 100%", "conic-gradient(#9fc0ff 30%",
+                 "conic-gradient(#eadf9a 97%", "conic-gradient(#c9b8ff 61%",
+                 "inset:0 26% 0 0", "inset:0 32% 0 0", "inset:0 42% 0 0",
+                 "inset:0 55% 0 0", "inset:0 18% 0 0"):
+        assert fake not in html, f"pre-data fake survived: {fake}"
+    # A 5xx is not NOMINAL: erroring and unreachable are distinct states.
+    assert "SYSTEM : ERRORING" in js
+    assert "resp.status >= 500" in js
+    # The uptime label says what the number is.
+    assert "SERVICE UPTIME" in html

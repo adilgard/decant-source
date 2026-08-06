@@ -683,6 +683,7 @@ class OperatorService:
             "error": getattr(report, "error", None),
             "models": served,
             "embedding": role(settings.embedding_model),
+            "embedding_dim": settings.embedding_dim,
             "extraction": role(settings.extraction_model),
         }
         self._inference_cache = (now, result)

@@ -1,0 +1,41 @@
+{
+  "version": "tax-statute-0.1",
+  "entity_types": [
+    "Provision"
+  ],
+  "predicates": [
+    "part_of",
+    "references",
+    "has_heading"
+  ],
+  "examples": {
+    "entity_types": {
+      "Provision": [
+        "26 U.S.C. § 1",
+        "26 U.S.C. § 1(a)",
+        "26 U.S.C. ch. 1"
+      ]
+    },
+    "predicates": {
+      "part_of": [
+        "26 U.S.C. § 1(a) --part_of--> 26 U.S.C. § 1"
+      ],
+      "references": [
+        "26 U.S.C. § 1(a) --references--> 26 U.S.C. § 63"
+      ],
+      "has_heading": [
+        "26 U.S.C. § 1 --has_heading--> 'Tax imposed'"
+      ]
+    }
+  },
+  "predicate_aliases": {
+    "contained in": "part_of",
+    "contains": {
+      "predicate": "part_of",
+      "swap": true
+    },
+    "cross references": "references",
+    "cites": "references"
+  },
+  "notes": "The vocabulary the USLM statute plugin emits, and nothing more. Deliberately tiny: it covers only what a parser can know for certain from the markup — where a provision sits, what it is headed, and what it points at. It is NOT a model of tax law. Concepts a reader would want (definitions, rates, effective dates, amendments) are interpretation, and belong to whatever extracts meaning rather than structure. Importing and activating this set is a separate, operator-driven step; the plugin never installs it, and core quarantines anything the ACTIVE ontology does not permit regardless of what this file says."
+}

@@ -30,6 +30,7 @@ const state = {
   tab: "monitor",
   monitor: null,
   health: null,
+  inference: null,       // /v1/inference — the monitor strip's model names
   uptimeBase: null,      // {uptime_s, at}
   reviews: { counts: null, items: [] },
   queue: [],             // client-side working queue (skip rotates it)
@@ -59,10 +60,15 @@ async function api(path, options) {
   try {
     resp = await fetch(path, opts);
   } catch (e) {
-    setOffline(true);
+    setOffline("unreachable");
     throw e;
   }
-  setOffline(false);
+  // Stage 2: a 5xx is NOT "all clear". The old code flipped the footer to
+  // NOMINAL on any fetch that returned — a permanently-erroring server
+  // showed green over stale numbers. Erroring and unreachable are
+  // different truths and get different words; only a real 2xx/4xx answer
+  // clears the banner.
+  setOffline(resp.status >= 500 ? "erroring" : false);
   if (resp.status === 401) {
     // F1: a sealed/unreachable vault refuses every credential — diagnose
     // via the health surface before blaming the token.
@@ -90,11 +96,22 @@ async function credentialFailureMessage(fallback) {
   return fallback;
 }
 
-function setOffline(isOffline) {
-  state.offline = isOffline;
-  $("offline").classList.toggle("kh-hide", !isOffline);
-  $("system-state").textContent = isOffline ? "SYSTEM : UNREACHABLE" : "SYSTEM : NOMINAL";
-  $("system-state").style.color = isOffline ? "#ff9b83" : "#7be0c8";
+/* mode: false (all clear) | "unreachable" (no answer) | "erroring" (the
+ * service answers, but with server errors — data on screen may be stale). */
+function setOffline(mode) {
+  state.offline = mode;
+  $("offline").classList.toggle("kh-hide", !mode);
+  if (mode) {
+    $("offline-msg").textContent = mode === "erroring"
+      ? "The system is answering with errors — what you see may be out of "
+        + "date. The console keeps retrying quietly; if this persists, the "
+        + "operator log has the details."
+      : "Can’t reach the system right now — the console keeps retrying "
+        + "quietly. Nothing you decided has been lost.";
+  }
+  $("system-state").textContent = mode === "erroring" ? "SYSTEM : ERRORING"
+    : mode ? "SYSTEM : UNREACHABLE" : "SYSTEM : NOMINAL";
+  $("system-state").style.color = mode ? "#ff9b83" : "#7be0c8";
 }
 
 /* ------------------------------------------------------------------- auth */
@@ -135,6 +152,10 @@ async function unlock(token) {
   $("lock").classList.add("kh-hide");
   $("tenant-name").textContent = String(body.tenant_id).toUpperCase();
   $("viewport-line").textContent = "viewport 01 · tenant : " + body.tenant_id;
+  // Stage 2: the footer names the address the page is actually served
+  // from — this page IS the operator service, so location is the truth.
+  $("footer-operator").textContent =
+    "operator " + location.host + " · act is audited";
   startPolling();
 }
 
@@ -206,8 +227,11 @@ function renderMonitor() {
   gauge($("tile-review-gauge"), $("tile-review-pct"), r.total ? 100 * r.merges / r.total : 0, "#eadf9a");
   $("badge-review").textContent = fmt(r.total);
 
-  // Tile 4 — serving p95 vs the §4 budget.
+  // Tile 4 — serving p95 vs the budget the SERVER declares (never a number
+  // frozen into the shell).
   $("tile-p95").textContent = m.p95_ms === null ? "—" : Math.round(m.p95_ms);
+  $("tile-p95-budget").textContent =
+    "budget " + m.p95_budget_ms + " ms · read-only channel";
   gauge($("tile-p95-gauge"), $("tile-p95-pct"),
     m.p95_ms === null ? 0 : 100 * m.p95_ms / m.p95_budget_ms, "#c9b8ff");
 
@@ -219,12 +243,20 @@ function renderMonitor() {
   $("st-capture-n").textContent = fmt(st.capture.count);
   $("st-capture-foot").textContent = "in flight: " + fmt(st.capture.in_flight);
   bar("st-capture-bar", st.capture.count);
+  // Stage 2: the model names come from /v1/inference (this instance's
+  // configured roles), never frozen into the console — until that read
+  // has answered, the footers claim nothing about models.
+  const inf = state.inference;
   $("st-process-n").textContent = fmt(st.process.count);
-  $("st-process-foot").textContent = "queue depth " + fmt(st.process.queue_depth) + " · bge-m3 1024-dim";
+  $("st-process-foot").textContent =
+    "queue depth " + fmt(st.process.queue_depth)
+    + (inf ? " · " + inf.embedding.model + " " + inf.embedding_dim + "-dim"
+           : "");
   bar("st-process-bar", st.process.count);
   $("st-extract-n").textContent = fmt(st.extract.count);
   $("st-extract-sub").textContent = fmt(st.extract.facts_staged) + " facts staged";
-  $("st-extract-foot").textContent = fmt(st.extract.quarantined) + " quarantined · qwen3.6";
+  $("st-extract-foot").textContent = fmt(st.extract.quarantined)
+    + " quarantined" + (inf ? " · " + inf.extraction.model : "");
   bar("st-extract-bar", st.extract.count);
   $("st-resolve-n").textContent = fmt(st.resolve.count);
   $("st-resolve-foot").textContent = fmt(st.resolve.held_for_review) + " held for review — not merged";
@@ -245,12 +277,20 @@ function renderMonitor() {
   // queue items + degraded sources) — the old status='error' count was
   // structurally 0 while documents failed.
   $("badge-health").textContent = fmt(m.alerts_open);
+  // Stage 2: the footer's posture line is sourced from /v1/health, not a
+  // static claim ("appliance · single box" was written into the shell).
+  if (h && h.posture) {
+    $("footer-posture").textContent = h.posture === "local"
+      ? "local posture · this machine only"
+      : h.posture + " posture";
+  }
 }
 
 function sourceRow(s) {
   const row = document.createElement("div");
   const paused = s.status === "disabled";
   const degraded = s.status === "degraded";
+  const done = s.backfill_done;
   const dot = degraded
     ? '<div style="width:10px;height:10px;border-radius:50%;background:#ff9b83;box-shadow:0 0 10px rgba(255,140,110,.8);animation:khBlink 1.4s ease-in-out infinite"></div>'
     : '<div style="width:10px;height:10px;border-radius:50%;background:' + (paused ? "#8fa8d8" : "#7be0c8") + ';box-shadow:0 0 8px rgba(110,230,200,.8)"></div>';
@@ -262,10 +302,27 @@ function sourceRow(s) {
   const barStyle = degraded
     ? "background:linear-gradient(90deg,#d96a52,#ff9b83);box-shadow:0 0 12px rgba(255,140,110,.55)"
     : "background:linear-gradient(90deg,#4fbfa4,#7be0c8);box-shadow:0 0 12px rgba(110,230,200,.5)";
+  // Stage 2: the note carries the REAL last-run time (served since BP20,
+  // never rendered until now) instead of leaving "idle" unanchored.
+  const lastRun = s.last_run_at
+    ? "last run " + s.last_run_at.slice(0, 16).replace("T", " ")
+    : "never run yet";
   const note = s.status_reason
     ? s.status_reason
-    : (s.backfill_done ? "idle · idempotent re-sweeps" : "backfill in progress");
+    : (done ? "idle between sweeps · " + lastRun
+            : "backfill in progress · " + lastRun);
   const btnLabel = paused ? "Resume" : "Pause";
+  // Stage 2: no fabricated percentage. Without a corpus total (adapters
+  // don't report one yet) a determinate bar is unknowable — the old bar
+  // sat at a hardwired 60% for every in-progress source. Now: paused =
+  // empty, done = full, in progress = an animated working stripe that
+  // claims activity, not extent.
+  const stripeRGB = degraded ? "255,140,110" : "159,192,255";
+  const barFill = paused
+    ? ""
+    : done
+      ? '<div style="position:absolute;inset:0;border-radius:6px;' + barStyle + '"></div>'
+      : '<div style="position:absolute;inset:0;border-radius:6px;opacity:.55;background-image:repeating-linear-gradient(90deg,rgba(' + stripeRGB + ',.7) 0 8px,rgba(' + stripeRGB + ',.15) 8px 16px);background-size:32px 100%;animation:khSweep 1.2s linear infinite"></div>';
   row.innerHTML =
     '<div>' +
     '<div style="display:flex;align-items:center;gap:10px;margin-bottom:7px">' + dot +
@@ -273,7 +330,7 @@ function sourceRow(s) {
     '<div style="flex:1"></div>' +
     '<div style="font-size:12px;color:#c9d8f8;font-family:Consolas,\'Lucida Console\',monospace">' + fmt(s.landed) + (s.total ? " / " + fmt(s.total) : "") + " landed</div></div>" +
     '<div style="position:relative;height:12px;border-radius:6px;overflow:hidden;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1)">' +
-    '<div style="position:absolute;inset:0 ' + (paused ? 100 : s.backfill_done ? 0 : 40) + '% 0 0;border-radius:6px;' + barStyle + '"></div></div>' +
+    barFill + "</div>" +
     '<div style="display:flex;align-items:center;gap:10px;margin-top:7px">' +
     '<div style="font-size:11px;color:' + (degraded ? "#ffcabb" : "#8fa8d8") + '">' + esc(note) + "</div>" +
     '<div style="flex:1"></div>' +
@@ -1171,6 +1228,7 @@ async function refreshInference() {
   if (resp.status === 403) { lock(NO_ROLE_MSG); return; }
   if (resp.status !== 200) return;
   const inf = await resp.json();
+  state.inference = inf;    // the monitor strip's model names read this
   $("inf-checked").textContent =
     "checked " + new Date().toTimeString().slice(0, 8);
   $("inf-target").textContent = inf.target;
@@ -1262,6 +1320,9 @@ function startPolling() {
   safe(refreshMonitor)();
   safe(refreshActivity)();
   safe(() => refreshReviews(true))();
+  // Once at unlock: the monitor strip names this instance's models from
+  // /v1/inference (Stage 2 — they were frozen into the shell before).
+  safe(refreshInference)();
   state.timers.push(setInterval(safe(refreshMonitor), POLL_MS));
   state.timers.push(setInterval(safe(refreshActivity), POLL_MS));
   state.timers.push(setInterval(() => {

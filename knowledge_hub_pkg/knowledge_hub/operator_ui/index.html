@@ -41,7 +41,8 @@ a:hover{color:#c3d5ff;text-decoration:underline}
       <div style="font-family:Silkscreen,Consolas,monospace;font-size:8px;letter-spacing:.2em;color:#7db4e8">OPERATOR : CONSOLE</div>
       <div style="width:58px;height:10px;opacity:.35;background:repeating-linear-gradient(90deg,#b8ccff 0 2px,transparent 2px 5px,#b8ccff 5px 6px,transparent 6px 11px)"></div>
       <div style="flex:1"></div>
-      <div style="font-family:Silkscreen,Consolas,monospace;font-size:8px;letter-spacing:.16em;color:rgba(150,180,235,.6)">CONCEPT 04 : VIRTUAL SELF</div>
+      <!-- Stage 2: the design-tool concept stamp is gone — this is the
+           shipped console, not a mockup. -->
       <div style="display:flex;gap:6px;margin-left:10px">
         <div style="width:26px;height:17px;border-radius:9px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.08)"></div>
         <div style="width:34px;height:17px;border-radius:9px;border:1px solid rgba(255,140,120,.5);background:rgba(255,110,90,.25)"></div>
@@ -54,16 +55,17 @@ a:hover{color:#c3d5ff;text-decoration:underline}
         <div style="font-family:Silkscreen,Consolas,monospace;font-size:8.5px;letter-spacing:.14em;color:#e9f0ff">TENANT : <span id="tenant-name">—</span></div>
       </div>
       <div style="font-size:10.5px;color:#5c6f9e">isolated · read + act</div>
-      <!-- L5: the lookup is not built yet — the field says so honestly
-           (same NOT-YET-WIRED voice as the placeholder tabs) instead of
-           advertising a search that goes nowhere. -->
-      <div style="flex:1;min-width:220px;display:flex;align-items:center;gap:8px;padding:8px 14px;clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);border:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.03);backdrop-filter:blur(10px);opacity:.6">
-        <div style="width:10px;height:10px;flex:none;border-radius:50%;border:2px solid rgba(160,185,235,.4)"></div>
-        <div style="font-family:Silkscreen,Consolas,monospace;font-size:7.5px;letter-spacing:.16em;color:#5c6f9e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">LOOKUP : NOT YET WIRED</div>
-      </div>
+      <!-- Stage 2: the lookup field is GONE, not flagged. L5 turned the dead
+           search into an honest NOT-YET-WIRED chip; the wire-or-hide bar
+           removes even that — search wiring is out of this pass's scope, and
+           a disabled control still spends attention. It returns when it
+           works (likely with the Facts & entities pass). -->
+      <div style="flex:1"></div>
       <div id="viewport-line" style="flex:0 1 auto;min-width:0;font-family:Consolas,'Lucida Console',monospace;font-size:8.5px;letter-spacing:.22em;color:rgba(150,175,225,.45);text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">viewport 01 · tenant : —</div>
       <div style="flex:none;display:flex;align-items:center;gap:9px">
-        <div style="font-family:Silkscreen,Consolas,monospace;font-size:8px;letter-spacing:.14em;color:#7db4e8">UPTIME</div>
+        <!-- Stage 2: what the number actually is — how long the operator
+             service (this console's server) has been up, not the machine. -->
+        <div style="font-family:Silkscreen,Consolas,monospace;font-size:8px;letter-spacing:.14em;color:#7db4e8">SERVICE UPTIME</div>
         <div id="uptime" style="font-family:Consolas,'Lucida Console',monospace;font-size:12px;color:#c9d8f8;padding:4px 11px;clip-path:polygon(7px 0,100% 0,100% calc(100% - 7px),calc(100% - 7px) 100%,0 100%,0 7px);background:rgba(0,2,12,.6);border:1px solid rgba(140,170,255,.25)">—</div>
       </div>
     </div>
@@ -90,7 +92,7 @@ a:hover{color:#c3d5ff;text-decoration:underline}
 
     <div id="offline" class="kh-hide" style="display:flex;align-items:center;gap:10px;padding:10px 18px;border-bottom:1px solid rgba(255,150,130,.3);background:rgba(255,110,90,.08)">
       <div style="width:9px;height:9px;border-radius:50%;background:#ff9b83;box-shadow:0 0 8px rgba(255,140,110,.8);animation:khBlink 1.4s ease-in-out infinite"></div>
-      <div style="font-size:12px;color:#ffd9cd">Can’t reach the system right now — the console keeps retrying quietly. Nothing you decided has been lost.</div>
+      <div id="offline-msg" style="font-size:12px;color:#ffd9cd">Can’t reach the system right now — the console keeps retrying quietly. Nothing you decided has been lost.</div>
     </div>
 
     <div style="position:relative;overflow:hidden;padding:18px;min-height:760px;box-sizing:border-box">
@@ -109,25 +111,27 @@ a:hover{color:#c3d5ff;text-decoration:underline}
       <div id="panel-monitor" style="position:relative;display:flex;flex-direction:column;gap:14px">
 
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px">
-          <div style="position:relative;padding:13px 78px 13px 15px;clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px);border:1px solid rgba(123,224,200,.3);background:rgba(123,224,200,.06);backdrop-filter:blur(10px)"><div id="tile-health-gauge" style="position:absolute;right:14px;top:50%;width:52px;height:52px;margin-top:-26px;border-radius:50%;background:conic-gradient(#7be0c8 100%,rgba(255,255,255,.08) 0);filter:drop-shadow(0 0 8px rgba(110,230,200,.5))"><div style="position:absolute;inset:6px;border-radius:50%;background:#10182f"></div><div id="tile-health-pct" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#7be0c8">—</div></div>
+          <div style="position:relative;padding:13px 78px 13px 15px;clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px);border:1px solid rgba(123,224,200,.3);background:rgba(123,224,200,.06);backdrop-filter:blur(10px)"><div id="tile-health-gauge" style="position:absolute;right:14px;top:50%;width:52px;height:52px;margin-top:-26px;border-radius:50%;background:conic-gradient(#7be0c8 0%,rgba(255,255,255,.08) 0);filter:drop-shadow(0 0 8px rgba(110,230,200,.5))"><div style="position:absolute;inset:6px;border-radius:50%;background:#10182f"></div><div id="tile-health-pct" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#7be0c8">—</div></div>
             <div style="display:flex;align-items:center;gap:8px"><div style="width:9px;height:9px;border-radius:50%;background:#7be0c8;box-shadow:0 0 10px rgba(110,230,200,.9);animation:khBreathe 3.6s ease-in-out infinite"></div><div style="font-family:Silkscreen,Consolas,monospace;font-size:7.5px;letter-spacing:.18em;color:#7be0c8">STACK : HEALTH</div></div>
             <div style="font-size:21px;font-weight:600;color:#e9f0ff;margin-top:7px;line-height:1"><span id="tile-health-num">—</span> <span style="font-size:12px;font-weight:400;color:#8fa8d8">green</span></div>
             <div id="tile-health-sub" style="font-size:11px;color:#5c6f9e;margin-top:4px">postgres · vault · serving</div>
           </div>
-          <div style="position:relative;padding:13px 78px 13px 15px;clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px);border:1px solid rgba(160,190,255,.3);background:rgba(120,150,255,.08);backdrop-filter:blur(10px)"><div id="tile-landed-gauge" style="position:absolute;right:14px;top:50%;width:52px;height:52px;margin-top:-26px;border-radius:50%;background:conic-gradient(#9fc0ff 30%,rgba(255,255,255,.08) 0);filter:drop-shadow(0 0 8px rgba(140,170,255,.5))"><div style="position:absolute;inset:6px;border-radius:50%;background:#10182f"></div><div id="tile-landed-pct" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#9fc0ff">—</div></div>
+          <div style="position:relative;padding:13px 78px 13px 15px;clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px);border:1px solid rgba(160,190,255,.3);background:rgba(120,150,255,.08);backdrop-filter:blur(10px)"><div id="tile-landed-gauge" style="position:absolute;right:14px;top:50%;width:52px;height:52px;margin-top:-26px;border-radius:50%;background:conic-gradient(#9fc0ff 0%,rgba(255,255,255,.08) 0);filter:drop-shadow(0 0 8px rgba(140,170,255,.5))"><div style="position:absolute;inset:6px;border-radius:50%;background:#10182f"></div><div id="tile-landed-pct" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#9fc0ff">—</div></div>
             <div style="display:flex;align-items:center;gap:8px"><div style="width:9px;height:9px;border-radius:50%;background:#9fc0ff;box-shadow:0 0 10px rgba(140,170,255,.9);animation:khBreathe 4.4s ease-in-out infinite"></div><div style="font-family:Silkscreen,Consolas,monospace;font-size:7.5px;letter-spacing:.18em;color:#9fc0ff">DOCUMENTS : LANDED</div></div>
             <div style="font-size:21px;font-weight:600;color:#e9f0ff;margin-top:7px;line-height:1"><span id="tile-landed">—</span></div>
             <div id="tile-landed-sub" style="font-size:11px;color:#5c6f9e;margin-top:4px">— sources registered</div>
           </div>
-          <div style="position:relative;padding:13px 78px 13px 15px;clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px);border:1px solid rgba(230,220,150,.28);background:rgba(230,215,140,.06);backdrop-filter:blur(10px)"><div id="tile-review-gauge" style="position:absolute;right:14px;top:50%;width:52px;height:52px;margin-top:-26px;border-radius:50%;background:conic-gradient(#eadf9a 97%,rgba(255,255,255,.08) 0);filter:drop-shadow(0 0 8px rgba(230,215,140,.5))"><div style="position:absolute;inset:6px;border-radius:50%;background:#10182f"></div><div id="tile-review-pct" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#eadf9a">—</div></div>
+          <div style="position:relative;padding:13px 78px 13px 15px;clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px);border:1px solid rgba(230,220,150,.28);background:rgba(230,215,140,.06);backdrop-filter:blur(10px)"><div id="tile-review-gauge" style="position:absolute;right:14px;top:50%;width:52px;height:52px;margin-top:-26px;border-radius:50%;background:conic-gradient(#eadf9a 0%,rgba(255,255,255,.08) 0);filter:drop-shadow(0 0 8px rgba(230,215,140,.5))"><div style="position:absolute;inset:6px;border-radius:50%;background:#10182f"></div><div id="tile-review-pct" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#eadf9a">—</div></div>
             <div style="display:flex;align-items:center;gap:8px"><div style="width:9px;height:9px;border-radius:50%;background:#eadf9a;box-shadow:0 0 10px rgba(230,215,140,.8);animation:khBreathe 5s ease-in-out infinite"></div><div style="font-family:Silkscreen,Consolas,monospace;font-size:7.5px;letter-spacing:.18em;color:#eadf9a">AWAITING : HUMAN</div></div>
             <div style="font-size:21px;font-weight:600;color:#e9f0ff;margin-top:7px;line-height:1"><span id="tile-review-num">—</span></div>
             <div id="tile-review-sub" style="font-size:11px;color:#5c6f9e;margin-top:4px">— merges · — quarantined · — flagged</div>
           </div>
-          <div style="position:relative;padding:13px 78px 13px 15px;clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px);border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.05);backdrop-filter:blur(10px)"><div id="tile-p95-gauge" style="position:absolute;right:14px;top:50%;width:52px;height:52px;margin-top:-26px;border-radius:50%;background:conic-gradient(#c9b8ff 61%,rgba(255,255,255,.08) 0);filter:drop-shadow(0 0 8px rgba(180,150,255,.5))"><div style="position:absolute;inset:6px;border-radius:50%;background:#10182f"></div><div id="tile-p95-pct" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#c9b8ff">—</div></div>
+          <div style="position:relative;padding:13px 78px 13px 15px;clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px);border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.05);backdrop-filter:blur(10px)"><div id="tile-p95-gauge" style="position:absolute;right:14px;top:50%;width:52px;height:52px;margin-top:-26px;border-radius:50%;background:conic-gradient(#c9b8ff 0%,rgba(255,255,255,.08) 0);filter:drop-shadow(0 0 8px rgba(180,150,255,.5))"><div style="position:absolute;inset:6px;border-radius:50%;background:#10182f"></div><div id="tile-p95-pct" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#c9b8ff">—</div></div>
             <div style="display:flex;align-items:center;gap:8px"><div style="width:9px;height:9px;border-radius:50%;background:#c9b8ff;box-shadow:0 0 10px rgba(180,150,255,.8);animation:khBreathe 4s ease-in-out infinite"></div><div style="font-family:Silkscreen,Consolas,monospace;font-size:7.5px;letter-spacing:.18em;color:#c9b8ff">SERVING : LAYER</div></div>
             <div style="font-size:21px;font-weight:600;color:#e9f0ff;margin-top:7px;line-height:1">p95 <span id="tile-p95">—</span> <span style="font-size:12px;font-weight:400;color:#8fa8d8">ms</span></div>
-            <div style="font-size:11px;color:#5c6f9e;margin-top:4px">budget 300 ms · read-only channel</div>
+            <!-- Stage 2: the budget renders from the server's p95_budget_ms,
+                 not a number frozen into the shell. -->
+            <div id="tile-p95-budget" style="font-size:11px;color:#5c6f9e;margin-top:4px">budget — ms · read-only channel</div>
           </div>
         </div>
 
@@ -147,7 +151,7 @@ a:hover{color:#c3d5ff;text-decoration:underline}
               <div id="st-capture-n" style="font-size:23px;font-weight:600;color:#e9f0ff;line-height:1">—</div>
               <div style="font-size:10.5px;color:#5c6f9e;margin:5px 0 9px">documents landed, WORM</div>
               <div style="position:relative;height:9px;border-radius:5px;overflow:hidden;background:rgba(255,255,255,.08)">
-                <div id="st-capture-bar" style="position:absolute;inset:0 26% 0 0;border-radius:5px;background:linear-gradient(90deg,#4d6bff,#9fc0ff);box-shadow:0 0 10px rgba(120,150,255,.7)"></div>
+                <div id="st-capture-bar" style="position:absolute;inset:0 100% 0 0;border-radius:5px;background:linear-gradient(90deg,#4d6bff,#9fc0ff);box-shadow:0 0 10px rgba(120,150,255,.7)"></div>
                 <div style="position:absolute;top:0;bottom:0;left:0;width:22%;background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.5),rgba(255,255,255,0));animation:khShine 2.6s ease-in-out infinite"></div>
               </div>
               <div id="st-capture-foot" style="font-size:10.5px;color:#8fa8d8;margin-top:6px">in flight: —</div>
@@ -158,10 +162,10 @@ a:hover{color:#c3d5ff;text-decoration:underline}
               <div id="st-process-n" style="font-size:23px;font-weight:600;color:#e9f0ff;line-height:1">—</div>
               <div style="font-size:10.5px;color:#5c6f9e;margin:5px 0 9px">parsed · chunked · embedded</div>
               <div style="position:relative;height:9px;border-radius:5px;overflow:hidden;background:rgba(255,255,255,.08)">
-                <div id="st-process-bar" style="position:absolute;inset:0 32% 0 0;border-radius:5px;background:linear-gradient(90deg,#4d6bff,#9fc0ff);box-shadow:0 0 10px rgba(120,150,255,.7)"></div>
+                <div id="st-process-bar" style="position:absolute;inset:0 100% 0 0;border-radius:5px;background:linear-gradient(90deg,#4d6bff,#9fc0ff);box-shadow:0 0 10px rgba(120,150,255,.7)"></div>
                 <div style="position:absolute;top:0;bottom:0;left:0;width:22%;background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.5),rgba(255,255,255,0));animation:khShine 2.6s ease-in-out .3s infinite"></div>
               </div>
-              <div id="st-process-foot" style="font-size:10.5px;color:#8fa8d8;margin-top:6px">queue depth — · bge-m3 1024-dim</div>
+              <div id="st-process-foot" style="font-size:10.5px;color:#8fa8d8;margin-top:6px">queue depth —</div>
             </div>
             <div style="align-self:center;height:4px;margin:0 5px;background-image:repeating-linear-gradient(90deg,rgba(160,190,255,.6) 0 6px,transparent 6px 12px);background-size:24px 100%;animation:khSweep 1.1s linear .2s infinite"></div>
             <div style="padding:13px;clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);border:1px solid rgba(160,190,255,.25);background:rgba(120,150,255,.07)">
@@ -169,10 +173,10 @@ a:hover{color:#c3d5ff;text-decoration:underline}
               <div id="st-extract-n" style="font-size:23px;font-weight:600;color:#e9f0ff;line-height:1">—</div>
               <div id="st-extract-sub" style="font-size:10.5px;color:#5c6f9e;margin:5px 0 9px">— facts staged</div>
               <div style="position:relative;height:9px;border-radius:5px;overflow:hidden;background:rgba(255,255,255,.08)">
-                <div id="st-extract-bar" style="position:absolute;inset:0 42% 0 0;border-radius:5px;background:linear-gradient(90deg,#4d6bff,#9fc0ff);box-shadow:0 0 10px rgba(120,150,255,.7)"></div>
+                <div id="st-extract-bar" style="position:absolute;inset:0 100% 0 0;border-radius:5px;background:linear-gradient(90deg,#4d6bff,#9fc0ff);box-shadow:0 0 10px rgba(120,150,255,.7)"></div>
                 <div style="position:absolute;top:0;bottom:0;left:0;width:22%;background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.5),rgba(255,255,255,0));animation:khShine 2.6s ease-in-out .6s infinite"></div>
               </div>
-              <div id="st-extract-foot" style="font-size:10.5px;color:#eadf9a;margin-top:6px">— quarantined · qwen3.6</div>
+              <div id="st-extract-foot" style="font-size:10.5px;color:#eadf9a;margin-top:6px">— quarantined</div>
             </div>
             <div style="align-self:center;height:4px;margin:0 5px;background-image:repeating-linear-gradient(90deg,rgba(160,190,255,.6) 0 6px,transparent 6px 12px);background-size:24px 100%;animation:khSweep 1.1s linear .4s infinite"></div>
             <div style="padding:13px;clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);border:1px solid rgba(230,220,150,.3);background:rgba(230,215,140,.06)">
@@ -180,7 +184,7 @@ a:hover{color:#c3d5ff;text-decoration:underline}
               <div id="st-resolve-n" style="font-size:23px;font-weight:600;color:#e9f0ff;line-height:1">—</div>
               <div style="font-size:10.5px;color:#5c6f9e;margin:5px 0 9px">mentions resolved</div>
               <div style="position:relative;height:9px;border-radius:5px;overflow:hidden;background:rgba(255,255,255,.08)">
-                <div id="st-resolve-bar" style="position:absolute;inset:0 55% 0 0;border-radius:5px;background:linear-gradient(90deg,#c9b877,#eadf9a);box-shadow:0 0 10px rgba(230,215,140,.6)"></div>
+                <div id="st-resolve-bar" style="position:absolute;inset:0 100% 0 0;border-radius:5px;background:linear-gradient(90deg,#c9b877,#eadf9a);box-shadow:0 0 10px rgba(230,215,140,.6)"></div>
                 <div style="position:absolute;top:0;bottom:0;left:0;width:22%;background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.5),rgba(255,255,255,0));animation:khShine 2.6s ease-in-out .9s infinite"></div>
               </div>
               <div id="st-resolve-foot" style="font-size:10.5px;color:#eadf9a;margin-top:6px">— held for review — not merged</div>
@@ -191,7 +195,7 @@ a:hover{color:#c3d5ff;text-decoration:underline}
               <div id="st-facts-n" style="font-size:23px;font-weight:600;color:#e9f0ff;line-height:1">—</div>
               <div style="font-size:10.5px;color:#5c6f9e;margin:5px 0 9px">promoted &amp; servable</div>
               <div style="position:relative;height:9px;border-radius:5px;overflow:hidden;background:rgba(255,255,255,.08)">
-                <div id="st-facts-bar" style="position:absolute;inset:0 18% 0 0;border-radius:5px;background:linear-gradient(90deg,#4fbfa4,#7be0c8);box-shadow:0 0 10px rgba(110,230,200,.6)"></div>
+                <div id="st-facts-bar" style="position:absolute;inset:0 100% 0 0;border-radius:5px;background:linear-gradient(90deg,#4fbfa4,#7be0c8);box-shadow:0 0 10px rgba(110,230,200,.6)"></div>
                 <div style="position:absolute;top:0;bottom:0;left:0;width:22%;background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.5),rgba(255,255,255,0));animation:khShine 2.6s ease-in-out 1.2s infinite"></div>
               </div>
               <div id="st-facts-foot" style="font-size:10.5px;color:#7be0c8;margin-top:6px">— confident · — low-confidence</div>
@@ -345,7 +349,10 @@ a:hover{color:#c3d5ff;text-decoration:underline}
             <div style="flex:1"></div>
             <div style="font-family:Consolas,'Lucida Console',monospace;font-size:10.5px;color:#8fa8d8;white-space:nowrap">active : <span id="onto-active" style="color:#7be0c8">—</span></div>
           </div>
-          <div style="font-size:12px;color:#8fa8d8;margin-top:6px;line-height:1.6">Each version is two flat vocabularies — entity types and predicates — the extractor is held to. <span style="color:#eadf9a">Selecting a version applies to future ingests only.</span> Facts already extracted keep the version that produced them; re-extracting existing data under a new version is a separate, deliberate action (a later build). Imports and selections are audited.</div>
+          <!-- Stage 2: the old copy deferred re-extraction to a future
+               build — stale, the re-extract box has shipped and sits at
+               the bottom of THIS tab. The copy now points at it. -->
+          <div style="font-size:12px;color:#8fa8d8;margin-top:6px;line-height:1.6">Each version is two flat vocabularies — entity types and predicates — the extractor is held to. <span style="color:#eadf9a">Selecting a version applies to future ingests only.</span> Facts already extracted keep the version that produced them; bringing existing data under a new version is a separate, deliberate action — the re-extract box at the bottom of this tab. Imports and selections are audited.</div>
         </div>
 
         <div style="display:grid;grid-template-columns:1.15fr .85fr;gap:14px">
@@ -638,8 +645,13 @@ a:hover{color:#c3d5ff;text-decoration:underline}
       <div id="system-state" style="font-family:Silkscreen,Consolas,monospace;font-size:8px;letter-spacing:.2em;color:#7be0c8;animation:khFlicker 11s linear infinite">SYSTEM : NOMINAL</div>
       <div style="font-family:Consolas,'Lucida Console',monospace;font-size:8.5px;letter-spacing:.14em;color:rgba(150,180,235,.35)">/≡/=—::read is safe : act is deliberate::—=/≡/</div>
       <div style="display:flex;align-items:center;gap:7px;min-width:0;flex:1"><div style="width:6px;height:6px;border-radius:50%;background:#7be0c8;box-shadow:0 0 6px rgba(110,230,200,.9);animation:khBlink 2.2s ease-in-out infinite"></div><div id="status-line" style="font-family:Consolas,'Lucida Console',monospace;font-size:10.5px;color:#b9cdf5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">watching</div></div>
-      <div style="flex:none;font-size:10px;color:#5c6f9e">operator 127.0.0.1:8081 · act is audited</div>
-      <div style="flex:none;font-size:10px;color:#5c6f9e">appliance · single box</div>
+      <!-- Stage 2: the footer states only what it can source. The address
+           comes from the page's own location (it IS the operator service);
+           the posture comes from /v1/health. The old static single-box
+           claim went false the day inference could point at a network
+           box, so it is gone. -->
+      <div id="footer-operator" style="flex:none;font-size:10px;color:#5c6f9e">operator console · act is audited</div>
+      <div id="footer-posture" style="flex:none;font-size:10px;color:#5c6f9e">—</div>
       <div style="flex:none;display:flex;gap:4px">
         <div style="width:8px;height:8px;transform:rotate(45deg);background:#9fc0ff;box-shadow:0 0 6px rgba(140,170,255,.7)"></div>
         <div style="width:8px;height:8px;transform:rotate(45deg);background:#7be0c8;box-shadow:0 0 6px rgba(110,230,200,.7)"></div>

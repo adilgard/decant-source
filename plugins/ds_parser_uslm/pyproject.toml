@@ -1,6 +1,6 @@
 [project]
 name = "ds-parser-uslm"
-version = "0.1.0"
+version = "0.1.2"
 description = "USLM (US Code XML) parser plugin for decant.Source — domain code, deliberately outside the corpus-agnostic core package"
 requires-python = ">=3.12"
 # knowledge_hub is the ONLY dependency, and the direction matters: a plugin

@@ -23,7 +23,7 @@ from ds_parser_uslm.parser import (
     UslmParser,
 )
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 __all__ = ["UslmParser", "EMITTED_ENTITY_TYPES", "EMITTED_PREDICATES",
            "IDENTIFIER_KEY", "__version__"]

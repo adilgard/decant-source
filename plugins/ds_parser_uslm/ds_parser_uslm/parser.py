@@ -62,7 +62,31 @@ IDENTIFIER_KEY = "uslm_identifier"
 
 class UslmParser(Parser, FactParser):
     name: ClassVar[str] = "uslm"
-    version = "0.1.0"       # code version; part of the idempotency ledger key
+    # Code version, and part of the idempotency ledger key
+    # (extraction_runs.ux_extraction_unit: tenant + unit_hash + extractor +
+    # extractor_version + ontology_version). BUMP IT WHENEVER OUTPUT CHANGES,
+    # or re-extraction of already-extracted content replays as a no-op and the
+    # change never reaches the documents that need it.
+    #
+    # 0.1.1 (2026-08-04): citation_for now reads en-dashed section numbers
+    # (`s1400Z–2`, `s300gg–44`), which USLM uses throughout and the previous
+    # ASCII-only pattern dropped — rendering 90 identifiers as a bare
+    # '26 U.S.C.' / '42 U.S.C.' and collapsing unrelated provisions onto one
+    # surface. Facts staged under 0.1.0 that cite such a target carry the
+    # collapsed object citation and must be re-extracted to be corrected.
+    #
+    # 0.1.2 (2026-08-05): quoted amendment text (`<quotedContent>` /
+    # `<quotedText>`) renders but is never indexed — under 0.1.1 its markup
+    # became 12,408 identifier-less Provisions (17.5% of the corpus count),
+    # whose ''-identifier entry in by_identifier() handed ownerless refs a
+    # junk subject keyed on the empty string: ~128 keyless mentions through
+    # the resolver's fuzzy path (Job 8, D4). Identifier-less numbered
+    # elements outside quotes are likewise rendered, never indexed. The
+    # RENDERED TEXT IS BYTE-IDENTICAL to 0.1.1 for the whole Title 26 corpus;
+    # what changed is only what gets asserted about it. References inside
+    # quoted content no longer emit edges (the amending act's citations are
+    # not this provision's).
+    version = "0.1.2"
 
     def __init__(self, memo_size: int = 4) -> None:
         # parse() and extract_text() are called back to back on the same
@@ -75,7 +99,10 @@ class UslmParser(Parser, FactParser):
     # -------------------------------------------------------------- Parser --
     def parse(self, raw: RawDocument, content: bytes) -> Document:
         parsed = self._parsed(raw, content)
-        root = parsed.provisions[0]
+        # None when every numbered element in the file is past law (a wholly
+        # repealed chapter). The document still lands and is still readable;
+        # it just has no current provision to name itself after.
+        root = parsed.provisions[0] if parsed.provisions else None
         return Document(
             tenant_id=raw.tenant_id,
             raw_document_id=raw.id,
@@ -84,7 +111,8 @@ class UslmParser(Parser, FactParser):
             # unusual, and that is a separate axis by design.
             doc_type=DocType.prose,
             title=(raw.native_metadata or {}).get("title")
-                  or parsed.title or root.citation,
+                  or parsed.title
+                  or (root.citation if root else _repealed_title(raw)),
             source_timestamp=None,
             security_label_id=raw.security_label_id,
             metadata={
@@ -97,10 +125,17 @@ class UslmParser(Parser, FactParser):
                 "detection_confident": True,
                 "parser": f"uslm {self.version}",
                 "source_ref": (raw.native_metadata or {}).get("source_ref"),
-                "uslm_identifier": root.identifier,
-                "uslm_root_citation": root.citation,
+                "uslm_identifier": root.identifier if root else None,
+                "uslm_root_citation": root.citation if root else None,
                 "provisions": len(parsed.provisions),
                 "cross_references": len(parsed.references),
+                # Rendered but not indexed as law. On the document so a run is
+                # answerable without re-parsing: "why does this chapter have
+                # fewer provisions than it has numbered elements" has an answer
+                # sitting next to the count.
+                "skipped_by_status": parsed.skipped_by_status,
+                "duplicate_identifiers": parsed.duplicate_identifiers,
+                "quoted_elements": parsed.quoted_elements,
             },
         )
 
@@ -191,6 +226,20 @@ class UslmParser(Parser, FactParser):
                 self._memo.pop(next(iter(self._memo)))
             self._memo[key] = cached
         return cached
+
+
+def _repealed_title(raw: RawDocument) -> str:
+    """A name for a file whose every numbered element is past law.
+
+    Title 26 has 21 of these. They have no current provision to be named
+    after, and calling them all the same thing would make a document list
+    unreadable — so the source's own identifier for the file carries the
+    name, which is the only thing left that distinguishes them.
+    """
+    native = (raw.native_metadata or {}).get("absolute_path") \
+        or raw.source_native_id or ""
+    stem = str(native).replace("\\", "/").rsplit("/", 1)[-1]
+    return f"{stem or 'document'} — repealed, no current provisions"
 
 
 def _entity(citation: str, identifier: str) -> dict[str, Any]:

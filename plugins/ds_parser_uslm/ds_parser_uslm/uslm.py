@@ -25,10 +25,13 @@ pipeline and replaceable without touching one.
 """
 from __future__ import annotations
 
+import logging
 import re
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 # Structural levels above a section. Rendered as Markdown headings so the
 # chunker can see the document's shape.
@@ -43,6 +46,20 @@ PROVISION_LEVELS = BIG_LEVELS + (SECTION_LEVEL,) + SMALL_LEVELS
 # Elements whose character data is body text.
 TEXT_LEVELS = ("chapeau", "content", "p", "continuation", "text")
 
+# Statuses that make an element PAST law rather than current law. Same
+# treatment as editorial apparatus: rendered, because a reader searching the
+# corpus wants to find that § 4521 was repealed in 1962, but never a
+# Provision, because it is not one now.
+#
+# This is also the fix for a real collision in the published data. Title 26
+# carries TWO <chapter identifier="/us/usc/t26/stD/ch38">: a repealed chapter
+# 38 and the current ENVIRONMENTAL TAXES chapter 38 (OLRC footnotes the first
+# with "A new chapter 38 (§ 4611 et seq.) follows"). Both render the citation
+# '26 U.S.C. ch. 38' and carry the same uslm_identifier, so nothing downstream
+# can tell them apart and the two silently become one entity. Dropping the
+# repealed one from the provision set removes the collision at its source.
+SKIPPED_STATUSES = frozenset({"repealed"})
+
 # Notes, source credits and editorial apparatus. Rendered (they are part of
 # the document a human reads) but never treated as provisions.
 NOTE_LEVELS = ("note", "sourceCredit", "editorialNote", "statutoryNote")
@@ -50,10 +67,35 @@ NOTE_LEVELS = ("note", "sourceCredit", "editorialNote", "statutoryNote")
 # paragraph before every note block it contains.
 NOTE_CONTAINERS = ("notes",)
 
+# Verbatim quotation of ANOTHER document — a note quoting the text of the
+# amending Public Law: `<quotedContent origin="/us/pl/...">`. The quote
+# contains `<paragraph>`/`<subparagraph>` markup with num and heading but no
+# identifier, because quoted PL text has none. Rendered (the reader wants the
+# quoted language) but NOTHING inside is ever indexed: not a Provision, not a
+# CrossReference. Treating quoted markup as law put 12,408 identifier-less
+# provisions (17.5% of the count) into the first full-title parse, and their
+# shared ""-identifier entry in by_identifier() gave ownerless refs a junk
+# subject — the source of the ~128 keyless mentions the fuzzy path had to
+# separate one by one (Job 8, D4). `quotedText` is the schema's inline
+# sibling, handled the same way for the same reason.
+QUOTED_LEVELS = ("quotedContent", "quotedText")
+
 _WS = re.compile(r"\s+")
 # A USLM identifier path segment: a level prefix plus its number, e.g.
 # 't26', 'stA', 'ch1', 's63', or a bare 'a' for sub-section levels.
-_SEG = re.compile(r"^(?P<prefix>[a-z]+)(?P<num>[A-Za-z0-9.\-]+)$")
+#
+# THE NUMBER CLASS INCLUDES THE EN DASH (U+2013), not just the ASCII hyphen.
+# OLRC punctuates compound section numbers typographically — `s300gg–44`,
+# `s1320a–1`, `s1400Z–2` — and it appears 261 times in Title 26's identifiers
+# alone. An ASCII-only class silently failed every one of them: the segment
+# fell through to the parenthesised trail and the citation came out as bare
+# '26 U.S.C.', which is not merely ugly. Every en-dashed section in a title
+# rendered as the SAME string, so §§ 1400Z-1 and 1400Z-2 and all 89 of their
+# descendants became one surface, and 88 cross-reference targets across 14
+# other titles collapsed per-title. Found on the first full-title run
+# (2026-08-04) by core's one-surface-one-key guard, which is the only reason
+# it surfaced as quarantine rather than as a silent mass merge.
+_SEG = re.compile(r"^(?P<prefix>[a-z]+)(?P<num>[A-Za-z0-9.–\-]+)$")
 
 _SEGMENT_LABELS = {
     "t": "", "st": "subtitle ", "ch": "ch. ", "sch": "subch. ",
@@ -111,6 +153,27 @@ class ParsedDocument:
     references: list[CrossReference] = field(default_factory=list)
     title: Optional[str] = None
     doc_number: Optional[str] = None
+    # Rendered but deliberately not provisions, counted so a run can say so
+    # rather than quietly returning fewer facts than the markup implies.
+    skipped_by_status: int = 0
+    duplicate_identifiers: list[str] = field(default_factory=list)
+    # Numbered elements inside quoted amendment text, rendered and refused as
+    # provisions. Counted separately from skipped_by_status because past law
+    # and quoted-other-document are different answers to "where did the
+    # markup's count go".
+    quoted_elements: int = 0
+    # Membership set maintained as provisions are appended. A full title runs
+    # ~59,000 of them, so the duplicate check has to be O(1) per element —
+    # rebuilding by_identifier() to ask "have I seen this?" would make the
+    # parse quadratic.
+    _claimed: set[str] = field(default_factory=set)
+
+    def claim(self, identifier: str) -> bool:
+        """Record an identifier, returning False if something already holds it."""
+        if identifier in self._claimed:
+            return False
+        self._claimed.add(identifier)
+        return True
 
     def by_identifier(self) -> dict[str, Provision]:
         return {p.identifier: p for p in self.provisions}
@@ -182,6 +245,15 @@ def citation_for(identifier: str) -> str:
     """
     if not identifier or not identifier.startswith("/us/usc/"):
         return identifier or ""
+    if _WS.search(identifier):
+        # TWO identifiers in one attribute, space separated — USLM does this for
+        # repealed ranges (`/us/usc/t26/s4531 /us/usc/t26/s4532`), 13 times in
+        # Title 26. Parsed as one path it yields a citation built from the LAST
+        # title and section in the string with the first spliced into the trail:
+        # '26 U.S.C. § 4532(s4531 )'. Plausible-looking and simply false, which
+        # is the worst kind. Which of the two the element means is not knowable
+        # here, so neither is guessed at.
+        return identifier
     segments = [s for s in identifier[len("/us/usc/"):].split("/") if s]
     if not segments:
         return identifier
@@ -213,7 +285,26 @@ def citation_for(identifier: str) -> str:
         tail = "".join(f"({t})" for t in trailing)
         return f"{stem} § {section_num}{tail}"
     if parts:
-        return f"{stem} {parts[-1]}"
+        # THE WHOLE PATH, not parts[-1]. Structural labels repeat everywhere —
+        # Title 26 alone has 46 parts numbered II and 36 subchapters lettered
+        # B — so the last label names a KIND of place, not a place. On the
+        # first full-title run (2026-08-04) that collided 25 of the corpus's
+        # 129 structural citations, quarantined the part_of facts of 11 files,
+        # and left 46 entities all named '26 U.S.C. pt. II'. The Bluebook cites
+        # these the same way for the same reason: 'pt. II' means nothing
+        # without the subchapter and chapter it sits in.
+        return f"{stem} {', '.join(parts)}"
+    # A TITLE-ONLY CITATION IS NEVER AN ANSWER when the identifier named
+    # something inside the title. '26 U.S.C.' does not identify a provision, so
+    # returning it makes every unreadable identifier in a title render
+    # identically — and identical surfaces are how unrelated provisions become
+    # one entity. The identifier is ugly as a citation and perfectly unique as
+    # one, which is the right trade: the docstring's own rule is that a wrong
+    # citation is worse than an ugly one, and a colliding one is worse still.
+    # The en-dash bug above is why this exists; the guard is here so the NEXT
+    # unhandled punctuation degrades to unique instead of to a mass merge.
+    if len(segments) > 1:
+        return identifier
     return stem
 
 
@@ -243,27 +334,43 @@ def parse_uslm(content: bytes) -> ParsedDocument:
     doc.text = out.text()
     for ref in doc.references:
         ref.text = doc.text[ref.char_start:ref.char_end]
-    if not doc.provisions:
+    if not doc.provisions and not doc.skipped_by_status \
+            and not doc.quoted_elements:
         raise UslmError("USLM document contains no numbered provisions")
+    if not doc.provisions:
+        # Every numbered element in this file is PAST law — Title 26's
+        # repealed chapter 38 is exactly this. Not a parse failure: the markup
+        # was read correctly and the answer is "nothing here is current". It
+        # must not raise, because ParseError nacks the queue item and the file
+        # would redeliver forever. It lands as retrievable text with no facts,
+        # which is the truthful outcome.
+        logger.info("uslm: %d element(s) skipped as past law, leaving no "
+                    "current provisions — the document renders as text and "
+                    "produces no facts", doc.skipped_by_status)
     return doc
 
 
 def _walk(elem: ET.Element, out: _Writer, doc: ParsedDocument,
-          parent: Optional[str], depth: int) -> None:
+          parent: Optional[str], depth: int, quoted: bool = False) -> None:
+    """`quoted` means "inside a QUOTED_LEVELS element": everything renders
+    exactly as it always did, and nothing is indexed. The flag only ever
+    turns ON — a quote cannot contain non-quoted law."""
     for child in elem:
         tag = _local(child.tag)
         if tag in PROVISION_LEVELS:
-            _emit_provision(child, tag, out, doc, parent, depth)
+            _emit_provision(child, tag, out, doc, parent, depth, quoted)
         elif tag in TEXT_LEVELS:
-            _emit_body(child, out, doc, parent)
+            _emit_body(child, out, doc, parent, quoted)
         elif tag in NOTE_LEVELS:
-            _emit_note(child, out, doc, parent)
+            _emit_note(child, out, doc, parent, quoted)
         elif tag in NOTE_CONTAINERS:
-            _walk(child, out, doc, parent, depth)   # a wrapper, not content
+            _walk(child, out, doc, parent, depth, quoted)  # a wrapper, not content
+        elif tag in QUOTED_LEVELS:
+            _walk(child, out, doc, parent, depth, quoted=True)
         elif tag in ("num", "heading"):
             continue          # consumed by the owning provision
         else:
-            _walk(child, out, doc, parent, depth)
+            _walk(child, out, doc, parent, depth, quoted)
 
 
 def _child_text(elem: ET.Element, name: str) -> Optional[str]:
@@ -275,7 +382,7 @@ def _child_text(elem: ET.Element, name: str) -> Optional[str]:
 
 def _emit_provision(elem: ET.Element, level: str, out: _Writer,
                     doc: ParsedDocument, parent: Optional[str],
-                    depth: int) -> None:
+                    depth: int, quoted: bool = False) -> None:
     identifier = elem.get("identifier") or ""
     num_text = _child_text(elem, "num") or ""
     heading = _child_text(elem, "heading")
@@ -322,6 +429,51 @@ def _emit_provision(elem: ET.Element, level: str, out: _Writer,
         out.write("\n" if heading else " ")
         next_depth = depth
 
+    # PAST LAW, or a SECOND CLAIM ON ONE IDENTIFIER. Either way the element is
+    # already rendered above — a reader still finds it — but it does not become
+    # a Provision, and it does not become anyone's parent: children re-parent to
+    # the nearest ancestor that IS current, so the structural spine stays whole.
+    status = (elem.get("status") or "").strip().lower()
+    demoted: Optional[str] = None
+    if quoted:
+        # Quoted amendment text. Not past law, not a defect in the file —
+        # just another document's words, so it gets its own counter and does
+        # not touch skipped_by_status.
+        demoted = "quoted"
+        doc.quoted_elements += 1
+    elif status in SKIPPED_STATUSES:
+        demoted = status
+        doc.skipped_by_status += 1
+    elif not identifier:
+        # A real current-law provision always carries an identifier (proven
+        # across all 287 Title 26 files: every identifier-less element was
+        # quoted PL text). If one ever shows up outside a quote it renders
+        # as text — because a Provision with identifier '' would land in
+        # by_identifier() under '', where ownerless refs would find it and
+        # emit facts keyed on the empty string. That is exactly the D4
+        # keyless-mention leak, refused here at its second door.
+        demoted = "no_identifier"
+        logger.warning(
+            "uslm: a <%s> outside quoted content has no identifier; rendered "
+            "as text, not indexed as a provision (num=%r heading=%r)",
+            level, num, heading)
+    elif not doc.claim(identifier):
+        # A USLM identifier is supposed to name exactly one thing, and almost
+        # always does — but not always, so this refuses to guess. The FIRST
+        # occurrence keeps the identifier; later ones render and are recorded
+        # here. Keeping the last (what a dict build does by default) would be
+        # just as arbitrary and completely silent.
+        demoted = "duplicate_identifier"
+        doc.duplicate_identifiers.append(identifier)
+        logger.warning(
+            "uslm: identifier %s appears more than once in this document; "
+            "keeping the first occurrence as the provision and rendering the "
+            "rest as text", identifier)
+
+    if demoted is not None:
+        _walk(elem, out, doc, parent=parent, depth=next_depth, quoted=quoted)
+        return
+
     record = Provision(
         identifier=identifier, level=level, num=num, heading=heading,
         citation=citation, parent=parent, char_start=start, char_end=start,
@@ -337,15 +489,15 @@ def _emit_provision(elem: ET.Element, level: str, out: _Writer,
 
 
 def _emit_body(elem: ET.Element, out: _Writer, doc: ParsedDocument,
-               owner: Optional[str]) -> None:
+               owner: Optional[str], quoted: bool = False) -> None:
     """Body text, capturing every `<ref>` span as it is written."""
-    _inline(elem, out, doc, owner)
+    _inline(elem, out, doc, owner, quoted=quoted)
     if not out.text().endswith("\n"):
         out.write("\n")
 
 
 def _emit_note(elem: ET.Element, out: _Writer, doc: ParsedDocument,
-               owner: Optional[str]) -> None:
+               owner: Optional[str], quoted: bool = False) -> None:
     """Editorial apparatus: rendered because a reader wants it, never
     indexed as a provision. Buffered and trimmed rather than streamed —
     note bodies are the whitespace-heaviest part of a USLM file and would
@@ -355,7 +507,7 @@ def _emit_note(elem: ET.Element, out: _Writer, doc: ParsedDocument,
     if heading:
         out.write(f"{heading}: ")
     mark = out.pos
-    _inline(elem, out, doc, owner, skip=("heading",))
+    _inline(elem, out, doc, owner, skip=("heading",), quoted=quoted)
     out.rstrip_to(mark)
     if out.pos == mark and not heading:
         return                      # an empty note is not worth a paragraph
@@ -363,12 +515,19 @@ def _emit_note(elem: ET.Element, out: _Writer, doc: ParsedDocument,
 
 
 def _inline(elem: ET.Element, out: _Writer, doc: ParsedDocument,
-            owner: Optional[str], skip: tuple[str, ...] = ()) -> None:
+            owner: Optional[str], skip: tuple[str, ...] = (),
+            quoted: bool = False) -> None:
     """Render mixed content, recording cross-reference spans.
 
     A `<ref>`'s span is captured around the recursive render of its own
     children, so the recorded offsets bound exactly the link text that
-    reaches the reader — which is what a citation should point at."""
+    reaches the reader — which is what a citation should point at.
+
+    Inside quoted content (`quoted=True`) everything still renders — the
+    link text is part of the quote — but no CrossReference is recorded: a
+    `<ref>` in quoted PL text is the AMENDING ACT citing something, not this
+    provision citing it, and indexing it would assert an edge the quoting
+    document never states."""
     out.write_prose(_clean(elem.text))
     for child in elem:
         tag = _local(child.tag)
@@ -376,17 +535,20 @@ def _inline(elem: ET.Element, out: _Writer, doc: ParsedDocument,
             pass
         elif tag == "ref":
             start = out.pos
-            _inline(child, out, doc, owner)
+            _inline(child, out, doc, owner, quoted=quoted)
             href = child.get("href") or ""
-            if href:
+            if href and not quoted:
                 doc.references.append(CrossReference(
                     owner=owner or "", href=href,
                     char_start=start, char_end=out.pos))
+        elif tag in QUOTED_LEVELS:
+            _inline(child, out, doc, owner, quoted=True)
         elif tag in PROVISION_LEVELS or tag in NOTE_LEVELS:
             # A nested provision inside body text: hand it back to the main
-            # walk so it is indexed, not flattened into prose.
-            _walk(elem, out, doc, owner, depth=3)
+            # walk so it is indexed, not flattened into prose. Under a quote
+            # the flag rides along and the walk renders without indexing.
+            _walk(elem, out, doc, owner, depth=3, quoted=quoted)
             return
         else:
-            _inline(child, out, doc, owner)
+            _inline(child, out, doc, owner, quoted=quoted)
         out.write_prose(_clean(child.tail))

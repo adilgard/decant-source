@@ -38,12 +38,18 @@ setup) or `set_extraction_setup`:
 
 ```json
 {
-  "data_track": "prose",
   "parser": "ds_parser_uslm.parser:UslmParser",
   "extraction_strategy": "parser_supplied",
   "fact_parser": "ds_parser_uslm.parser:UslmParser"
 }
 ```
+
+Three keys, which is exactly what `set_extraction_setup` accepts. It does
+NOT take `data_track`, and this source does not need one: `data_track`
+only picks a strategy when `extraction_strategy` is absent, and the parser
+stamps `prose` on the document itself. An earlier draft of this file listed
+it as a fourth key, which sent an operator looking for a field that isn't
+there.
 
 The same class fills both roles deliberately. Fact offsets have to index
 the same string the chunker cut, and the only way to guarantee that is for
@@ -87,6 +93,16 @@ identifier is globally unique and stable, which makes it a real
 deterministic key for the resolver's T0 tier rather than a name that merely
 looks unique — two files mentioning `26 U.S.C. § 63` resolve to one entity
 without a model being asked.
+
+That last sentence is only true because core is told to believe the key.
+The `Provision` row in `resolution_policy` carries
+`keys_are_authoritative = true` (migration 014), which is what makes an
+unseen identifier mean a NEW provision instead of a fuzzy-match candidate.
+Without it the resolver falls back to name similarity, and citations are
+the worst possible input for that: `26 U.S.C. § 63` and `26 U.S.C. § 163`
+score 0.97 while being unrelated sections. The first real ingest resolved
+4 of 73 mentions that way. If a deployment ever ships without that row,
+this is where it will show up.
 
 Cross-references to provisions **not** in the current file are still
 emitted. That is the normal case, and it is what makes the corpus connect

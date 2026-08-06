@@ -249,7 +249,26 @@ class TieredScorer(Scorer):
             if matched:
                 hits[cand.entity_id] = matched
         if not hits:
-            return None  # keys present but unseen -> fall through to Tier 1+
+            if not policy.keys_are_authoritative:
+                return None  # keys present but unseen -> fall through to Tier 1+
+            # AUTHORITATIVE KEYS (migration 014): the key is complete and
+            # externally unique for this type, so "nobody carries it" is not
+            # missing evidence — it is the answer. Falling through here would
+            # hand the decision to name similarity, which for a keyed corpus is
+            # a strictly WEAKER signal than the one already in hand, and can be
+            # actively misleading: sibling USLM citations differ by one or two
+            # characters inside a long identical string, so two unrelated
+            # provisions score ~0.97 (see 014's header for the measurements).
+            # Deciding here keeps identity deterministic AND costs nothing —
+            # no embedding compare, no LLM adjudication on the gray residual.
+            # No score and no band, matching the other new_entity path: there
+            # is no candidate here to have scored, and inventing a number
+            # would put a match score on a non-match.
+            return ResolutionOutcome(
+                decision="new_entity", tier="t0",
+                method="deterministic_key",
+                reason="authoritative_key_unseen",
+                features={"authoritative_keys": strong})
 
         scored = [ScoredCandidate(
             entity_id=eid, score=1.0, method="deterministic_key", tier="t0",

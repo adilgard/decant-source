@@ -95,6 +95,9 @@ class ResolutionService:
         self.scorer = scorer
         self.embedder = embedder
         self._ontology_version = ontology_version
+        # keys_are_authoritative per entity type, read once per process (see
+        # _keys_are_authoritative for why this one policy field is cached).
+        self._authoritative_types: dict[str, bool] = {}
 
     # -------------------------------------------------------------- sweep --
     def sweep(self, tenant_id: str, limit: int = 500) -> ResolutionSummary:
@@ -199,6 +202,22 @@ class ResolutionService:
             for r in rows:
                 hit(r["id"], "key")
 
+        # AUTHORITATIVE KEYS STOP HERE (migration 014, measured 2026-08-04).
+        # When the type declares its keys decide identity, Tier 0's verdict is
+        # already determined by the key block alone: hit -> resolve/conflict,
+        # miss -> new_entity. The ANN and trigram paths below cannot change it
+        # — the scorer never reads their candidates for this type — so running
+        # them is pure cost. And the cost is the run: path (c) is a trigram
+        # scan over every entity+alias with GROUP BY/HAVING, per mention, so
+        # the sweep degrades O(mentions x entities) as the corpus accretes.
+        # On the first full-title run it was 25 mentions/min against 65,000
+        # staged — a 40-hour drain, with Ollama at 9% and Postgres doing all
+        # of it. Skipping also skips _ensure_embedding: no ANN, no vector
+        # needed, and bge-m3 stays out of the hot path entirely.
+        if keys and self._keys_are_authoritative(tenant_id,
+                                                 mention.entity_type):
+            return self._candidates_for(tenant_id, hits)
+
         # (b) pgvector ANN over entity embeddings (P1's ann_candidates); the
         #     mention is embedded on first touch and the vector persisted
         self._ensure_embedding(mention)
@@ -231,6 +250,25 @@ class ResolutionService:
         for r in rows:
             hit(r["id"], "name")
 
+        return self._candidates_for(tenant_id, hits)
+
+    def _keys_are_authoritative(self, tenant_id: str,
+                                entity_type: str) -> bool:
+        """resolution_policy.keys_are_authoritative for one type, cached for
+        the process. Policy is data and normally reread per sweep, but this
+        flag is read PER MENTION on the blocking hot path, and flipping it
+        mid-corpus would resolve half a corpus one way and half the other —
+        restart to change it, same rule as a config edit."""
+        cached = self._authoritative_types.get(entity_type)
+        if cached is None:
+            row = self.store.get_resolution_policy(tenant_id, entity_type)
+            cached = bool(row and row.keys_are_authoritative)
+            self._authoritative_types[entity_type] = cached
+        return cached
+
+    def _candidates_for(self, tenant_id: str,
+                        hits: dict[int, dict[str, Any]]
+                        ) -> list[BlockedCandidate]:
         candidates = []
         for entity_id, entry in hits.items():
             entity = self.store.get_entity(tenant_id, entity_id)
@@ -241,8 +279,24 @@ class ResolutionService:
                 entity_type=entity.entity_type, attributes=entity.attributes,
                 aliases=[a.alias for a in entity.aliases],
                 cosine=entry["cosine"], blocks=entry["blocks"]))
-        candidates.sort(key=lambda c: -(c.cosine or 0))
-        return candidates[:MAX_CANDIDATES]
+        # KEY-BLOCKED CANDIDATES ARE NEVER TRUNCATED. Sorting by cosine alone
+        # put them LAST — a candidate found only by exact key has no cosine, so
+        # `-(None or 0)` ranks it below every fuzzy neighbour — and then the cap
+        # could drop the one candidate that resolves the mention deterministically.
+        # Harmless while a tenant holds a handful of entities per type, which is
+        # why the pilot never showed it. It bites at corpus scale: path (c) has
+        # no cap of its own and a floor of only NAME_SIM_FLOOR, so a full Title
+        # 26 offers thousands of citation strings above it, and Tier 0 would
+        # start missing keys that ARE in the registry. That reads as "the
+        # deterministic tier is unreliable" when the blocker is what failed.
+        # An exact hit on a strong key is bounded in practice (0 or 1; more than
+        # one is a key conflict, which Tier 0 must SEE to send to review), so
+        # keeping all of them costs nothing and cannot be starved.
+        keyed = [c for c in candidates if "key" in c.blocks]
+        rest = [c for c in candidates if "key" not in c.blocks]
+        keyed.sort(key=lambda c: -(c.cosine or 0))
+        rest.sort(key=lambda c: -(c.cosine or 0))
+        return keyed + rest[:max(0, MAX_CANDIDATES - len(keyed))]
 
     def _ensure_embedding(self, mention: EntityMention) -> None:
         if mention.context_embedding is not None:

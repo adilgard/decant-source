@@ -180,6 +180,179 @@ def test_tier0_key_conflict_routes_to_review(store, pipeline, resolution,
 
 
 # ---------------------------------------------------------------------------
+# 2b. Tier 0, AUTHORITATIVE KEYS (migration 014): for a type whose keys are
+#     complete and externally unique, a key NOBODY CARRIES means a new entity.
+#     Similarity never gets a vote.
+#
+#     The shipped case is Provision, whose key is a published USLM identifier.
+#     Sibling citations differ by one or two characters inside a long identical
+#     string, so the fuzzy tiers see two unrelated provisions as ~0.97 similar
+#     and park them in review — measured on the first real statute ingest,
+#     which resolved 4 of 73 mentions. There is no threshold that fixes that,
+#     because name similarity carries no signal here. The key does.
+# ---------------------------------------------------------------------------
+def test_tier0_authoritative_key_unseen_is_a_new_entity(store, pipeline,
+                                                        resolution, tenant):
+    doc, chunk = doc_with_chunk(pipeline, store, tenant)
+    # A near-twin already in the registry: 0.90 name similarity, an embedding
+    # the mention will match on exactly. Everything fuzzy points at a merge.
+    sibling = store.upsert_entity(make_entity(
+        tenant, "26 U.S.C. § 63", "Provision",
+        attributes={"uslm_identifier": "/us/usc/t26/s63"},
+        embedding=unit_vec(4), embedding_model="bge-m3"))
+    m = stage_mention(store, doc, chunk, "26 U.S.C. § 63(a)", "Provision",
+                      keys={"uslm_identifier": "/us/usc/t26/s63/a"},
+                      vec=unit_vec(4))
+
+    summary = resolution.sweep(tenant)
+
+    # `resolved` counts mentions that ended attached to an entity, which a
+    # new_entity outcome also does — to the one it just minted. `review` is
+    # the counter that must stay at zero: nothing here was uncertain.
+    assert summary.new_entities == 1 and summary.review == 0
+    assert summary.resolved == 1
+    assert summary.by_tier == {"t0": 1}
+
+    got = store.get_mention(tenant, m.id)
+    assert got.resolution_status == "resolved"      # attached to its own entity
+    assert got.resolved_entity_id != sibling
+    minted = entity_of(store, tenant, got.resolved_entity_id)
+    assert minted.attributes["uslm_identifier"] == "/us/usc/t26/s63/a"
+
+    (d,) = rows(store, tenant, "resolution_decisions")
+    assert d["tier"] == "t0" and d["method"] == "deterministic_key"
+    assert d["decision"] == "new_entity"
+    assert d["features"]["reason"] == "authoritative_key_unseen"
+
+    # Nothing fuzzy ran: no embedding compare, no LLM adjudication, no pair
+    # logged against the near-twin. Deciding at Tier 0 is the cheap path too.
+    assert rows(store, tenant, "match_candidates") == []
+
+
+# ---------------------------------------------------------------------------
+# 2c. The flag is OPT-IN. A type without it keeps the fall-through — an unseen
+#     key is weak evidence there, and the fuzzy tier is the second opinion an
+#     LLM-extracted email needs. This is the regression guard on the DEFAULT:
+#     flipping it globally would change every existing type at once.
+# ---------------------------------------------------------------------------
+def test_unseen_key_still_falls_through_for_ordinary_types(store, pipeline,
+                                                           resolution, tenant):
+    doc, chunk = doc_with_chunk(pipeline, store, tenant)
+    store.upsert_entity(make_entity(
+        tenant, "Dana Reyes", "Person",
+        attributes={"email": "dana.reyes@diversifiedbotanics.com"},
+        embedding=unit_vec(5), embedding_model="bge-m3"))
+    # Same person, different address: the key is unseen, so Tier 0 must NOT
+    # decide. Person carries keys_are_authoritative=false.
+    m = stage_mention(store, doc, chunk, "Dana Reyes", "Person",
+                      keys={"email": "d.reyes@diversifiedbotanics.com"},
+                      vec=unit_vec(5))
+
+    resolution.sweep(tenant)
+
+    (d,) = rows(store, tenant, "resolution_decisions")
+    assert d["tier"] != "t0", "an unseen key must not short-circuit here"
+    assert (d["features"] or {}).get("reason") != "authoritative_key_unseen"
+
+
+# ---------------------------------------------------------------------------
+# 2d'. Blocking for an authoritative-key type stops at the key block: no
+#      embedding call, no ANN, no trigram scan. Not an optimisation nicety —
+#      the trigram path is a per-mention aggregate scan over every entity and
+#      alias of the type, O(mentions x entities) across a sweep. On the first
+#      full-title run (2026-08-04) it ran resolution at 25 mentions/min
+#      against 65,000 staged: a 40-hour drain for work Tier 0 then discarded,
+#      with the embedder near idle. The verdict is fully determined by the
+#      key block for these types, so the fuzzy paths are pure cost.
+# ---------------------------------------------------------------------------
+def test_authoritative_key_blocking_never_embeds_or_scans(store, pipeline,
+                                                          scorer, tenant):
+    from knowledge_hub.resolution import ResolutionService
+
+    class ExplodingEmbedder:
+        """The test: reaching for the embedder IS the failure."""
+        def embed(self, texts):
+            raise AssertionError(
+                "blocking embedded a mention of an authoritative-key type — "
+                "the ANN path should never run for it")
+
+    resolution = ResolutionService(pipeline, scorer, ExplodingEmbedder())
+    doc, chunk = doc_with_chunk(pipeline, store, tenant)
+    known = store.upsert_entity(make_entity(
+        tenant, "26 U.S.C. § 63", "Provision",
+        attributes={"uslm_identifier": "/us/usc/t26/s63"}))
+
+    # A key HIT resolves onto the known entity, and a key MISS mints a new
+    # one — both without a vector anywhere in sight. (No embedding on the
+    # entity either: nothing in this test can pay the ANN path's toll.)
+    stage_mention(store, doc, chunk, "26 U.S.C. § 63", "Provision",
+                  keys={"uslm_identifier": "/us/usc/t26/s63"})
+    stage_mention(store, doc, chunk, "26 U.S.C. § 1", "Provision",
+                  keys={"uslm_identifier": "/us/usc/t26/s1"})
+
+    summary = resolution.sweep(tenant)
+
+    assert summary.swept == 2 and summary.errors == 0
+    assert summary.by_tier == {"t0": 2}
+    assert summary.resolved == 2 and summary.new_entities == 1
+    ids = {m["resolved_entity_id"] for m in rows(
+        store, tenant, "entity_mentions")}
+    assert known in ids and len(ids) == 2
+
+    # A NON-authoritative type still embeds — the fast path must not leak.
+    class CountingEmbedder:
+        calls = 0
+        def embed(self, texts):
+            CountingEmbedder.calls += 1
+            return [unit_vec(9) for _ in texts]
+
+    resolution2 = ResolutionService(pipeline, scorer, CountingEmbedder())
+    stage_mention(store, doc, chunk, "Dana Reyes", "Person",
+                  keys={"email": "dana@example.com"})
+    resolution2.sweep(tenant)
+    assert CountingEmbedder.calls > 0, \
+        "a Person mention should still take the embedding path"
+
+
+# ---------------------------------------------------------------------------
+# 2d. Blocking: a KEY-blocked candidate is never truncated away.
+#
+#     The union used to sort by cosine alone, and a candidate found only by
+#     exact key has none — so it sorted LAST and the MAX_CANDIDATES cap could
+#     drop the one candidate that resolves the mention deterministically. The
+#     name-similarity path has no cap of its own and a floor of only
+#     NAME_SIM_FLOOR, so at corpus scale it fills every slot. Tier 0 then
+#     "misses" a key that is sitting in the registry.
+# ---------------------------------------------------------------------------
+def test_key_blocked_candidate_survives_the_blocking_cap(store, pipeline,
+                                                         resolution, scorer,
+                                                         tenant):
+    from knowledge_hub.resolution import MAX_CANDIDATES
+
+    doc, chunk = doc_with_chunk(pipeline, store, tenant)
+    # Flood the type with near-identical names AND near-identical embeddings,
+    # so both fuzzy paths fill the union past the cap.
+    for i in range(MAX_CANDIDATES + 10):
+        store.upsert_entity(make_entity(
+            tenant, f"Dana Reyes {i:02d}", "Person",
+            embedding=mix_vec(6, 7, 0.99, 0.01), embedding_model="bge-m3"))
+    # The real match: reachable ONLY by its key. Dissimilar name, orthogonal
+    # embedding — it loses every fuzzy ranking there is.
+    dana = store.upsert_entity(make_entity(
+        tenant, "Q", "Person",
+        attributes={"email": "dana.reyes@diversifiedbotanics.com"},
+        embedding=unit_vec(8), embedding_model="bge-m3"))
+    m = stage_mention(store, doc, chunk, "Dana Reyes 99", "Person",
+                      keys={"email": "dana.reyes@diversifiedbotanics.com"},
+                      vec=mix_vec(6, 7, 0.99, 0.01))
+
+    summary = resolution.sweep(tenant)
+
+    assert summary.resolved == 1 and summary.by_tier == {"t0": 1}
+    assert store.get_mention(tenant, m.id).resolved_entity_id == dana
+
+
+# ---------------------------------------------------------------------------
 # 3. Tier 1 (Splink): a structured mention scores probabilistically and
 #    bands against resolution_policy — an exact name alone (prior 0.01,
 #    shipped placeholder m/u) lands in the GRAY band -> review

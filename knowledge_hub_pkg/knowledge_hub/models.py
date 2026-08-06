@@ -377,6 +377,11 @@ class ResolutionPolicy(BaseModel):
     precision_target: Optional[float] = None
     requires_corroboration: bool = False   # name-only match needs a graph edge
     auto_merge_allowed: bool = True
+    # A strong extracted key DECIDES identity for this type, so an unseen key
+    # means a new entity and similarity never gets a vote (migration 014).
+    # Opt-in per type: default false keeps every type whose keys are sparse or
+    # LLM-extracted on the fuzzy second opinion it needs.
+    keys_are_authoritative: bool = False
     notes: Optional[str] = None
     updated_at: Optional[datetime] = None
 

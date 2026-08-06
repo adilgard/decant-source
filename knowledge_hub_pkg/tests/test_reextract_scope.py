@@ -42,7 +42,10 @@ from knowledge_hub.operator_http import (
     WriteRefused,
     register_operator_defaults,
 )
-from knowledge_hub.pipeline import RETRACTED_BY_ONTOLOGY
+from knowledge_hub.pipeline import (
+    RETRACTED_BY_EXTRACTOR,
+    RETRACTED_BY_ONTOLOGY,
+)
 from knowledge_hub.serving import Principal
 
 TEST_BUCKET = "kh-raw-test"
@@ -59,19 +62,21 @@ def import_version(store, tenant: str) -> str:
 
 
 def stage_fact(store, tenant: str, subject_id: int, literal: str, *,
-               doc_id: int, version: str) -> None:
+               doc_id: int, version: str, extractor: str = "test",
+               extractor_version: str = "rx") -> None:
     store.stage_pending({}, [PendingFact(
         tenant_id=tenant, subject_ref=f"entity:{subject_id}",
         predicate="owns", object_literal=literal, ontology_version=version,
-        source_document_id=doc_id, extractor="test",
-        extractor_version="rx")])
+        source_document_id=doc_id, extractor=extractor,
+        extractor_version=extractor_version)])
 
 
 def doc_facts(store, tenant: str, doc_id: int) -> list[dict]:
     with store.transaction(tenant) as conn:
         return conn.execute(
             "SELECT id, object_literal, ontology_version, valid_from,"
-            " valid_to, retraction_reason FROM facts"
+            " valid_to, retraction_reason, extractor, extractor_version"
+            " FROM facts"
             " WHERE tenant_id = %s AND source_document_id = %s ORDER BY id",
             (tenant, doc_id)).fetchall()
 
@@ -130,6 +135,77 @@ def test_ontology_supersession_retires_retains_and_is_atomic(
     # "A vs B" stays answerable: version A's yield is three literals.
     assert {r["object_literal"] for r in a_rows} == \
         {"Net-30", "Building A", "extra-A"}
+
+
+def test_extractor_supersession_retires_same_version_plugin_upgrade(
+        pipeline, store, tenant):
+    """The fourth trigger: a plugin upgrade re-yields under the SAME
+    ontology version (the ledger keys on extractor_version, so it is fresh
+    work, never a replay) — without extractor supersession the re-yield
+    would promote BESIDE the old rows and the corpus would silently
+    double. The old producer version's facts must retire exactly like an
+    ontology cutover: retained, reason-tagged, one shared timestamp."""
+    doc = land_document(pipeline, store, tenant)
+    vendor = make_entity(tenant, "Alpine Extracts")
+    store.upsert_entity(vendor)
+
+    # Plugin 1.0's yield — the served corpus.
+    stage_fact(store, tenant, vendor.id, "Net-30", doc_id=doc.id,
+               version=ONTOLOGY, extractor_version="1.0")
+    stage_fact(store, tenant, vendor.id, "Building A", doc_id=doc.id,
+               version=ONTOLOGY, extractor_version="1.0")
+    assert len(pipeline.promote_pending(tenant)) == 2
+
+    # Plugin 1.1 re-yields under the SAME ontology version: 1.0 retires
+    # (retained + tagged), 1.1 is current, one cutover.
+    stage_fact(store, tenant, vendor.id, "Net-30", doc_id=doc.id,
+               version=ONTOLOGY, extractor_version="1.1")
+    assert len(pipeline.promote_pending(tenant)) == 1
+    rows = doc_facts(store, tenant, doc.id)
+    old = [r for r in rows if r["extractor_version"] == "1.0"]
+    new = [r for r in rows if r["extractor_version"] == "1.1"]
+    assert len(old) == 2 and len(new) == 1      # RETAINED, never deleted
+    assert all(r["valid_to"] is not None and
+               r["retraction_reason"] == RETRACTED_BY_EXTRACTOR
+               for r in old)
+    assert all(r["valid_to"] is None for r in new)
+    # One shared cutover instant: 1.1's validity begins where 1.0 ends.
+    cutovers = {r["valid_to"] for r in old}
+    assert len(cutovers) == 1
+    assert new[0]["valid_from"] == cutovers.pop()
+
+    # Old-vs-new stays answerable: 1.0's yield is both literals.
+    assert {r["object_literal"] for r in old} == {"Net-30", "Building A"}
+
+
+def test_extractor_supersession_never_touches_other_producers(
+        pipeline, store, tenant):
+    """Same-producer on purpose: a different extractor NAME promoting
+    under the same version is a strategy switch, not an upgrade — the
+    incumbent's facts must stay served. And the incumbent re-promoting at
+    its own unchanged version must trip nothing (normal operation)."""
+    doc = land_document(pipeline, store, tenant)
+    vendor = make_entity(tenant, "Basalt Trading")
+    store.upsert_entity(vendor)
+
+    stage_fact(store, tenant, vendor.id, "Net-30", doc_id=doc.id,
+               version=ONTOLOGY, extractor="llm", extractor_version="1.0")
+    pipeline.promote_pending(tenant)
+
+    # A DIFFERENT producer promotes same-version: nothing retires.
+    stage_fact(store, tenant, vendor.id, "Net-45", doc_id=doc.id,
+               version=ONTOLOGY, extractor="parser", extractor_version="9.9")
+    pipeline.promote_pending(tenant)
+    rows = doc_facts(store, tenant, doc.id)
+    assert all(r["valid_to"] is None for r in rows), \
+        "a strategy switch must not silently retire the incumbent"
+
+    # The same producer at the SAME version promotes again: still nothing.
+    stage_fact(store, tenant, vendor.id, "extra", doc_id=doc.id,
+               version=ONTOLOGY, extractor="llm", extractor_version="1.0")
+    pipeline.promote_pending(tenant)
+    rows = doc_facts(store, tenant, doc.id)
+    assert all(r["valid_to"] is None for r in rows)
 
 
 def test_supersession_is_promotion_gated(pipeline, store, tenant):

@@ -38,6 +38,7 @@ REVIEW_KINDS = ("mention", "match", "oversized_fact", "document",
 RETRACTED_BY_TOMBSTONE = "source_tombstone"
 RETRACTED_BY_REVERSION = "superseded"
 RETRACTED_BY_ONTOLOGY = "ontology_superseded"
+RETRACTED_BY_EXTRACTOR = "extractor_superseded"
 
 
 class Pipeline:
@@ -174,25 +175,46 @@ class Pipeline:
                                      *, valid_to: datetime, reason: str,
                                      keep_fact_ids: tuple = (),
                                      other_than_ontology_version:
+                                     Optional[str] = None,
+                                     only_ontology_version:
+                                     Optional[str] = None,
+                                     only_extractor: Optional[str] = None,
+                                     other_than_extractor_version:
                                      Optional[str] = None) -> int:
         """THE facts.valid_to writer — the BP7 retraction primitive's
-        document-scoped core, shared by all three triggers (tombstone
-        propagation, re-version supersession, ontology supersession; the
-        reason discriminates). Retracts every CURRENT fact anchored to
-        `doc_ids` per the provenance-link rule (source_document_id, else
-        the chunk's document), except `keep_fact_ids` — the supersession
-        diff's survivors, which stay temporally continuous.
+        document-scoped core, shared by all four triggers (tombstone
+        propagation, re-version supersession, ontology supersession,
+        extractor supersession; the reason discriminates). Retracts every
+        CURRENT fact anchored to `doc_ids` per the provenance-link rule
+        (source_document_id, else the chunk's document), except
+        `keep_fact_ids` — the supersession diff's survivors, which stay
+        temporally continuous.
         `other_than_ontology_version` narrows the retraction to facts NOT
         carrying that version — the ontology-supersession trigger's guard:
         the newly promoted rows (which ARE current) carry the new version
-        and must survive their own cutover. Runs on the caller's connection
-        so the caller's transaction owns atomicity. Returns rows retracted."""
+        and must survive their own cutover.
+        `only_ontology_version` / `only_extractor` /
+        `other_than_extractor_version` are the extractor-supersession
+        trigger's guards: retire only the SAME vocabulary's rows from the
+        SAME producer at a DIFFERENT code version — a same-version plugin
+        upgrade must never touch another producer's facts or another
+        vocabulary's. Runs on the caller's connection so the caller's
+        transaction owns atomicity. Returns rows retracted."""
         version_guard = ""
         params: list = [valid_to, reason, tenant_id, list(keep_fact_ids),
                         doc_ids, tenant_id, doc_ids]
         if other_than_ontology_version is not None:
-            version_guard = " AND ontology_version <> %s"
+            version_guard += " AND ontology_version <> %s"
             params.append(other_than_ontology_version)
+        if only_ontology_version is not None:
+            version_guard += " AND ontology_version = %s"
+            params.append(only_ontology_version)
+        if only_extractor is not None:
+            version_guard += " AND extractor = %s"
+            params.append(only_extractor)
+        if other_than_extractor_version is not None:
+            version_guard += " AND extractor_version <> %s"
+            params.append(other_than_extractor_version)
         return conn.execute(
             """
             UPDATE facts SET valid_to = %s, retraction_reason = %s
@@ -444,8 +466,16 @@ class Pipeline:
             # ever arrive under a new version by deliberate re-extraction.
             current_versions = self._current_ontology_versions(
                 conn, tenant_id, anchor_document_id)
+            # Extractor supersession (the fourth trigger) needs finer
+            # evidence: WHO produced the document's current facts, per
+            # vocabulary. (ontology_version, extractor, extractor_version)
+            # triples — a plugin upgrade arrives same-version, so the
+            # version set alone cannot see it.
+            current_producers = self._current_producers(
+                conn, tenant_id, anchor_document_id)
             kept: set[int] = set()
             promoted_versions: set[str] = set()
+            promoted_producers: set[tuple[str, str]] = set()
             for pending_id in pending_ids:
                 pending = self.store.get_pending_fact(tenant_id, pending_id)
                 fact = self._rewrite_refs(pending)
@@ -463,11 +493,22 @@ class Pipeline:
                     supersedes_ontology = bool(
                         current_versions and
                         fact.ontology_version not in current_versions)
+                    # Same vocabulary, same producer, DIFFERENT code
+                    # version: this fact is a plugin upgrade's re-yield,
+                    # so its validity begins at the cutover that retires
+                    # its predecessor (kept temporally continuous below).
+                    supersedes_extractor = any(
+                        v == fact.ontology_version and e == fact.extractor
+                        and ev != fact.extractor_version
+                        for v, e, ev in current_producers)
                     if fact.valid_from is None and (prior_docs or
-                                                    supersedes_ontology):
+                                                    supersedes_ontology or
+                                                    supersedes_extractor):
                         fact.valid_from = cutover  # validity begins at cutover
                     fact_id = self.store.write_facts([fact])[0]
                 promoted_versions.add(fact.ontology_version)
+                promoted_producers.add((fact.extractor,
+                                        fact.extractor_version))
                 conn.execute(
                     "UPDATE pending_facts SET resolution_status = 'promoted',"
                     " promoted_fact_id = %s WHERE tenant_id = %s AND id = %s",
@@ -506,6 +547,37 @@ class Pipeline:
                         valid_to=cutover, reason=RETRACTED_BY_ONTOLOGY,
                         keep_fact_ids=tuple(promoted) + tuple(kept),
                         other_than_ontology_version=new_version)
+                # Extractor supersession (the fourth trigger). The
+                # extraction ledger already treats a plugin's new code
+                # version as fresh work, never a replay — without this
+                # branch that honesty DUPLICATES the corpus: the re-yield
+                # promotes beside the old rows and nothing retires,
+                # because the version set matches. So: when this wave
+                # promoted under exactly ONE producer, the vocabulary is
+                # unchanged, and the document currently serves that same
+                # vocabulary from the SAME producer at a DIFFERENT code
+                # version, the old producer's rows retire — retained,
+                # reason-tagged, same cutover, same transaction, exactly
+                # like the ontology trigger. Same-producer on purpose: a
+                # strategy SWITCH (llm -> parser) is a modeling decision
+                # that earns an ontology version bump, not a silent
+                # retirement of another producer's yield. Mixed-producer
+                # waves skip for the same reason mixed-version waves do —
+                # superseding on ambiguous evidence loses data; waiting
+                # loses nothing. Promotion-gated like its sibling: an
+                # empty re-yield leaves the old facts served.
+                elif len(promoted_producers) == 1:
+                    new_extractor, new_ev = next(iter(promoted_producers))
+                    if any(v == new_version and e == new_extractor
+                           and ev != new_ev
+                           for v, e, ev in current_producers):
+                        self._retract_facts_for_documents(
+                            conn, tenant_id, [anchor_document_id],
+                            valid_to=cutover, reason=RETRACTED_BY_EXTRACTOR,
+                            keep_fact_ids=tuple(promoted) + tuple(kept),
+                            only_ontology_version=new_version,
+                            only_extractor=new_extractor,
+                            other_than_extractor_version=new_ev)
         return promoted
 
     @staticmethod
@@ -528,6 +600,32 @@ class Pipeline:
             """,
             (tenant_id, document_id, tenant_id, document_id)).fetchall()
         return {r["ontology_version"] for r in rows}
+
+    @staticmethod
+    def _current_producers(conn, tenant_id: str,
+                           document_id: Optional[int]
+                           ) -> set[tuple[str, str, str]]:
+        """Distinct (ontology_version, extractor, extractor_version) on the
+        document's CURRENT facts (provenance-link rule) — the
+        extractor-supersession trigger's evidence. A plugin upgrade
+        re-yields under the SAME ontology version, so only producer
+        identity can distinguish it from a normal same-version wave."""
+        if document_id is None:
+            return set()
+        rows = conn.execute(
+            """
+            SELECT DISTINCT ontology_version, extractor, extractor_version
+            FROM facts
+            WHERE tenant_id = %s AND valid_to IS NULL
+              AND (source_document_id = %s
+                   OR (source_document_id IS NULL
+                       AND source_chunk_id IN (
+                           SELECT id FROM chunks
+                           WHERE tenant_id = %s AND document_id = %s)))
+            """,
+            (tenant_id, document_id, tenant_id, document_id)).fetchall()
+        return {(r["ontology_version"], r["extractor"],
+                 r["extractor_version"]) for r in rows}
 
     @staticmethod
     def _prior_version_documents(conn, tenant_id: str,

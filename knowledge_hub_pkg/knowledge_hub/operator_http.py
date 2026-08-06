@@ -409,11 +409,19 @@ class OperatorService:
     def __init__(self, store: PostgresFactStore,
                  resolution: ResolutionService,
                  registry: SourceRegistry,
-                 secrets: Optional[SecretsProvider] = None):
+                 secrets: Optional[SecretsProvider] = None,
+                 inference_probe: Optional[Callable[[str], Any]] = None):
         self._store = store
         self._resolution = resolution
         self._registry = registry
         self._secrets = secrets
+        # d.s operator-console pass: the ONE availability source for what
+        # the inference box serves (deploy_probe.probe_ollama — /api/tags +
+        # /api/version). Injectable so tests need no live Ollama. Cached a
+        # few seconds because two console surfaces read it.
+        self._inference_probe = inference_probe
+        self._inference_cache: tuple[float, Optional[dict[str, Any]]] = \
+            (0.0, None)
 
     # ------------------------------------------------------ review resolution
     def resolve_merge(self, principal: Principal,
@@ -633,6 +641,52 @@ class OperatorService:
                     "'package.module:Attribute'; it is resolved and "
                     "type-checked when the source is saved",
         }
+
+    _INFERENCE_TTL_S = 5.0
+
+    def inference_status(self) -> dict[str, Any]:
+        """What the inference box ACTUALLY serves, asked live — never a
+        hardcoded list (d.s operator-console pass, Stage 1/5).
+
+        The source is the Ollama server itself at settings.ollama_host:
+        /api/version answers reachability, /api/tags answers the served
+        model list (deploy_probe.probe_ollama, the same read `khctl apply`
+        trusts). A model pulled onto the box appears here with no console
+        change; one removed disappears. `embedding`/`extraction` carry this
+        instance's CONFIGURED roles beside the availability facts, matched
+        by the same tag rule phase_models uses (name == tag or tag is
+        name:variant), so 'configured but not served' is visible instead of
+        discovered at the first failed ingest.
+
+        Not tenant-scoped (which box this instance dials is deployment
+        config, not customer data); role-gated by the route like
+        /v1/components. Cached ~5s: the thin Inference tab and the Stage 5
+        pickers both read it, and one probe answers both."""
+        now = time.time()
+        cached_at, cached = self._inference_cache
+        if cached is not None and now - cached_at < self._INFERENCE_TTL_S:
+            return cached
+        probe = self._inference_probe
+        if probe is None:
+            from knowledge_hub.deploy_probe import probe_ollama
+            probe = probe_ollama
+        report = probe(settings.ollama_host)
+        served = list(getattr(report, "models", None) or [])
+        def role(model: str) -> dict[str, Any]:
+            return {"model": model,
+                    "served": any(t == model or t.startswith(f"{model}:")
+                                  for t in served)}
+        result = {
+            "target": settings.ollama_host,
+            "reachable": bool(getattr(report, "reachable", False)),
+            "server_version": getattr(report, "version", None),
+            "error": getattr(report, "error", None),
+            "models": served,
+            "embedding": role(settings.embedding_model),
+            "extraction": role(settings.extraction_model),
+        }
+        self._inference_cache = (now, result)
+        return result
 
     def add_source(self, principal: Principal,
                    p: dict[str, Any]) -> WriteOutcome:
@@ -1457,6 +1511,13 @@ class OperatorApp:
             if not {ROLE_REVIEWER, ROLE_OPERATOR} & set(principal.roles):
                 return 403, {"error": "forbidden"}
             return 200, self.service.components()
+        if method == "GET" and path == "/v1/inference":
+            # Deployment config + a live probe of the inference box, not
+            # tenant data — routed like /v1/components (role-gated, no
+            # store lock; the probe holds no DB connection).
+            if not {ROLE_REVIEWER, ROLE_OPERATOR} & set(principal.roles):
+                return 403, {"error": "forbidden"}
+            return 200, self.service.inference_status()
         if method == "GET" and path == "/v1/reextract-preview":
             if not {ROLE_REVIEWER, ROLE_OPERATOR} & set(principal.roles):
                 return 403, {"error": "forbidden"}

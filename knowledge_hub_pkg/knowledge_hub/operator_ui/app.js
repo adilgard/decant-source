@@ -44,14 +44,11 @@ const state = {
 const $ = (id) => document.getElementById(id);
 const fmt = (n) => (n === null || n === undefined) ? "—" : Number(n).toLocaleString();
 
-const OTHER_TITLES = {
-  sources: "Sources & access",
-  health: "Errors & health",
-  topology: "System connections",
-  landing: "Data landing",
-  inference: "Inference",
-  facts: "Facts & entities",
-};
+/* d.s Stage 1 — tab disposition. The placeholder surface is GONE: every
+ * visible tab is fully wired. Sources & access is a future build; System
+ * connections collapsed into the Inference tab; Facts & entities is the
+ * NEXT PASS, to be designed against the real Title 26 corpus (see
+ * index.html's tab-row comment). */
 
 /* ------------------------------------------------------------------ fetch */
 async function api(path, options) {
@@ -1074,6 +1071,156 @@ async function refreshJobs() {
   body.jobs.forEach((j) => list.appendChild(jobRow(j)));
 }
 
+/* -------------------------------------------------- errors & health (S1) */
+/* An alert is real state, not a log line: a dispatch/extraction queue item
+ * carrying an error that nobody retried or acknowledged, or a degraded
+ * source (the operator_alerts view). Retry re-queues the item (the ack is
+ * cleared server-side); Acknowledge marks it seen. A source alert has no
+ * retry — the remedy is fixing the cause, then Resume on the monitor. */
+const ALERT_KINDS = {
+  dispatch: {
+    label: "PROCESSING FAILURE", retry: true,
+    what: "this document failed while being read, chunked or embedded",
+  },
+  extraction: {
+    label: "EXTRACTION FAILURE", retry: true,
+    what: "this document failed while facts were being extracted",
+  },
+  source: {
+    label: "SOURCE DEGRADED", retry: false,
+    what: "this source's runs are failing — fix the cause, then Resume it "
+      + "on the Ingestion monitor",
+  },
+};
+
+async function refreshAlerts() {
+  const resp = await api("/v1/alerts");
+  if (resp.status === 403) { lock(NO_ROLE_MSG); return; }
+  if (resp.status !== 200) return;
+  const alerts = (await resp.json()).alerts;
+  $("al-loading").classList.add("kh-hide");
+  $("al-empty").classList.toggle("kh-hide", alerts.length > 0);
+  $("al-count").textContent = alerts.length
+    ? alerts.length + " open alert" + (alerts.length === 1 ? "" : "s")
+    : "0 open";
+  const list = $("al-list");
+  list.textContent = "";
+  alerts.forEach((a) => list.appendChild(alertRow(a)));
+}
+
+function alertRow(a) {
+  const kind = ALERT_KINDS[a.kind] ||
+    { label: String(a.kind || "").toUpperCase(), retry: false, what: "" };
+  const when = (a.created_at || "").slice(0, 19).replace("T", " ");
+  const row = document.createElement("div");
+  row.setAttribute("style",
+    "padding:12px 14px;clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);border:1px solid rgba(255,150,130,.3);background:rgba(255,110,90,.05)");
+  row.innerHTML =
+    '<div style="display:flex;align-items:center;gap:10px">' +
+    '<div style="font-family:Silkscreen,Consolas,monospace;font-size:7px;letter-spacing:.1em;color:#ffcabb;padding:2px 8px;border-radius:8px;border:1px solid rgba(255,150,130,.4);background:rgba(255,110,90,.1)">' + esc(kind.label) + "</div>" +
+    '<div style="font-size:11px;color:#8fa8d8">' + esc(kind.what) + "</div>" +
+    '<div style="flex:1"></div>' +
+    '<div style="font-size:10.5px;color:#5c6f9e;font-family:Consolas,monospace">' + esc(when) + "</div></div>" +
+    '<div style="font-size:11.5px;color:#ffd9cd;font-family:Consolas,\'Lucida Console\',monospace;margin-top:7px;word-break:break-all">' + esc(a.detail || "(no error text recorded)") + "</div>" +
+    '<div style="display:flex;align-items:center;gap:10px;margin-top:9px">' +
+    (kind.retry
+      ? '<div data-al-retry style="cursor:pointer;font-size:11px;color:#dbe7ff;padding:4px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.22);background:linear-gradient(180deg,rgba(255,255,255,.12),rgba(255,255,255,.04))">Retry</div>' +
+        '<div data-al-ack style="cursor:pointer;font-size:11px;color:#8fa8d8;padding:4px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.03)">Acknowledge — seen, don’t retry</div>'
+      : "") +
+    '<span data-al-say style="font-size:11px;color:#8fa8d8"></span></div>';
+  const say = row.querySelector("[data-al-say]");
+  const act = async (action, params, btn) => {
+    btn.style.opacity = "0.5";
+    let resp;
+    try {
+      resp = await api("/v1/actions/" + action, {
+        method: "POST", body: JSON.stringify(params) });
+    } catch (e) { btn.style.opacity = "1"; return; }
+    const body = await resp.json().catch(() => ({}));
+    if (resp.status === 403) { btn.style.opacity = "1"; say.textContent = "operator role required"; return; }
+    if (resp.status !== 200) {
+      btn.style.opacity = "1";
+      // 404/409 here is usually a race with the pipeline (it finished or
+      // someone else acted) — the refresh below shows the current truth.
+      say.textContent = body.detail || body.error || ("HTTP " + resp.status);
+      await refreshAlerts();
+      return;
+    }
+    say.style.color = "#7be0c8";
+    say.textContent = action === "retry_failed_item"
+      ? "back in line — it will be picked up again shortly"
+      : "acknowledged";
+    await refreshAlerts();
+    await refreshMonitor();   // the tab badge counts the same view
+  };
+  const retryBtn = row.querySelector("[data-al-retry]");
+  if (retryBtn) retryBtn.addEventListener("click", () =>
+    act("retry_failed_item", { queue: a.kind, item_id: a.ref_id }, retryBtn));
+  const ackBtn = row.querySelector("[data-al-ack]");
+  if (ackBtn) ackBtn.addEventListener("click", () =>
+    act("acknowledge_alert", { kind: a.kind, item_id: a.ref_id }, ackBtn));
+  return row;
+}
+
+/* ------------------------------------------------------- inference (S1) */
+/* The THIN honest tab: target, reachability, and what the box serves —
+ * all from GET /v1/inference, which asks the box itself (never a
+ * hardcoded list). No GPU telemetry by design. */
+async function refreshInference() {
+  const resp = await api("/v1/inference");
+  if (resp.status === 403) { lock(NO_ROLE_MSG); return; }
+  if (resp.status !== 200) return;
+  const inf = await resp.json();
+  $("inf-checked").textContent =
+    "checked " + new Date().toTimeString().slice(0, 8);
+  $("inf-target").textContent = inf.target;
+  $("inf-dot").style.background = inf.reachable ? "#7be0c8" : "#ff9b83";
+  $("inf-dot").style.boxShadow = inf.reachable
+    ? "0 0 8px rgba(110,230,200,.9)" : "0 0 8px rgba(255,140,110,.8)";
+  $("inf-status").textContent = inf.reachable
+    ? "answering" + (inf.server_version ? " · ollama " + inf.server_version : "")
+      + " · serving " + inf.models.length + " model"
+      + (inf.models.length === 1 ? "" : "s")
+    : "not answering — check that the machine is on and its model server "
+      + "(Ollama) is running. Ingestion needing a model waits; nothing is "
+      + "lost. (" + (inf.error || "no detail") + ")";
+  const roles = $("inf-roles");
+  roles.textContent = "";
+  [{ title: "Embedding", r: inf.embedding,
+     what: "turns text into searchable vectors — every document needs it" },
+   { title: "Extraction", r: inf.extraction,
+     what: "reads prose and proposes facts — prose sources need it; "
+       + "plugin (parser-supplied) sources don't" },
+  ].forEach((entry) => {
+    const ok = entry.r.served;
+    const div = document.createElement("div");
+    div.innerHTML =
+      '<div style="display:flex;align-items:center;gap:10px">' +
+      '<div style="width:9px;height:9px;border-radius:50%;background:' + (ok ? "#7be0c8" : "#ff9b83") + '"></div>' +
+      '<div style="font-size:12.5px;color:#dbe7ff;font-weight:500">' + entry.title + "</div>" +
+      '<div style="font-family:Consolas,monospace;font-size:12px;color:#c9d8f8">' + esc(entry.r.model) + "</div>" +
+      '<div style="flex:1"></div>' +
+      '<div style="font-family:Silkscreen,Consolas,monospace;font-size:7px;letter-spacing:.1em;color:' + (ok ? "#7be0c8" : "#ffcabb") + '">' + (ok ? "SERVED" : (inf.reachable ? "NOT SERVED" : "UNKNOWN — BOX UNREACHABLE")) + "</div></div>" +
+      '<div style="font-size:10.5px;color:#5c6f9e;margin:3px 0 0 19px">' + entry.what + "</div>";
+    roles.appendChild(div);
+  });
+  const models = $("inf-models");
+  models.textContent = "";
+  if (!inf.reachable) {
+    models.innerHTML = '<div style="font-size:11px;color:#5c6f9e">unknown until the box answers</div>';
+  } else if (!inf.models.length) {
+    models.innerHTML = '<div style="font-size:11px;color:#5c6f9e">the box is answering but serving no models yet — pull one onto it and it appears here</div>';
+  } else {
+    inf.models.forEach((m) => {
+      const chip = document.createElement("div");
+      chip.setAttribute("style",
+        "font-family:Consolas,monospace;font-size:11.5px;color:#b9cdf5;padding:5px 12px;border-radius:12px;border:1px solid rgba(160,190,255,.3);background:rgba(120,150,255,.08)");
+      chip.textContent = m;
+      models.appendChild(chip);
+    });
+  }
+}
+
 /* ------------------------------------------------------------------- tabs */
 function setTab(name) {
   state.tab = name;
@@ -1084,14 +1231,12 @@ function setTab(name) {
       : "rgba(255,255,255,.04)";
     el.style.border = active ? "1px solid rgba(160,190,255,.6)" : "1px solid rgba(255,255,255,.12)";
   });
-  const wired = name === "monitor" || name === "review" ||
-    name === "ontology" || name === "landing";
   $("panel-monitor").classList.toggle("kh-hide", name !== "monitor");
   $("panel-review").classList.toggle("kh-hide", name !== "review");
   $("panel-ontology").classList.toggle("kh-hide", name !== "ontology");
   $("panel-landing").classList.toggle("kh-hide", name !== "landing");
-  $("panel-other").classList.toggle("kh-hide", wired);
-  if (!wired) $("other-title").textContent = OTHER_TITLES[name] || "";
+  $("panel-health").classList.toggle("kh-hide", name !== "health");
+  $("panel-inference").classList.toggle("kh-hide", name !== "inference");
   if (name === "review" && state.token) refreshReviews(true).catch(() => {});
   if (name === "ontology" && state.token) refreshOntology().catch(() => {});
   if (name === "landing" && state.token) {
@@ -1099,6 +1244,8 @@ function setTab(name) {
     populateOntologySelect().catch(() => {});
     loadComponents().catch(() => {});
   }
+  if (name === "health" && state.token) refreshAlerts().catch(() => {});
+  if (name === "inference" && state.token) refreshInference().catch(() => {});
 }
 
 /* ------------------------------------------------------------------- boot */
@@ -1123,6 +1270,14 @@ function startPolling() {
   state.timers.push(setInterval(() => {
     if (state.tab === "landing") refreshJobs().catch(() => {});
   }, POLL_MS));
+  state.timers.push(setInterval(() => {
+    if (state.tab === "health") refreshAlerts().catch(() => {});
+  }, POLL_MS));
+  state.timers.push(setInterval(() => {
+    // The server caches the probe ~5s; 15s here keeps the tab live
+    // without turning the console into a load test for the box.
+    if (state.tab === "inference") refreshInference().catch(() => {});
+  }, REVIEW_POLL_MS));
   state.timers.push(setInterval(tickUptime, 1000));
 }
 

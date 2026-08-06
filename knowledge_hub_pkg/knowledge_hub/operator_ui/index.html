@@ -68,16 +68,24 @@ a:hover{color:#c3d5ff;text-decoration:underline}
       </div>
     </div>
 
+    <!-- d.s operator-console pass, Stage 1 — tab disposition. Every visible
+         tab is FULLY wired; a present-but-half-working tab lies. Removed
+         from the visible set (designs remain in ../design/operator/):
+           * Sources & access — source onboarding/scope/credential/cursor
+             management is its own future build, mostly serving API
+             connectors these instances don't run.
+           * System connections — collapsed into the Inference tab's
+             target/reachability line; a whole tab was redundant.
+           * Facts & entities — NEXT PASS, deliberately: it gets designed
+             against the real Title 26 corpus (actual extracted facts),
+             not guesses. Do not wire it in this pass. -->
     <div id="tabs" style="display:flex;gap:6px;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,.1);flex-wrap:wrap">
       <div data-tab="monitor" style="cursor:pointer;padding:7px 15px;clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);font-size:12px;font-weight:500;color:#dbe7ff;backdrop-filter:blur(10px)">Ingestion monitor</div>
-      <div data-tab="sources" style="cursor:pointer;padding:7px 15px;clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);font-size:12px;font-weight:500;color:#dbe7ff;backdrop-filter:blur(10px)">Sources &amp; access</div>
       <div data-tab="review" style="cursor:pointer;display:flex;align-items:center;gap:7px;padding:7px 15px;clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);font-size:12px;font-weight:500;color:#dbe7ff;backdrop-filter:blur(10px)">Review queue<span id="badge-review" style="font-family:Consolas,monospace;font-size:10px;font-weight:700;color:#0a1128;padding:1px 8px;border-radius:9px;background:#9fc0ff;box-shadow:0 0 10px rgba(140,170,255,.6)">—</span></div>
       <div data-tab="ontology" style="cursor:pointer;padding:7px 15px;clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);font-size:12px;font-weight:500;color:#dbe7ff;backdrop-filter:blur(10px)">Ontology</div>
       <div data-tab="health" style="cursor:pointer;display:flex;align-items:center;gap:7px;padding:7px 15px;clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);font-size:12px;font-weight:500;color:#dbe7ff;backdrop-filter:blur(10px)">Errors &amp; health<span id="badge-health" style="font-family:Consolas,monospace;font-size:10px;font-weight:700;color:#2a0800;padding:1px 8px;border-radius:9px;background:#ff9b83;box-shadow:0 0 10px rgba(255,140,110,.5)">—</span></div>
-      <div data-tab="topology" style="cursor:pointer;padding:7px 15px;clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);font-size:12px;font-weight:500;color:#dbe7ff;backdrop-filter:blur(10px)">System connections</div>
       <div data-tab="landing" style="cursor:pointer;padding:7px 15px;clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);font-size:12px;font-weight:500;color:#dbe7ff;backdrop-filter:blur(10px)">Data landing</div>
       <div data-tab="inference" style="cursor:pointer;padding:7px 15px;clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);font-size:12px;font-weight:500;color:#dbe7ff;backdrop-filter:blur(10px)">Inference</div>
-      <div data-tab="facts" style="cursor:pointer;padding:7px 15px;clip-path:polygon(9px 0,100% 0,100% calc(100% - 9px),calc(100% - 9px) 100%,0 100%,0 9px);font-size:12px;font-weight:500;color:#dbe7ff;backdrop-filter:blur(10px)">Facts &amp; entities</div>
     </div>
 
     <div id="offline" class="kh-hide" style="display:flex;align-items:center;gap:10px;padding:10px 18px;border-bottom:1px solid rgba(255,150,130,.3);background:rgba(255,110,90,.08)">
@@ -550,12 +558,78 @@ a:hover{color:#c3d5ff;text-decoration:underline}
         </div>
       </div>
 
-      <div id="panel-other" class="kh-hide">
-        <div style="position:relative;max-width:620px;margin:80px auto 0;padding:28px;border-radius:20px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.05);backdrop-filter:blur(14px);text-align:center;box-shadow:0 0 40px rgba(90,120,255,.12)">
-          <div style="font-family:Silkscreen,Consolas,monospace;font-size:12px;color:rgba(200,220,255,.6);margin-bottom:12px">↑ ↑ ↑</div>
-          <div style="font-family:Silkscreen,Consolas,monospace;font-size:8.5px;letter-spacing:.24em;color:#ffcabb;margin-bottom:10px">SURFACE : NOT YET WIRED</div>
-          <div id="other-title" style="font-size:19px;font-weight:600;color:#e9f0ff;text-shadow:0 0 16px rgba(140,170,255,.4)">—</div>
-          <div style="font-size:12.5px;color:#8fa8d8;margin-top:9px;line-height:1.6">This surface exists in full in the all-surfaces design reference. It gets wired to the live APIs in a follow-on build — the structure and content carry over unchanged.</div>
+      <!-- Errors & health (d.s Stage 1) — wired to GET /v1/alerts +
+           retry_failed_item / acknowledge_alert. An alert is a VIEW over
+           real state (migration 010): a queue item carrying an error that
+           nobody retried or acknowledged, or a degraded source. Retry and
+           completion both clear it — the list can never disagree with the
+           pipeline. -->
+      <div id="panel-health" class="kh-hide" style="position:relative;display:flex;flex-direction:column;gap:14px">
+        <div style="padding:13px 16px;clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px);border:1px solid rgba(255,255,255,.14);background:linear-gradient(160deg,rgba(120,150,255,.08),rgba(255,255,255,.03));backdrop-filter:blur(12px)">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="font-family:Silkscreen,Consolas,monospace;font-size:8.5px;letter-spacing:.2em;color:#7db4e8">ERRORS &amp; HEALTH : WHAT NEEDS A HUMAN</div>
+            <div style="flex:1"></div>
+            <div id="al-count" style="font-family:Consolas,'Lucida Console',monospace;font-size:10.5px;color:#8fa8d8;white-space:nowrap">—</div>
+          </div>
+          <div style="font-size:12px;color:#8fa8d8;margin-top:6px;line-height:1.6">Documents that failed a pipeline stage, and sources that stopped working. Each entry stays here until you act on it: <span style="color:#b9cdf5">Retry</span> puts the document back in line to be processed again (most failures are transient — a busy model, a locked file), <span style="color:#b9cdf5">Acknowledge</span> marks it seen and removes it from this list without retrying. Both are recorded on the audit trail.</div>
+        </div>
+
+        <div style="padding:16px 18px;clip-path:polygon(16px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 16px);border:1px solid rgba(255,255,255,.14);background:linear-gradient(160deg,rgba(120,150,255,.08),rgba(255,255,255,.03));backdrop-filter:blur(12px)">
+          <!-- Three DISTINCT states, deliberately: not-loaded-yet is not the
+               same claim as "there are no errors", and the two must never
+               share a face. -->
+          <div id="al-loading" style="font-size:11px;color:#5c6f9e">checking for open alerts…</div>
+          <div id="al-empty" class="kh-hide" style="text-align:center;padding:56px 30px">
+            <div style="font-family:Silkscreen,Consolas,monospace;font-size:8.5px;letter-spacing:.24em;color:#7be0c8;margin-bottom:12px">ALERTS : NONE</div>
+            <div style="font-size:19px;font-weight:600;color:#e9f0ff;text-shadow:0 0 16px rgba(140,170,255,.4)">No errors — nothing needs attention.</div>
+            <div style="font-size:12.5px;color:#8fa8d8;margin-top:9px;line-height:1.6">If a document fails to process or a source stops working, it appears here with a Retry button. You don’t need to check this tab unless the badge shows a number.</div>
+          </div>
+          <div id="al-list" style="display:flex;flex-direction:column;gap:10px"></div>
+        </div>
+      </div>
+
+      <!-- Inference (d.s Stage 1) — the THIN honest version: which box this
+           instance sends model work to, whether it answers, and what it is
+           serving (GET /v1/inference — a live probe of the box's own list,
+           never hardcoded). No GPU-stat telemetry by design. This tab also
+           absorbs what System connections existed to say. -->
+      <div id="panel-inference" class="kh-hide" style="position:relative;display:flex;flex-direction:column;gap:14px">
+        <div style="padding:13px 16px;clip-path:polygon(12px 0,100% 0,100% calc(100% - 12px),calc(100% - 12px) 100%,0 100%,0 12px);border:1px solid rgba(255,255,255,.14);background:linear-gradient(160deg,rgba(120,150,255,.08),rgba(255,255,255,.03));backdrop-filter:blur(12px)">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="font-family:Silkscreen,Consolas,monospace;font-size:8.5px;letter-spacing:.2em;color:#7db4e8">INFERENCE : WHERE MODEL WORK RUNS</div>
+            <div style="flex:1"></div>
+            <div id="inf-checked" style="font-family:Consolas,'Lucida Console',monospace;font-size:10.5px;color:#8fa8d8;white-space:nowrap">—</div>
+          </div>
+          <div style="font-size:12px;color:#8fa8d8;margin-top:6px;line-height:1.6">Reading documents into facts, and turning text into searchable vectors, both run on a machine you control — <span style="color:#b9cdf5">no document text ever leaves your network</span>. This page asks that machine directly what it is serving right now, so the list below is live, not a setting.</div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+          <div style="padding:16px 18px;clip-path:polygon(16px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 16px);border:1px solid rgba(255,255,255,.14);background:linear-gradient(160deg,rgba(120,150,255,.08),rgba(255,255,255,.03));backdrop-filter:blur(12px)">
+            <div style="font-family:Silkscreen,Consolas,monospace;font-size:8.5px;letter-spacing:.2em;color:#7db4e8;margin-bottom:12px">TARGET : THIS INSTANCE POINTS AT</div>
+            <div style="display:flex;align-items:center;gap:10px">
+              <div id="inf-dot" style="width:10px;height:10px;border-radius:50%;background:#8fa8d8"></div>
+              <div id="inf-target" style="font-size:14px;color:#e9f0ff;font-weight:600;font-family:Consolas,'Lucida Console',monospace;word-break:break-all">—</div>
+            </div>
+            <div id="inf-status" style="font-size:12px;color:#8fa8d8;margin-top:8px;line-height:1.6">checking…</div>
+            <div style="font-size:10.5px;color:#5c6f9e;margin-top:10px">the address comes from this instance’s configuration (OLLAMA_HOST) — changing it is a deployment setting, not a console action</div>
+          </div>
+
+          <div style="padding:16px 18px;clip-path:polygon(16px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 16px);border:1px solid rgba(255,255,255,.14);background:linear-gradient(160deg,rgba(120,150,255,.08),rgba(255,255,255,.03));backdrop-filter:blur(12px)">
+            <div style="font-family:Silkscreen,Consolas,monospace;font-size:8.5px;letter-spacing:.2em;color:#7db4e8;margin-bottom:12px">ROLES : WHAT THIS INSTANCE USES</div>
+            <div id="inf-roles" style="display:flex;flex-direction:column;gap:10px">
+              <div style="font-size:11px;color:#5c6f9e">checking…</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="padding:16px 18px;clip-path:polygon(16px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 16px);border:1px solid rgba(255,255,255,.14);background:linear-gradient(160deg,rgba(120,150,255,.08),rgba(255,255,255,.03));backdrop-filter:blur(12px)">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+            <div style="font-size:14px;font-weight:600;letter-spacing:.04em;color:#e9f0ff">Everything the box is serving</div>
+            <div style="font-size:11px;color:#5c6f9e">live from the box · a newly added model appears here on its own</div>
+          </div>
+          <div id="inf-models" style="display:flex;flex-wrap:wrap;gap:8px">
+            <div style="font-size:11px;color:#5c6f9e">checking…</div>
+          </div>
         </div>
       </div>
     </div>

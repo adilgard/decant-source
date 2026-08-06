@@ -783,3 +783,132 @@ def test_ui_serves_from_the_operator_service_with_no_fakes(op_client):
     # The root points a browser at the console.
     root = op_client.get("/")
     assert root.status_code == 302 and "/ui/" in root.text
+
+
+# ---------------------------------------------------------------------------
+# d.s operator-console pass, Stage 1 — tab disposition + the two new wires
+# ---------------------------------------------------------------------------
+
+
+class _FakeOllamaReport:
+    def __init__(self, reachable=True, models=(), version="0.9.9",
+                 error=None):
+        self.reachable = reachable
+        self.models = list(models)
+        self.version = version
+        self.error = error
+
+
+def test_inference_read_reports_the_boxes_own_list(store, pipeline, scorer,
+                                                   embedder, secrets):
+    """GET /v1/inference's service half: the served-model list comes from
+    the BOX (probe_ollama's /api/tags read), never a hardcoded list, and
+    the configured roles are matched by phase_models' tag rule (name == tag
+    or tag is name:variant) so 'configured but not served' is visible."""
+    from knowledge_hub.config import settings
+
+    calls: list[str] = []
+
+    def probe(host):
+        calls.append(host)
+        return _FakeOllamaReport(models=[f"{settings.embedding_model}:latest",
+                                         f"{settings.extraction_model}:q8",
+                                         "mistral:7b"])
+
+    service = OperatorService(store, ResolutionService(pipeline, scorer,
+                                                       embedder),
+                              SourceRegistry(store), secrets,
+                              inference_probe=probe)
+    status = service.inference_status()
+    assert calls == [settings.ollama_host]      # asked the configured box
+    assert status["target"] == settings.ollama_host
+    assert status["reachable"] is True
+    assert "mistral:7b" in status["models"]     # everything served is shown
+    assert status["embedding"]["served"] is True     # bge-m3:latest matches
+    assert status["extraction"]["served"] is True    # qwen3.6:q8 matches
+    # Cached: two console surfaces read this; one probe answers both.
+    service.inference_status()
+    assert len(calls) == 1
+
+    # Unreachable box: honest error, roles UNKNOWN rather than fabricated.
+    down = OperatorService(store, ResolutionService(pipeline, scorer,
+                                                    embedder),
+                           SourceRegistry(store), secrets,
+                           inference_probe=lambda host: _FakeOllamaReport(
+                               reachable=False, version=None,
+                               error="ConnectionError: refused"))
+    status = down.inference_status()
+    assert status["reachable"] is False
+    assert status["models"] == []
+    assert "refused" in status["error"]
+    assert status["embedding"]["served"] is False
+
+    # A model the box does NOT serve reads served=False even when reachable.
+    partial = OperatorService(store, ResolutionService(pipeline, scorer,
+                                                       embedder),
+                              SourceRegistry(store), secrets,
+                              inference_probe=lambda host: _FakeOllamaReport(
+                                  models=[f"{settings.embedding_model}:latest"]))
+    status = partial.inference_status()
+    assert status["embedding"]["served"] is True
+    assert status["extraction"]["served"] is False
+
+
+def test_inference_read_is_role_gated(op_client, resolver, tenant):
+    """The route half: role-gated exactly like /v1/components — an agent
+    serving credential gets 403 without a probe ever firing; an operator
+    gets the payload shape the tab renders."""
+    from knowledge_hub.config import settings
+
+    agent = grant(resolver, tenant, [])
+    assert op_client.get("/v1/inference",
+                         headers=bearer(agent)).status_code == 403
+    assert op_client.get("/v1/inference").status_code == 401
+
+    operator = grant(resolver, tenant, ["operator"])
+    resp = op_client.get("/v1/inference", headers=bearer(operator))
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["target"] == settings.ollama_host
+    for key in ("reachable", "models", "embedding", "extraction"):
+        assert key in body
+    assert body["embedding"]["model"] == settings.embedding_model
+    assert body["extraction"]["model"] == settings.extraction_model
+
+
+def test_console_tab_disposition_wire_two_hide_two_defer_one(op_client):
+    """d.s Stage 1: every VISIBLE tab is fully wired — the placeholder
+    surface is gone, the three unwired tabs are out of the visible set
+    (Sources & access: future build; System connections: folded into
+    Inference; Facts & entities: next pass, designed from the real
+    corpus), and the two newly-wired tabs carry their real bindings."""
+    html = op_client.get("/ui/").text
+    # Hidden tabs are not offered.
+    for gone in ('data-tab="sources"', 'data-tab="topology"',
+                 'data-tab="facts"'):
+        assert gone not in html, f"hidden tab still visible: {gone}"
+    # The lying placeholder surface no longer exists at all.
+    assert "SURFACE : NOT YET WIRED" not in html
+    assert "follow-on build" not in html
+    # Errors & health: wired panel with the retry/acknowledge contract and
+    # an empty state DISTINCT from not-loaded.
+    assert 'id="panel-health"' in html
+    assert "ALERTS : NONE" in html                     # honest empty state
+    assert "checking for open alerts" in html          # distinct not-loaded
+    assert "No errors — nothing needs attention." in html
+    # Inference: the thin honest tab — target + reachability + served list.
+    assert 'id="panel-inference"' in html
+    assert "INFERENCE : WHERE MODEL WORK RUNS" in html
+    assert "no document text ever leaves your network" in html
+
+    js = op_client.get("/ui/app.js").text
+    # The wires are real: alerts read + the two write actions, and the
+    # inference read. No orphaned placeholder logic remains.
+    for real in ("/v1/alerts", "/v1/actions/", "retry_failed_item",
+                 "acknowledge_alert", "/v1/inference"):
+        assert real in js
+    assert "OTHER_TITLES" not in js
+    assert "panel-other" not in js
+    # A degraded SOURCE alert offers no retry button — its remedy is named
+    # instead (retry_failed_item knows only dispatch/extraction queues).
+    assert "Resume it " in js or "Resume it" in js

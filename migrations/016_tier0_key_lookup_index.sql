@@ -1,0 +1,44 @@
+-- ============================================================================
+-- MIGRATION 016 — TIER-0 KEY-LOOKUP EXPRESSION INDEX
+-- Applies ON TOP of 015. Additive only. No table shape changes, no code
+-- lock-step required: the resolver's query (resolution.py _block, path (a))
+-- is unchanged — this makes the lookup it already runs an index hit.
+-- ----------------------------------------------------------------------------
+-- WHY. The Tier-0 blocker probes the registry once per pending mention:
+--     SELECT id FROM entities
+--     WHERE tenant_id = %s AND entity_type = %s AND valid_to IS NULL
+--       AND (attributes->>'<key>' = '<value>')
+-- On a registry where one entity_type dominates (measured 2026-08-05:
+-- 59,995 of 60,021 rows share one type), the (tenant_id, entity_type) index
+-- selects nothing and the planner sequential-scans the whole table per probe
+-- (measured: ~6ms/probe, 60,020 rows filtered to reach 1). The JSONB key
+-- expression is the only selective predicate in the query, and nothing
+-- indexes it. Every keyed source pays this; the fix is corpus-agnostic.
+--
+-- ONE KEY, THE PROVEN-HOT ONE. The key vocabulary is open (extracted_keys is
+-- data): qbo_id, email, domain, asset_id all flow through the same clause.
+-- Only 'uslm_identifier' is measured hot at corpus scale today, so only it
+-- gets an index — add a sibling index when a corpus proves another key hot,
+-- rather than guessing at the vocabulary now.
+--
+-- SINGLE STATEMENT, NO BEGIN/COMMIT, ON PURPOSE. CONCURRENTLY cannot run
+-- inside a transaction block. The runner (deploy_apply.phase_schema) executes
+-- each file over an autocommit connection via the simple query protocol; a
+-- ONE-statement file therefore runs outside any transaction and CONCURRENTLY
+-- is legal. A second statement in this file would re-wrap it in an implicit
+-- transaction and Postgres would refuse. Keep it to exactly one statement.
+--
+-- IF A CONCURRENT BUILD FAILS it leaves an INVALID index behind with no
+-- ledger row — `khctl migrations status` will then report
+-- BROKEN:objects-without-ledger for this file. The repair is:
+--     DROP INDEX IF EXISTS ix_entities_key_uslm_identifier;
+-- then re-run apply. Do not mark-applied over an invalid index.
+--
+-- NOT PARTIAL, ON PURPOSE. A `WHERE valid_to IS NULL` predicate would shave
+-- the index but ties index use to predicate-implication proofs; the plain
+-- expression form provably serves every query shape on this expression.
+-- Rows without the key index as NULL, which costs nothing material.
+-- ============================================================================
+
+CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_entities_key_uslm_identifier
+    ON entities ((attributes->>'uslm_identifier'));

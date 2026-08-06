@@ -238,7 +238,9 @@ def test_hosted_plan_has_no_local_tier_and_no_compose_services():
 def test_render_env_ours_keeps_pilot_defaults():
     plan = resolve_plan(PROFILES, "appliance", make_probe(), tenants=["ops"])
     env = render_env(plan, PILOT_DEFAULTS)
-    assert "POSTGRES_HOST" not in env          # ours -> compose default
+    # ours -> the literal loopback compose binds, never 'localhost'
+    # (dual-stack ::1 black-hole; see render_env)
+    assert "POSTGRES_HOST=127.0.0.1" in env
     assert "EXTRACTION_MODEL=qwen3.6" in env
     # adjudication rides the extraction tag (config.py default-shared) so an
     # exact-tag tier can't leave it pointing at a model the kit lacks
@@ -282,7 +284,7 @@ def test_render_env_ours_postgres_port_default_and_shifted():
                            use=["postgres=ours:5433"])
     env = render_env(shifted, PILOT_DEFAULTS)
     assert "POSTGRES_PORT=5433" in env
-    assert "POSTGRES_HOST" not in env          # still OUR loopback stack
+    assert "POSTGRES_HOST=127.0.0.1" in env    # still OUR loopback stack
 
 
 def test_render_env_unoverridden_ours_postgres_still_renders_the_port():

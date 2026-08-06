@@ -1,6 +1,8 @@
 # --- Secrets and local environment (never commit; see .env.example) ---
 .env
 .env.deploy
+# phase_env's backup of the previous .env — carries the same credentials
+.env.bak
 # Local-posture credentials (d.s Stage 2): source credentials AND the console
 # principal registry live here. The .example.json companion IS tracked and
 # carries no real values. Both are also refused by the kit's no-secrets guard
@@ -11,6 +13,7 @@
 # --- Per-box rendered state (khctl regenerates these; commit the inputs, not the renders) ---
 deploy_plan.json
 probe_report.json
+.apply_progress.json
 
 # --- Runtime artifacts ---
 operator.log

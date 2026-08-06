@@ -526,6 +526,14 @@ def render_env(plan: DeployPlan, pilot_defaults: dict[str, str]) -> str:
         # (settings, dsn_from_env, stack_alive) agree on the same port —
         # including when a declined client Postgres forced us off 5432.
         env["POSTGRES_PORT"] = str(pg.host_port or 5432)
+        # Same rule for the HOST: compose binds 127.0.0.1 literally, so the
+        # rendered .env must dial 127.0.0.1 literally. The 'localhost'
+        # fallback resolves ::1 first on dual-stack boxes, and Docker
+        # Desktop's ::1 proxy black-holes under load — every fresh
+        # connection then eats the full connect_timeout before falling
+        # through to IPv4 (the pilot .env carried this pin by hand; a
+        # re-plan must not strip it).
+        env["POSTGRES_HOST"] = "127.0.0.1"
     s3 = plan.seams.get("object_store")
     if s3 and s3.choice == "theirs":
         env["S3_ENDPOINT"] = s3.endpoint

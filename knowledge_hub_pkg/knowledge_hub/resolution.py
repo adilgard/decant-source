@@ -46,6 +46,7 @@ from typing import Any, Optional
 from psycopg.types.json import Jsonb
 from pydantic import BaseModel, Field
 
+from knowledge_hub import drain_timing
 from knowledge_hub.interfaces import (
     BlockedCandidate,
     Embedder,
@@ -107,13 +108,17 @@ class ResolutionService:
         skipped by the status filter, promotion skips promoted rows, and a
         mention that errors stays pending for the next sweep."""
         summary = ResolutionSummary(tenant_id=tenant_id)
-        with self.store.transaction(tenant_id) as conn:
-            rows = conn.execute(
-                "SELECT id FROM entity_mentions"
-                " WHERE tenant_id = %s AND resolution_status = 'pending'"
-                " ORDER BY id LIMIT %s", (tenant_id, limit)).fetchall()
-        mentions = [self.store.get_mention(tenant_id, r["id"]) for r in rows]
-        self.scorer.prime(tenant_id, mentions)
+        drain_timing.sweep_begin(tenant_id)
+        with drain_timing.timed("pickup"):
+            with self.store.transaction(tenant_id) as conn:
+                rows = conn.execute(
+                    "SELECT id FROM entity_mentions"
+                    " WHERE tenant_id = %s AND resolution_status = 'pending'"
+                    " ORDER BY id LIMIT %s", (tenant_id, limit)).fetchall()
+            mentions = [self.store.get_mention(tenant_id, r["id"])
+                        for r in rows]
+        with drain_timing.timed("prime"):
+            self.scorer.prime(tenant_id, mentions)
 
         for mention in mentions:
             summary.swept += 1
@@ -135,7 +140,11 @@ class ResolutionService:
             else:
                 summary.resolved += 1
 
-        summary.promoted_facts = self.pipeline.promote_pending(tenant_id)
+        with drain_timing.timed("promote"):
+            summary.promoted_facts = self.pipeline.promote_pending(tenant_id)
+        drain_timing.sweep_end(swept=summary.swept, resolved=summary.resolved,
+                               review=summary.review, errors=summary.errors,
+                               promoted=len(summary.promoted_facts))
         return summary
 
     def resolve_mention(self, tenant_id: str, mention_id: int) -> ResolutionOutcome:
@@ -153,10 +162,16 @@ class ResolutionService:
     # ------------------------------------------------------ resolve + apply --
     def _resolve_one(self, mention: EntityMention) -> ResolutionOutcome:
         started = time.monotonic()
+        _t = drain_timing.t0()
         candidates = self._block(mention)
+        drain_timing.lap("block", _t)
+        _t = drain_timing.t0()
         outcome = self.scorer.resolve(mention, candidates)
+        drain_timing.lap("score", _t)
         wall_ms = int((time.monotonic() - started) * 1000)
+        _t = drain_timing.t0()
         self._apply(mention, outcome, wall_ms)
+        drain_timing.lap("apply", _t)
         return outcome
 
     # ------------------------------------------------------------ blocking --
@@ -324,6 +339,7 @@ class ResolutionService:
                                  key=lambda s: s.score).entity_id
         with self.store.transaction(tenant_id):
             winner_candidate_id = None
+            _t_mc = drain_timing.t0()
             for s in outcome.candidates:
                 if outcome.decision == "resolved" \
                         and s.entity_id == outcome.entity_id:
@@ -341,6 +357,7 @@ class ResolutionService:
                     decision_reason=outcome.reason if decision != "auto_separate"
                     else None)
                 self.store.insert_match_candidate(mc)
+                drain_timing.count("mc_rows")
                 if s.entity_id == best_entity_id:
                     winner_candidate_id = mc.id
 
@@ -359,6 +376,8 @@ class ResolutionService:
                         features={"via_mention": mention.id,
                                   "key_overlap": outcome.features.get(
                                       "key_overlap", {})}))
+                    drain_timing.count("mc_rows")
+            drain_timing.lap("mc_insert", _t_mc, n=0)
 
             if outcome.decision == "resolved":
                 self._resolve_to_existing(mention, outcome)

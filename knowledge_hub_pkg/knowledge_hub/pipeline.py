@@ -13,6 +13,7 @@ from typing import Optional
 
 from psycopg.types.json import Jsonb
 
+from knowledge_hub import drain_timing
 from knowledge_hub.factstore_pg import PostgresFactStore
 from knowledge_hub.models import Fact, PendingFact, RawDocument
 
@@ -427,8 +428,7 @@ class Pipeline:
             # NEW corpus. Found pre-flighting the Title 26 re-extract:
             # 1,560 old-version pending facts were one junk-mention
             # resolution away from rolling back fresh cutovers.
-            rows = conn.execute(
-                """
+            selection_sql = """
                 WITH pending AS (
                     SELECT p.id, p.ontology_version,
                            COALESCE(p.source_document_id,
@@ -466,8 +466,23 @@ class Pipeline:
                                        AND c2.document_id =
                                            p.anchor_document_id))))
                 ORDER BY anchor_document_id NULLS LAST, id
-                """,
-                (tenant_id, tenant_id, tenant_id, tenant_id)).fetchall()
+                """
+            selection_params = (tenant_id, tenant_id, tenant_id, tenant_id)
+            # Timing probe (KH_DRAIN_TIMING, observe-only): on the capture
+            # sweeps the same read-only SELECT runs once more under
+            # EXPLAIN ANALYZE so the plan is on record — labeled, so its
+            # extra cost never muddies the reconciliation.
+            if drain_timing.should_explain():
+                plan = conn.execute(
+                    "EXPLAIN (ANALYZE, BUFFERS) " + selection_sql,
+                    selection_params).fetchall()
+                drain_timing.explain_captured(
+                    "promote_pending selection",
+                    [r["QUERY PLAN"] for r in plan])
+            _t = drain_timing.t0()
+            rows = conn.execute(selection_sql, selection_params).fetchall()
+            drain_timing.lap("pp_select", _t)
+            drain_timing.count("pp_select_rows", len(rows))
 
         # Waves are per (document, ontology_version), not per document: a
         # mixed-version group is thereby IMPOSSIBLE rather than merely
@@ -485,6 +500,7 @@ class Pipeline:
             groups.setdefault(key, []).append(row["id"])
 
         promoted: list[int] = []
+        drain_timing.count("pp_groups", len(groups))
         for (anchor_id, _version), pending_ids in groups.items():
             promoted.extend(self._promote_document_group(
                 tenant_id, anchor_id, pending_ids))
@@ -503,6 +519,7 @@ class Pipeline:
         promoted: list[int] = []
         with self.store.transaction(tenant_id) as conn:
             cutover = datetime.now(tz=timezone.utc)
+            _t_pre = drain_timing.t0()
             prior_docs = self._prior_version_documents(
                 conn, tenant_id, anchor_document_id)
             prior_index = (self._current_triples(conn, tenant_id, prior_docs)
@@ -521,16 +538,20 @@ class Pipeline:
             # version set alone cannot see it.
             current_producers = self._current_producers(
                 conn, tenant_id, anchor_document_id)
+            drain_timing.lap("pp_preamble", _t_pre)
             kept: set[int] = set()
             promoted_versions: set[str] = set()
             promoted_producers: set[tuple[str, str]] = set()
+            _t_rows = drain_timing.t0()
             for pending_id in pending_ids:
                 pending = self.store.get_pending_fact(tenant_id, pending_id)
                 fact = self._rewrite_refs(pending)
                 if fact is None:
+                    drain_timing.count("pp_rows_skipped_unresolved")
                     continue  # a referenced mention is unresolved: stay pending
                 key = (fact.subject_entity_id, fact.predicate,
                        fact.object_entity_id, fact.object_literal)
+                _t_write = drain_timing.t0()
                 surviving = prior_index.get(key)
                 if surviving is not None:
                     # Diff: the new version still asserts this — the old
@@ -562,6 +583,9 @@ class Pipeline:
                     " promoted_fact_id = %s WHERE tenant_id = %s AND id = %s",
                     (fact_id, tenant_id, pending_id))
                 promoted.append(fact_id)
+                drain_timing.lap("pp_write", _t_write)
+            drain_timing.lap("pp_rowloop", _t_rows, n=len(pending_ids))
+            _t_super = drain_timing.t0()
             if prior_docs and promoted:
                 self._retract_facts_for_documents(
                     conn, tenant_id, prior_docs, valid_to=cutover,
@@ -626,6 +650,7 @@ class Pipeline:
                             only_ontology_version=new_version,
                             only_extractor=new_extractor,
                             other_than_extractor_version=new_ev)
+            drain_timing.lap("pp_supersede", _t_super, n=0)
         return promoted
 
     @staticmethod

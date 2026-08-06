@@ -116,12 +116,18 @@ a:hover{color:#c3d5ff;text-decoration:underline}
             <div style="font-size:21px;font-weight:600;color:#e9f0ff;margin-top:7px;line-height:1"><span id="tile-health-num">—</span> <span style="font-size:12px;font-weight:400;color:#8fa8d8">green</span></div>
             <div id="tile-health-sub" style="font-size:11px;color:#5c6f9e;margin-top:4px">postgres · vault · serving</div>
           </div>
-          <div style="position:relative;padding:13px 78px 13px 15px;clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px);border:1px solid rgba(160,190,255,.3);background:rgba(120,150,255,.08);backdrop-filter:blur(10px)"><div id="tile-landed-gauge" style="position:absolute;right:14px;top:50%;width:52px;height:52px;margin-top:-26px;border-radius:50%;background:conic-gradient(#9fc0ff 0%,rgba(255,255,255,.08) 0);filter:drop-shadow(0 0 8px rgba(140,170,255,.5))"><div style="position:absolute;inset:6px;border-radius:50%;background:#10182f"></div><div id="tile-landed-pct" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#9fc0ff">—</div></div>
+          <!-- Stage 3: this tile's gauge showed a DIFFERENT metric (% of
+               sources fully swept) than its number — unexplained duality.
+               The sub-line already carries the swept count in words. -->
+          <div style="position:relative;padding:13px 15px;clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px);border:1px solid rgba(160,190,255,.3);background:rgba(120,150,255,.08);backdrop-filter:blur(10px)">
             <div style="display:flex;align-items:center;gap:8px"><div style="width:9px;height:9px;border-radius:50%;background:#9fc0ff;box-shadow:0 0 10px rgba(140,170,255,.9);animation:khBreathe 4.4s ease-in-out infinite"></div><div style="font-family:Silkscreen,Consolas,monospace;font-size:7.5px;letter-spacing:.18em;color:#9fc0ff">DOCUMENTS : LANDED</div></div>
             <div style="font-size:21px;font-weight:600;color:#e9f0ff;margin-top:7px;line-height:1"><span id="tile-landed">—</span></div>
             <div id="tile-landed-sub" style="font-size:11px;color:#5c6f9e;margin-top:4px">— sources registered</div>
           </div>
-          <div style="position:relative;padding:13px 78px 13px 15px;clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px);border:1px solid rgba(230,220,150,.28);background:rgba(230,215,140,.06);backdrop-filter:blur(10px)"><div id="tile-review-gauge" style="position:absolute;right:14px;top:50%;width:52px;height:52px;margin-top:-26px;border-radius:50%;background:conic-gradient(#eadf9a 0%,rgba(255,255,255,.08) 0);filter:drop-shadow(0 0 8px rgba(230,215,140,.5))"><div style="position:absolute;inset:6px;border-radius:50%;background:#10182f"></div><div id="tile-review-pct" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;color:#eadf9a">—</div></div>
+          <!-- Stage 3: the gauge here rendered merges as a % of the review
+               total — a ratio nobody acts on, and the sub-line already
+               breaks the total down in words. -->
+          <div style="position:relative;padding:13px 15px;clip-path:polygon(14px 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%,0 14px);border:1px solid rgba(230,220,150,.28);background:rgba(230,215,140,.06);backdrop-filter:blur(10px)">
             <div style="display:flex;align-items:center;gap:8px"><div style="width:9px;height:9px;border-radius:50%;background:#eadf9a;box-shadow:0 0 10px rgba(230,215,140,.8);animation:khBreathe 5s ease-in-out infinite"></div><div style="font-family:Silkscreen,Consolas,monospace;font-size:7.5px;letter-spacing:.18em;color:#eadf9a">AWAITING : HUMAN</div></div>
             <div style="font-size:21px;font-weight:600;color:#e9f0ff;margin-top:7px;line-height:1"><span id="tile-review-num">—</span></div>
             <div id="tile-review-sub" style="font-size:11px;color:#5c6f9e;margin-top:4px">— merges · — quarantined · — flagged</div>
@@ -143,9 +149,10 @@ a:hover{color:#c3d5ff;text-decoration:underline}
             <div style="flex:1"></div>
             <div style="font-family:Silkscreen,Consolas,monospace;font-size:8px;letter-spacing:.2em;color:#7db4e8">CAPTURE → FACTS : LIVE</div>
           </div>
-          <div id="pipeline-status" style="font-size:12px;color:#8fa8d8;margin-bottom:15px">—</div>
-
-          <div style="display:grid;grid-template-columns:1fr 30px 1fr 30px 1fr 30px 1fr 30px 1fr;align-items:stretch">
+          <!-- Stage 3: the summary sentence that lived here repeated the
+               stage footers word for word (in flight / queue depth / held
+               for review). One home per number — the footers keep it. -->
+          <div style="display:grid;grid-template-columns:1fr 30px 1fr 30px 1fr 30px 1fr 30px 1fr;align-items:stretch;margin-top:11px">
             <div style="padding:13px;clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);border:1px solid rgba(160,190,255,.25);background:rgba(120,150,255,.07)">
               <div style="display:flex;align-items:center;gap:7px;margin-bottom:7px"><div style="font-family:Silkscreen,Consolas,monospace;font-size:9px;color:#9fc0ff">→</div><div style="font-family:Silkscreen,Consolas,monospace;font-size:7.5px;letter-spacing:.16em;color:#9fc0ff">01 : CAPTURE</div></div>
               <div id="st-capture-n" style="font-size:23px;font-weight:600;color:#e9f0ff;line-height:1">—</div>
@@ -250,7 +257,9 @@ a:hover{color:#c3d5ff;text-decoration:underline}
           </div>
           <div style="font-size:11px;color:#5c6f9e;margin-bottom:8px">sorted by confidence — least certain first</div>
           <div id="queue-list" style="display:flex;flex-direction:column;gap:5px"></div>
-          <div style="margin-top:12px;padding-top:11px;border-top:1px solid rgba(255,255,255,.1);font-size:11px;color:#5c6f9e">Keyboard: A / R decide — the buttons name the action for each item type · S split · space skip.</div>
+          <!-- Stage 3: the key hint that footed this panel was the THIRD
+               copy of the legend. The live one in the header (rv-keys)
+               re-renders per item type and is the single source. -->
         </div>
 
         <div id="review-main" style="padding:16px 18px;clip-path:polygon(16px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 16px);border:1px solid rgba(255,255,255,.14);background:linear-gradient(160deg,rgba(120,150,255,.08),rgba(255,255,255,.03));backdrop-filter:blur(12px)">
@@ -329,12 +338,12 @@ a:hover{color:#c3d5ff;text-decoration:underline}
           <div style="padding:15px;clip-path:polygon(16px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 16px);border:1px solid rgba(255,255,255,.14);background:linear-gradient(160deg,rgba(120,150,255,.08),rgba(255,255,255,.03));backdrop-filter:blur(12px)">
             <div style="font-family:Silkscreen,Consolas,monospace;font-size:8.5px;letter-spacing:.2em;color:#7db4e8;margin-bottom:11px">YOUR SESSION</div>
             <div id="cleared" style="font-size:26px;font-weight:600;color:#e9f0ff;line-height:1">0</div>
-            <div style="font-size:11.5px;color:#5c6f9e;margin-bottom:11px">items cleared this session</div>
-            <div style="position:relative;height:9px;border-radius:5px;overflow:hidden;background:rgba(255,255,255,.08)">
-              <div id="cleared-bar" style="position:absolute;inset:0 100% 0 0;border-radius:5px;background:linear-gradient(90deg,#4fbfa4,#7be0c8);box-shadow:0 0 10px rgba(110,230,200,.6)"></div>
-              <div style="position:absolute;top:0;bottom:0;left:0;width:20%;background:linear-gradient(90deg,rgba(255,255,255,0),rgba(255,255,255,.5),rgba(255,255,255,0));animation:khShine 3s ease-in-out infinite"></div>
-            </div>
-            <div style="font-size:11px;color:#8fa8d8;margin-top:9px">Keyboard only: A / R decide (the buttons name the action) · S split · space skip. Your hands never need to leave the keys.</div>
+            <!-- Stage 3: the progress bar under this count filled 4% per
+                 cleared item — an invented 25-item denominator, progress
+                 toward nothing. The count is the readout. The second
+                 static key legend that footed this panel is gone too;
+                 rv-keys in the header is the single live one. -->
+            <div style="font-size:11.5px;color:#5c6f9e">items cleared this session</div>
           </div>
         </div>
       </div>
@@ -457,30 +466,38 @@ a:hover{color:#c3d5ff;text-decoration:underline}
               <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:#b9cdf5;cursor:pointer">
                 <input id="ld-recurse" type="checkbox" checked> include subfolders
               </label>
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-                <div>
-                  <div style="font-size:11px;color:#8fa8d8;margin-bottom:4px">Include globs <span style="color:#5c6f9e">(optional, comma-sep)</span></div>
-                  <input id="ld-include" type="text" spellcheck="false" placeholder="*.pdf, reports/**"
-                         style="width:100%;box-sizing:border-box;padding:8px 11px;border-radius:10px;border:1px solid rgba(255,255,255,.18);background:rgba(0,2,12,.5);color:#e9f0ff;font-family:Consolas,monospace;font-size:11.5px;outline:none">
+              <!-- Stage 3: the common job is path -> Start. The four
+                   narrowing fields (globs, file types, ontology pin) are
+                   real capability but rare — grouped behind a disclosure
+                   so they stop competing with the primary action. All
+                   defaults hold when the group stays closed. -->
+              <div id="ld-more-toggle" style="cursor:pointer;display:flex;align-items:center;gap:8px;font-size:11.5px;color:#8fa8d8;padding:2px 0"><span data-arrow style="font-family:Consolas,monospace;color:#7db4e8">▸</span> More options — file filters · ontology pin <span style="color:#5c6f9e">(defaults apply while closed)</span></div>
+              <div id="ld-more" class="kh-hide" style="display:flex;flex-direction:column;gap:10px;padding-left:14px;border-left:1px solid rgba(255,255,255,.1)">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                  <div>
+                    <div style="font-size:11px;color:#8fa8d8;margin-bottom:4px">Include globs <span style="color:#5c6f9e">(optional, comma-sep)</span></div>
+                    <input id="ld-include" type="text" spellcheck="false" placeholder="*.pdf, reports/**"
+                           style="width:100%;box-sizing:border-box;padding:8px 11px;border-radius:10px;border:1px solid rgba(255,255,255,.18);background:rgba(0,2,12,.5);color:#e9f0ff;font-family:Consolas,monospace;font-size:11.5px;outline:none">
+                  </div>
+                  <div>
+                    <div style="font-size:11px;color:#8fa8d8;margin-bottom:4px">Exclude globs <span style="color:#5c6f9e">(optional)</span></div>
+                    <input id="ld-exclude" type="text" spellcheck="false" placeholder="drafts/**, *~*"
+                           style="width:100%;box-sizing:border-box;padding:8px 11px;border-radius:10px;border:1px solid rgba(255,255,255,.18);background:rgba(0,2,12,.5);color:#e9f0ff;font-family:Consolas,monospace;font-size:11.5px;outline:none">
+                  </div>
                 </div>
                 <div>
-                  <div style="font-size:11px;color:#8fa8d8;margin-bottom:4px">Exclude globs <span style="color:#5c6f9e">(optional)</span></div>
-                  <input id="ld-exclude" type="text" spellcheck="false" placeholder="drafts/**, *~*"
+                  <div style="font-size:11px;color:#8fa8d8;margin-bottom:4px">File types <span style="color:#5c6f9e">(optional — defaults to .md .txt .pdf .docx)</span></div>
+                  <input id="ld-extensions" type="text" spellcheck="false" placeholder=".xml, .md"
                          style="width:100%;box-sizing:border-box;padding:8px 11px;border-radius:10px;border:1px solid rgba(255,255,255,.18);background:rgba(0,2,12,.5);color:#e9f0ff;font-family:Consolas,monospace;font-size:11.5px;outline:none">
+                  <div style="font-size:10.5px;color:#5c6f9e;margin-top:4px">set this only when a folder holds a format the defaults skip — it replaces the default set for THIS job, and leaves every other folder alone</div>
                 </div>
-              </div>
-              <div>
-                <div style="font-size:11px;color:#8fa8d8;margin-bottom:4px">File types <span style="color:#5c6f9e">(optional — defaults to .md .txt .pdf .docx)</span></div>
-                <input id="ld-extensions" type="text" spellcheck="false" placeholder=".xml, .md"
-                       style="width:100%;box-sizing:border-box;padding:8px 11px;border-radius:10px;border:1px solid rgba(255,255,255,.18);background:rgba(0,2,12,.5);color:#e9f0ff;font-family:Consolas,monospace;font-size:11.5px;outline:none">
-                <div style="font-size:10.5px;color:#5c6f9e;margin-top:4px">set this only when a folder holds a format the defaults skip — it replaces the default set for THIS job, and leaves every other folder alone</div>
-              </div>
-              <div>
-                <div style="font-size:11px;color:#8fa8d8;margin-bottom:4px">Ontology version for this ingest</div>
-                <select id="ld-ontology" style="width:100%;box-sizing:border-box;padding:8px 11px;border-radius:10px;border:1px solid rgba(255,255,255,.18);background:rgba(0,2,12,.6);color:#e9f0ff;font-family:Consolas,monospace;font-size:12px;outline:none">
-                  <option value="">active selection (default)</option>
-                </select>
-                <div style="font-size:10.5px;color:#5c6f9e;margin-top:4px">fixed when the job is created — a later swap never reaches a running job</div>
+                <div>
+                  <div style="font-size:11px;color:#8fa8d8;margin-bottom:4px">Ontology version for this ingest</div>
+                  <select id="ld-ontology" style="width:100%;box-sizing:border-box;padding:8px 11px;border-radius:10px;border:1px solid rgba(255,255,255,.18);background:rgba(0,2,12,.6);color:#e9f0ff;font-family:Consolas,monospace;font-size:12px;outline:none">
+                    <option value="">active selection (default)</option>
+                  </select>
+                  <div style="font-size:10.5px;color:#5c6f9e;margin-top:4px">fixed when the job is created — a later swap never reaches a running job</div>
+                </div>
               </div>
               <div id="ld-start" style="cursor:pointer;text-align:center;font-size:12.5px;font-weight:600;color:#ffffff;padding:11px;border-radius:17px;border:1px solid rgba(160,190,255,.6);background:linear-gradient(180deg,rgba(120,150,255,.5),rgba(70,100,235,.35));box-shadow:0 0 18px rgba(110,140,255,.45),0 1px 0 rgba(255,255,255,.35) inset">Start ingest job</div>
             </div>
@@ -512,8 +529,13 @@ a:hover{color:#c3d5ff;text-decoration:underline}
              separately is typed as 'package.module:Attribute' and is
              resolved and type-checked server-side on save, so a typo or a
              missing install fails here, visibly, instead of at 3am. -->
+        <!-- Stage 3: an advanced, occasional concern (a source needing a
+             non-default reader or fact plugin) — collapsed so the tab's
+             primary flow (path -> Start, watch Jobs) stands alone. The
+             capability is intact one click away. -->
         <div style="padding:16px 18px;clip-path:polygon(16px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 16px);border:1px solid rgba(255,255,255,.14);background:linear-gradient(160deg,rgba(120,150,255,.08),rgba(255,255,255,.03));backdrop-filter:blur(12px)">
-          <div style="font-family:Silkscreen,Consolas,monospace;font-size:8.5px;letter-spacing:.2em;color:#7db4e8;margin-bottom:6px">EXTRACTION SETUP : PER SOURCE</div>
+          <div id="xs-toggle" style="cursor:pointer;display:flex;align-items:center;gap:8px"><span data-arrow style="font-family:Consolas,monospace;color:#7db4e8">▸</span><div style="font-family:Silkscreen,Consolas,monospace;font-size:8.5px;letter-spacing:.2em;color:#7db4e8">EXTRACTION SETUP : PER SOURCE</div><div style="font-size:11px;color:#5c6f9e">advanced — open when a folder needs a non-default reader or fact plugin</div></div>
+          <div id="xs-body" class="kh-hide" style="margin-top:12px">
           <div style="font-size:12px;color:#8fa8d8;margin-bottom:12px;line-height:1.6">Choose how one registered source is read and where its facts come from. Leave a field blank to keep this deployment's default. <span style="color:#b9cdf5">Parser-supplied</span> means a registered plugin produces the facts deterministically — no language model runs for that source — while prose is still chunked and embedded for retrieval as usual. Everything a plugin emits is checked against the active ontology exactly like model output; whatever the vocabulary does not permit is quarantined, never stored.</div>
           <!-- Register a source. A folder's source row is normally created by
                its first ingest job, which is too late for a folder that needs
@@ -561,6 +583,7 @@ a:hover{color:#c3d5ff;text-decoration:underline}
           <div style="display:flex;align-items:center;gap:12px;margin-top:12px">
             <div id="xs-save" style="cursor:pointer;font-size:12px;font-weight:500;color:#0a1128;padding:9px 20px;clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);background:linear-gradient(180deg,#b9cdf5,#7db4e8)">Save setup</div>
             <div id="xs-say" style="font-size:11.5px;color:#5c6f9e"></div>
+          </div>
           </div>
         </div>
       </div>

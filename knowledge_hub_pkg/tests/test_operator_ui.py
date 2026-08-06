@@ -959,3 +959,48 @@ def test_stage2_no_lying_copy_or_fabricated_status(op_client):
     assert "resp.status >= 500" in js
     # The uptime label says what the number is.
     assert "SERVICE UPTIME" in html
+
+
+def test_stage3_hierarchy_one_home_per_number(op_client):
+    """d.s Stage 3: declutter is REMOVING COMPETING READOUTS, not
+    character — each number keeps exactly one home, advanced controls
+    group behind disclosures, and the animations/voice stay."""
+    html = op_client.get("/ui/").text
+    js = op_client.get("/ui/app.js").text
+
+    # Monitor: the two tile gauges that showed a DIFFERENT metric than
+    # their tile's number are gone; the meaningful two remain.
+    assert "tile-landed-gauge" not in html and "tile-landed-gauge" not in js
+    assert "tile-review-gauge" not in html and "tile-review-gauge" not in js
+    assert "tile-health-gauge" in html      # green-count ring: real ratio
+    assert "tile-p95-gauge" in html         # p95 vs budget: real ratio
+    # The summary sentence that repeated the stage footers is gone.
+    assert "pipeline-status" not in html and "pipeline-status" not in js
+    assert "in capture flight" not in js
+
+    # Review: ONE live key legend (rv-keys, re-rendered per item type);
+    # the two static copies are gone, as is the session bar that filled
+    # toward an invented 25-item denominator.
+    assert 'id="rv-keys"' in html
+    assert "Keyboard: A / R decide" not in html
+    assert "Keyboard only:" not in html
+    assert "cleared-bar" not in html and "cleared-bar" not in js
+
+    # Data landing: path -> Start stands alone; the four narrowing fields
+    # and the whole per-source extraction setup sit behind disclosures,
+    # closed by default, capability intact.
+    assert 'id="ld-more-toggle"' in html
+    assert 'id="ld-more" class="kh-hide"' in html
+    assert 'id="ld-include"' in html        # still there, one click away
+    assert 'id="ld-ontology"' in html
+    assert 'id="xs-toggle"' in html
+    assert 'id="xs-body" class="kh-hide"' in html
+    assert 'id="xs-plugin"' in html
+    assert "wireDisclosure" in js
+
+    # The character stayed: the crystal/ambient animations and the
+    # console's own voice are untouched.
+    for kept in ("khCrystal", "khSweep", "khBreathe",
+                 "every fact will carry its source passage",
+                 "read is safe : act is deliberate"):
+        assert kept in html, f"character stripped: {kept}"

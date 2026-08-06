@@ -210,21 +210,20 @@ function renderMonitor() {
          : c.name + " " + (c.bad || "DEGRADED")
   ).join(" · ") + (h ? " · v" + h.version : "");
 
-  // Tile 2 — documents landed.
+  // Tile 2 — documents landed. (Stage 3: its gauge showed a different
+  // metric than its number — the sub-line carries that count in words.)
   $("tile-landed").textContent = fmt(m.landed);
   const nSources = m.sources.length;
   const done = m.sources.filter((s) => s.backfill_done).length;
   $("tile-landed-sub").textContent = nSources
     ? nSources + " source" + (nSources === 1 ? "" : "s") + " registered · " + done + " fully swept"
     : "no sources registered yet";
-  gauge($("tile-landed-gauge"), $("tile-landed-pct"), nSources ? 100 * done / nSources : 0, "#9fc0ff");
 
   // Tile 3 — awaiting human.
   const r = m.review;
   $("tile-review-num").textContent = fmt(r.total);
   $("tile-review-sub").textContent =
     fmt(r.merges) + " merges · " + fmt(r.quarantined) + " quarantined · " + fmt(r.flagged) + " flagged";
-  gauge($("tile-review-gauge"), $("tile-review-pct"), r.total ? 100 * r.merges / r.total : 0, "#eadf9a");
   $("badge-review").textContent = fmt(r.total);
 
   // Tile 4 — serving p95 vs the budget the SERVER declares (never a number
@@ -264,11 +263,8 @@ function renderMonitor() {
   $("st-facts-n").textContent = fmt(st.facts.count);
   $("st-facts-foot").textContent = fmt(st.facts.confident) + " confident · " + fmt(st.facts.low_confidence) + " low-confidence";
   bar("st-facts-bar", st.facts.count);
-
-  $("pipeline-status").textContent =
-    fmt(st.capture.in_flight) + " document(s) in capture flight · process queue depth " +
-    fmt(st.process.queue_depth) + " · resolve is holding " + fmt(st.resolve.held_for_review) +
-    " pair(s) it will not decide alone.";
+  // Stage 3: the summary sentence that followed repeated the stage
+  // footers word for word — one home per number, the footers keep it.
 
   renderSources(m.sources);
   renderSourcePicker(m.sources);
@@ -645,9 +641,10 @@ async function decide(kind) {
     showDecision("Resolved. The document re-queues for processing with the adjudicated tag.");
   }
   if (clears) {
+    // Stage 3: the count alone — the bar under it filled 4% per item,
+    // progress toward an invented 25-item denominator.
     state.cleared += 1;
     $("cleared").textContent = state.cleared;
-    $("cleared-bar").style.inset = "0 " + Math.max(0, 100 - state.cleared * 4) + "% 0 0";
   }
   await refreshReviews(false);   // advance to the next item, refresh counts
 }
@@ -1342,10 +1339,22 @@ function startPolling() {
   state.timers.push(setInterval(tickUptime, 1000));
 }
 
+/* Stage 3: disclosure groups — advanced fields stay one click away, and
+ * the arrow says which state the group is in. */
+function wireDisclosure(toggleId, bodyId) {
+  $(toggleId).addEventListener("click", () => {
+    const hidden = $(bodyId).classList.toggle("kh-hide");
+    const arrow = $(toggleId).querySelector("[data-arrow]");
+    if (arrow) arrow.textContent = hidden ? "▸" : "▾";
+  });
+}
+
 document.addEventListener("DOMContentLoaded", () => {
   document.querySelectorAll("#tabs [data-tab]").forEach((el) =>
     el.addEventListener("click", () => setTab(el.getAttribute("data-tab"))));
   setTab("monitor");
+  wireDisclosure("ld-more-toggle", "ld-more");
+  wireDisclosure("xs-toggle", "xs-body");
 
   $("token-go").addEventListener("click", () => unlock($("token-input").value.trim()));
   $("token-input").addEventListener("keydown", (e) => {

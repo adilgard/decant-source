@@ -186,6 +186,7 @@ class TieredScorer(Scorer):
         self._max_adjudications = max_adjudications
         self._policies: dict[str, ResolutionPolicy] = {}
         self._linkers: dict[str, Any] = {}   # tenant -> splink Linker
+        self._primed: dict[str, list] = {}   # tenant -> last primed batch
         self._version: Optional[str] = None
 
     @property
@@ -198,10 +199,17 @@ class TieredScorer(Scorer):
 
     # ------------------------------------------------------------- priming --
     def prime(self, tenant_id: str, mentions: Sequence[EntityMention]) -> None:
-        """Build the tenant's Splink linker from the sweep batch + the entity
-        registry (Splink is batch-oriented; per-pair scoring reuses it)."""
+        """Note the sweep batch for the tenant's Splink linker (Splink is
+        batch-oriented; per-pair scoring reuses it). The build itself is
+        LAZY — deferred to the first Tier-1 score that needs it — because a
+        key-authoritative corpus Tier-0-decides whole sweeps and the linker
+        is then never consulted: eager building charged every such sweep a
+        pandas+DuckDB construction for nothing (measured on the Title 26
+        drain, ~130 sweeps of pure fixed cost). A batch that does reach
+        Tier 1 builds from exactly the mentions primed here, as before."""
         self._policies.clear()  # policy is data — reread every sweep
-        self._linkers[tenant_id] = self._build_linker(tenant_id, mentions)
+        self._primed[tenant_id] = list(mentions)
+        self._linkers.pop(tenant_id, None)  # a stale linker never serves
 
     # ------------------------------------------------------------- resolve --
     def resolve(self, mention: EntityMention,
@@ -348,7 +356,8 @@ class TieredScorer(Scorer):
 
     def _linker(self, tenant_id: str):
         if tenant_id not in self._linkers:
-            self._linkers[tenant_id] = self._build_linker(tenant_id, [])
+            self._linkers[tenant_id] = self._build_linker(
+                tenant_id, self._primed.get(tenant_id, []))
         return self._linkers[tenant_id]
 
     def _build_linker(self, tenant_id: str,

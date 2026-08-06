@@ -392,8 +392,12 @@ class Pipeline:
         Retraction guard (migration 009): a pending fact whose anchor
         document is retracted (valid_to set — tombstoned OR superseded) is
         SKIPPED, not mutated — a deleted source's facts aren't promotable
-        until revival, and an old version's late-resolving facts are never
-        promotable at all once a newer version has cut over.
+        until revival. An old version's late-resolving facts are likewise
+        never promotable once a newer version has cut over: document
+        re-versioning gets that from this guard (the cutover retracts the
+        prior documents), ontology re-extraction gets it from the
+        staleness guard in the selection below (the cutover retires only
+        facts, so the document row alone can't tell).
 
         Re-version supersession (§8.1g, the BP7 primitive's second trigger)
         happens HERE, because promotion is where a new version's facts
@@ -411,33 +415,77 @@ class Pipeline:
         Returns the promoted fact ids — a reused surviving row's id for
         unchanged assertions, a new row's id otherwise."""
         with self.store.transaction(tenant_id) as conn:
+            # The second NOT EXISTS is the STALENESS guard: a pending fact
+            # whose anchor document currently serves a NEWER vocabulary
+            # (by the registry's own effective_from timeline; version
+            # string breaks a tie) is never promotable — it stays pending,
+            # retained for audit, exactly as the retraction-guard sentence
+            # in the docstring promises. Without it a late-resolving
+            # old-version straggler promotes as a pure-old-version wave
+            # and the ontology trigger — which is direction-blind, it
+            # retires whatever differs from the wave — would retire the
+            # NEW corpus. Found pre-flighting the Title 26 re-extract:
+            # 1,560 old-version pending facts were one junk-mention
+            # resolution away from rolling back fresh cutovers.
             rows = conn.execute(
                 """
-                SELECT p.id,
-                       COALESCE(p.source_document_id,
-                                (SELECT c.document_id FROM chunks c
-                                 WHERE c.id = p.source_chunk_id))
-                           AS anchor_document_id
-                FROM pending_facts p
-                WHERE p.tenant_id = %s AND p.resolution_status = 'pending'
-                  AND NOT EXISTS (
+                WITH pending AS (
+                    SELECT p.id, p.ontology_version,
+                           COALESCE(p.source_document_id,
+                                    (SELECT c.document_id FROM chunks c
+                                     WHERE c.id = p.source_chunk_id))
+                               AS anchor_document_id
+                    FROM pending_facts p
+                    WHERE p.tenant_id = %s
+                      AND p.resolution_status = 'pending'
+                )
+                SELECT id, ontology_version, anchor_document_id
+                FROM pending p
+                WHERE NOT EXISTS (
                       SELECT 1 FROM documents dd
-                      WHERE dd.tenant_id = p.tenant_id
+                      WHERE dd.tenant_id = %s
                         AND dd.valid_to IS NOT NULL
-                        AND dd.id = COALESCE(
-                            p.source_document_id,
-                            (SELECT c.document_id FROM chunks c
-                             WHERE c.id = p.source_chunk_id)))
-                ORDER BY anchor_document_id NULLS LAST, p.id
+                        AND dd.id = p.anchor_document_id)
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM facts f
+                      JOIN ontology_versions sv
+                        ON sv.version = f.ontology_version
+                      JOIN ontology_versions pv
+                        ON pv.version = p.ontology_version
+                      WHERE f.tenant_id = %s AND f.valid_to IS NULL
+                        AND f.ontology_version <> p.ontology_version
+                        AND (sv.effective_from > pv.effective_from
+                             OR (sv.effective_from = pv.effective_from
+                                 AND sv.version > pv.version))
+                        AND (f.source_document_id = p.anchor_document_id
+                             OR (f.source_document_id IS NULL
+                                 AND f.source_chunk_id IN (
+                                     SELECT id FROM chunks c2
+                                     WHERE c2.tenant_id = %s
+                                       AND c2.document_id =
+                                           p.anchor_document_id))))
+                ORDER BY anchor_document_id NULLS LAST, id
                 """,
-                (tenant_id,)).fetchall()
+                (tenant_id, tenant_id, tenant_id, tenant_id)).fetchall()
 
-        groups: dict[Optional[int], list[int]] = {}
+        # Waves are per (document, ontology_version), not per document: a
+        # mixed-version group is thereby IMPOSSIBLE rather than merely
+        # skipped. The skip was safe when both versions were strangers,
+        # but during a re-extraction it meant a document whose old-version
+        # stragglers resolved in the same sweep as its new yield promoted
+        # BOTH under one wave and the cutover never happened — served
+        # duplication with no retirement. Selection order (anchor, id)
+        # makes the old version's group run first (lower staging ids), so
+        # the new version's cutover retires it moments later in the same
+        # call — the timeline stays clean.
+        groups: dict[tuple, list[int]] = {}
         for row in rows:
-            groups.setdefault(row["anchor_document_id"], []).append(row["id"])
+            key = (row["anchor_document_id"], row["ontology_version"])
+            groups.setdefault(key, []).append(row["id"])
 
         promoted: list[int] = []
-        for anchor_id, pending_ids in groups.items():
+        for (anchor_id, _version), pending_ids in groups.items():
             promoted.extend(self._promote_document_group(
                 tenant_id, anchor_id, pending_ids))
         return promoted

@@ -137,6 +137,67 @@ def test_ontology_supersession_retires_retains_and_is_atomic(
         {"Net-30", "Building A", "extra-A"}
 
 
+def test_stale_version_stragglers_never_roll_back_a_cutover(
+        pipeline, store, tenant):
+    """The staleness guard: once a document serves a NEWER vocabulary (by
+    the registry's effective_from timeline), an old version's
+    late-resolving fact must stay pending — promoted, it would form a
+    pure-old-version wave and the direction-blind ontology trigger would
+    retire the NEW corpus. The straggler is retained for audit, not
+    mutated."""
+    doc = land_document(pipeline, store, tenant)
+    vendor = make_entity(tenant, "Cedar Analytics")
+    store.upsert_entity(vendor)
+    v2 = import_version(store, tenant)   # later effective_from than baseline
+
+    # The new vocabulary cuts over first.
+    stage_fact(store, tenant, vendor.id, "Net-45", doc_id=doc.id, version=v2)
+    assert len(pipeline.promote_pending(tenant)) == 1
+
+    # An old-version straggler resolves late: it must NOT promote, and the
+    # new corpus must stay current.
+    stage_fact(store, tenant, vendor.id, "Net-30", doc_id=doc.id,
+               version=ONTOLOGY)
+    assert pipeline.promote_pending(tenant) == []
+    rows = doc_facts(store, tenant, doc.id)
+    assert len(rows) == 1 and rows[0]["ontology_version"] == v2 \
+        and rows[0]["valid_to"] is None
+    with store.transaction(tenant) as conn:
+        straggler = conn.execute(
+            "SELECT resolution_status FROM pending_facts"
+            " WHERE tenant_id = %s AND ontology_version = %s"
+            "   AND source_document_id = %s",
+            (tenant, ONTOLOGY, doc.id)).fetchone()
+    assert straggler["resolution_status"] == "pending"
+
+
+def test_same_sweep_residue_promotes_before_the_cutover_that_retires_it(
+        pipeline, store, tenant):
+    """Old-version residue and the new version's yield resolving in the
+    SAME sweep: waves are per (document, version), so the old group
+    promotes first (lower staging ids) and the new group's cutover retires
+    it moments later — never a mixed wave that skips supersession and
+    leaves a document serving two vocabularies."""
+    doc = land_document(pipeline, store, tenant)
+    vendor = make_entity(tenant, "Dune Logistics")
+    store.upsert_entity(vendor)
+    v2 = import_version(store, tenant)
+
+    stage_fact(store, tenant, vendor.id, "Net-30", doc_id=doc.id,
+               version=ONTOLOGY)
+    stage_fact(store, tenant, vendor.id, "Net-45", doc_id=doc.id, version=v2)
+    promoted = pipeline.promote_pending(tenant)   # one call, both versions
+    assert len(promoted) == 2
+    rows = doc_facts(store, tenant, doc.id)
+    old = [r for r in rows if r["ontology_version"] == ONTOLOGY]
+    new = [r for r in rows if r["ontology_version"] == v2]
+    assert len(old) == 1 and len(new) == 1
+    assert old[0]["valid_to"] is not None \
+        and old[0]["retraction_reason"] == RETRACTED_BY_ONTOLOGY
+    assert new[0]["valid_to"] is None
+    assert new[0]["valid_from"] == old[0]["valid_to"]   # one clean timeline
+
+
 def test_extractor_supersession_retires_same_version_plugin_upgrade(
         pipeline, store, tenant):
     """The fourth trigger: a plugin upgrade re-yields under the SAME

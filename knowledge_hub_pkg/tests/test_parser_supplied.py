@@ -277,6 +277,45 @@ def test_one_entity_per_surface_and_type_across_facts():
     assert result.facts[0].subject_key == result.facts[1].subject_key
 
 
+def test_conflicting_keys_for_one_surface_are_quarantined():
+    """One surface cannot be two entities.
+
+    Identity within a document is core's rule, and the rule used to be
+    'whichever extracted_keys arrived first wins' — silently, with the later
+    ones dropped. That is the wrong answer precisely because the surviving
+    key is what the resolver blocks on: core would pick one arbitrarily and
+    the corpus would carry the consequence with nothing recorded. It is also
+    a contradiction no deterministic producer should ever emit, so refusing
+    it turns 'plugins are consistent' from an assumption into a guarantee.
+    """
+    _, result = run([
+        part_of_fact(subject_keys={"registry_id": "A-1"}),
+        part_of_fact(subject_keys={"registry_id": "A-2"}),
+    ])
+
+    assert len(result.facts) == 1          # the first stands
+    (q,) = result.quarantined
+    assert q.reason == "validation_failure"
+    assert "conflicting keys" in q.detail
+    assert "A-1" in q.detail and "A-2" in q.detail
+
+
+def test_extra_or_missing_keys_on_a_later_mention_are_fine():
+    """Only a key present on BOTH sides with two DIFFERENT values is a
+    contradiction. Facts about one thing legitimately arrive knowing
+    different amounts about it, and treating that as a clash would
+    quarantine ordinary emissions."""
+    _, result = run([
+        part_of_fact(subject_keys={"registry_id": "A-1"}),
+        part_of_fact(predicate="reports_to", subject_keys={}),
+        part_of_fact(subject_keys={"registry_id": "A-1", "tax_id": "99"}),
+    ])
+
+    assert not result.quarantined
+    assert len(result.facts) == 3
+    assert len({f.subject_key for f in result.facts}) == 1
+
+
 def test_no_llm_touches_this_path():
     """Structural, not aspirational: the strategy holds a binding and a
     plugin and nothing else, so there is no client it could call. The

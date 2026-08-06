@@ -167,6 +167,24 @@ class ParserSuppliedStrategy(ExtractionStrategy):
                 f"satisfy", raw))
             return
 
+        # --- one surface, one set of keys --------------------------------
+        # Two facts naming the same (surface, type) with DIFFERENT extracted
+        # keys is a producer contradiction: it says one thing is two things.
+        # This used to be invisible — _entity_key keeps whichever arrived
+        # first and drops the rest — and invisible is the wrong answer when
+        # the surviving key is what the resolver blocks on. A deterministic
+        # producer should never do it; catching it here is what makes that a
+        # guarantee instead of an assumption.
+        sides = [(item.subject_text, item.subject_type, item.subject_keys)]
+        if has_object_entity:
+            sides.append((item.object_text, item.object_type, item.object_keys))
+        for surface, etype, ekeys in sides:
+            clash = self._key_clash(keys, result, surface, etype, ekeys)
+            if clash is not None:
+                result.quarantined.append(self._quarantine(
+                    unit, "validation_failure", clash, raw))
+                return
+
         # --- candidates -------------------------------------------------
         subject_key = self._entity_key(
             keys, result, item.subject_text, item.subject_type,
@@ -200,6 +218,34 @@ class ParserSuppliedStrategy(ExtractionStrategy):
             char_start=start,
             char_end=end,
         ))
+
+    @staticmethod
+    def _key_clash(keys: dict[tuple[str, str], str], result: ExtractionResult,
+                   surface: str, entity_type: Optional[str],
+                   extracted_keys: Optional[dict]) -> Optional[str]:
+        """A message naming the contradiction, or None when there isn't one.
+
+        Only a key present on BOTH sides with two different values counts. A
+        later mention carrying extra keys, or none at all, is normal: facts
+        about one thing legitimately arrive with different amounts known.
+        """
+        existing_key = keys.get((surface.casefold(), entity_type))
+        if existing_key is None:
+            return None
+        prior = next((e for e in result.entities if e.key == existing_key), None)
+        if prior is None:
+            return None
+        conflicts = {k: (prior.extracted_keys[k], v)
+                     for k, v in (extracted_keys or {}).items()
+                     if k in prior.extracted_keys
+                     and str(prior.extracted_keys[k]) != str(v)}
+        if not conflicts:
+            return None
+        detail = ", ".join(f"{k}={was!r} then {now!r}"
+                           for k, (was, now) in sorted(conflicts.items()))
+        return (f"{entity_type} {surface!r} was given conflicting keys in one "
+                f"document ({detail}) — one surface cannot be two entities; "
+                f"the producer must disambiguate them")
 
     @staticmethod
     def _entity_key(keys: dict[tuple[str, str], str], result: ExtractionResult,

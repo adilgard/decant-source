@@ -753,6 +753,61 @@ class OperatorService:
                             "watch it under GET /v1/jobs"},
             target=f"job:{job_id}")
 
+    def cancel_job(self, principal: Principal,
+                   p: dict[str, Any]) -> WriteOutcome:
+        """Stop a queued or running job (migration 015).
+
+        Two different mechanisms behind one operator action, because the two
+        states genuinely differ:
+
+        * QUEUED — nothing has claimed it, so there is nobody to cooperate
+          with. It is finished here and now, and never runs.
+        * RUNNING — the flag is set and the RUNNER stops, at its next
+          drain-pass boundary, which is the only point where the counters it
+          has written and the queues it is draining agree. Seconds, not
+          instant, and deliberately so: interrupting mid-document would trade
+          an unwanted run for an inconsistent one.
+
+        Work already done is KEPT either way. Documents processed before the
+        cancellation are real, with real provenance, and anything still queued
+        stays queued for a later job to drain — so this stops a run without
+        also throwing away what it accomplished. Undoing the work is a
+        separate, scoped decision, which is the same rule the ontology swap
+        follows.
+
+        NOT a substitute for pause_source. That marks a SOURCE so future
+        capture sweeps skip it, and a job already past capture never reads it
+        again — an operator reaching for it to stop a run (2026-08-04) finds it
+        does nothing, which is the gap this closes."""
+        tenant = principal.tenant_id
+        job_id = p["job_id"]
+        status = self._store.request_job_cancel(
+            tenant, job_id, requested_by=principal.principal_id)
+        if status is None:
+            raise LookupError(f"job {job_id} not found for tenant {tenant!r}")
+        if status in ("done", "failed"):
+            raise WriteCallError(
+                f"cancel_job: job {job_id} already finished ({status}) — "
+                f"there is nothing to stop. Undoing what it did is a separate "
+                f"action")
+        reason = f"cancelled by {principal.principal_id}"
+        if p.get("reason"):
+            reason += f": {p['reason']}"
+        if status == "queued":
+            self._store.finish_job(tenant, job_id, status="failed",
+                                   error=f"{reason} before it started")
+            return WriteOutcome(
+                result={"job_id": job_id, "was": status, "stopped": "now",
+                        "note": "never started — nothing was ingested"},
+                target=f"job:{job_id}")
+        return WriteOutcome(
+            result={"job_id": job_id, "was": status,
+                    "stopped": "at the next drain-pass boundary",
+                    "note": "the runner stops within one pass; work already "
+                            "done is kept and anything still queued stays "
+                            "queued for a later job"},
+            target=f"job:{job_id}")
+
     def jobs(self, tenant: str) -> dict[str, Any]:
         """The console's job listing (read; routed like open_alerts)."""
         rows = self._store.list_jobs(tenant)
@@ -848,6 +903,18 @@ class OperatorService:
                 f"resolve against the service's working directory, not "
                 f"yours")
         if not folder.exists():
+            # A path carrying an ellipsis is almost never a real path: it is
+            # a path that was ABBREVIATED for display somewhere — a chat
+            # message, a log line, a narrow table — and then pasted. The
+            # generic "does not exist" is true but sends an operator hunting
+            # for a missing folder instead of showing them the one character
+            # that is wrong, which in a 148-character path is invisible.
+            if "…" in raw_path or "..." in raw_path:
+                raise WriteCallError(
+                    f"ingest_folder: {str(folder)!r} contains an ellipsis, so "
+                    f"it looks like a path that was shortened for display and "
+                    f"then copied. Paste the full path — nothing between the "
+                    f"drive letter and the folder name may be left out")
             raise WriteCallError(
                 f"ingest_folder: {str(folder)!r} does not exist on this box")
         if not folder.is_dir():
@@ -1151,6 +1218,19 @@ def register_operator_defaults(gate: OperatorGate,
                     "ontology_version": P(type="str"),
                     "source_ref": P(type="str")},
             scope=OPERATE_SCOPE), service.ingest_folder),
+        (WriteOperation(
+            name="cancel_job",
+            description="Stop a queued or running job. A queued one never"
+                        " runs; a running one stops at its next drain-pass"
+                        " boundary, which is where its counters and the"
+                        " queues agree. Work already done is KEPT and"
+                        " anything still queued stays queued for a later"
+                        " job — this stops the run, it does not undo it."
+                        " Pausing the SOURCE does not do this: that only"
+                        " tells future capture sweeps to skip it.",
+            params={"job_id": P(type="int", required=True),
+                    "reason": P(type="str")},
+            scope=OPERATE_SCOPE), service.cancel_job),
         (WriteOperation(
             name="import_ontology",
             description="Validate and load one ontology set (version + the"

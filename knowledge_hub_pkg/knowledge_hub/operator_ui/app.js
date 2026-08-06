@@ -812,6 +812,12 @@ async function startIngest() {
   if ($("ld-exclude").value.trim()) params.exclude = $("ld-exclude").value.trim();
   if ($("ld-extensions").value.trim()) params.extensions = $("ld-extensions").value.trim();
   if ($("ld-ontology").value) params.ontology_version = $("ld-ontology").value;
+  // Naming the source is what lets a folder be SET UP before its first job.
+  // Omitted, the server derives one from the path — fine for a folder on the
+  // deployment defaults, useless for one that needs a plugin, because the
+  // derived name cannot be known (and so cannot be configured) until a run
+  // has already read every file the wrong way.
+  if ($("ld-source").value.trim()) params.source_ref = $("ld-source").value.trim();
   if (!params.path) { landSay(false, "Type the folder's absolute path first."); return; }
   let resp;
   try {
@@ -825,8 +831,9 @@ async function startIngest() {
     return;
   }
   const r = body.result;
-  landSay(true, "Job " + r.job_id + " queued for " + r.path + " under ontology " +
-    r.ontology_version + ". The runner picks it up within seconds; progress shows on the right.");
+  landSay(true, "Job " + r.job_id + " queued for " + r.path + " as source " +
+    r.source_ref + ", under ontology " + r.ontology_version +
+    ". The runner picks it up within seconds; progress shows on the right.");
   await refreshJobs();
 }
 
@@ -896,6 +903,40 @@ function renderSourcePicker(sources) {
     sel.appendChild(opt);
   });
   if (previous) sel.value = previous;   // a refresh must not move the cursor
+  // The ingest form's Source box offers the same list. A datalist, not a
+  // select: the name may be one that does not exist yet, and typing it is
+  // how a folder gets a stable ref on its very first run.
+  fillDatalist("ld-source-list", knownSources.map((s) => s.source_ref));
+}
+
+/* Register a source so it can be configured BEFORE its first ingest.
+ *
+ * add_source takes adapter config only, and this form deliberately sends
+ * none: the components go on next, through set_extraction_setup, which
+ * merges. Two steps rather than one wide form, because the second one
+ * resolves and type-checks every component server-side and its errors are
+ * the ones worth reading. */
+async function addSource() {
+  const ref = $("xs-new-ref").value.trim();
+  if (!ref) { xsSay(false, "Give the source a name first."); return; }
+  let resp;
+  try {
+    resp = await api("/v1/actions/add_source", {
+      method: "POST",
+      body: JSON.stringify({ source_ref: ref,
+                             source_system: $("xs-new-system").value }) });
+  } catch (e) { return; }
+  const body = await resp.json();
+  if (resp.status === 403) { xsSay(false, "Operator role required."); return; }
+  if (resp.status !== 200) {
+    xsSay(false, body.detail || body.error || ("HTTP " + resp.status));
+    return;
+  }
+  $("xs-new-ref").value = "";
+  await refreshMonitor();          // the one reader of /v1/monitor.sources
+  $("xs-source").value = body.result.source_ref;   // land on what was just made
+  xsSay(true, "Registered " + body.result.source_ref +
+        " — set its components below, then name it on the ingest form.");
 }
 
 function xsSay(ok, text) {
@@ -960,8 +1001,63 @@ function jobRow(j) {
     '<div style="font-size:10.5px;color:#5c6f9e;font-family:Consolas,monospace">' + esc((j.created_at || "").slice(0, 19).replace("T", " ")) + "</div></div>" +
     '<div style="font-size:11px;color:#b9cdf5;font-family:Consolas,monospace;margin-top:6px;word-break:break-all">' + esc((j.params || {}).path || "") + "</div>" +
     '<div style="font-size:11px;color:' + (j.status === "failed" ? "#ffcabb" : "#8fa8d8") + ';margin-top:5px">' + esc(line) +
-      (c.ontology_version ? ' <span style="color:#5c6f9e">· ontology ' + esc(c.ontology_version) + "</span>" : "") + "</div>";
+      (c.ontology_version ? ' <span style="color:#5c6f9e">· ontology ' + esc(c.ontology_version) + "</span>" : "") + "</div>" +
+    // Only where there is something to stop. A finished job gets no button,
+    // because the honest answer for one is "undoing this is a different
+    // action" rather than a control that looks like it would.
+    (j.status === "queued" || j.status === "running"
+      ? '<div data-kill="' + j.id + '" style="cursor:pointer;display:inline-block;margin-top:9px;font-size:11px;color:#ffd9cd;padding:5px 14px;border-radius:12px;border:1px solid rgba(255,150,130,.45);background:rgba(255,110,90,.1)">Kill job</div>' +
+        '<span data-kill-say="' + j.id + '" style="font-size:11px;color:#8fa8d8;margin-left:10px"></span>'
+      : "");
+  const kill = row.querySelector("[data-kill]");
+  if (kill) kill.addEventListener("click", () => killJob(j, kill));
   return row;
+}
+
+/* Kill a job, behind a confirm.
+ *
+ * The confirm is not ceremony: an ingest is minutes-to-hours of work and the
+ * button sits in a list where the row under the cursor changes as the poll
+ * refreshes. It names the job and what survives, because "are you sure?" with
+ * no object is a question nobody can answer. */
+async function killJob(j, btn) {
+  const c = j.counts || {};
+  const done = fmt(c.docs_processed) + " document(s) processed, " +
+    fmt(c.facts_promoted) + " fact(s) promoted";
+  const ok = window.confirm(
+    "Kill job " + j.id + "?\n\n" +
+    ((j.params || {}).path || "") + "\n\n" +
+    (j.status === "running"
+      ? "It stops at the next drain-pass boundary — seconds, not instantly.\n" +
+        "KEPT: " + done + ".\n" +
+        "Anything still queued stays queued for a later job.\n\n" +
+        "This stops the run. It does not undo it."
+      : "It has not started, so nothing has been ingested."));
+  if (!ok) return;
+  const say = document.querySelector('[data-kill-say="' + j.id + '"]');
+  const tell = (t, bad) => {
+    if (say) { say.textContent = t; say.style.color = bad ? "#ff9b83" : "#eadf9a"; }
+  };
+  btn.style.opacity = "0.5";
+  let resp;
+  try {
+    resp = await api("/v1/actions/cancel_job", {
+      method: "POST", body: JSON.stringify({ job_id: j.id }) });
+  } catch (e) { btn.style.opacity = "1"; return; }
+  const body = await resp.json();
+  if (resp.status !== 200) {
+    btn.style.opacity = "1";
+    // A 404 here is a real race, not a typo: the list is polled, so a job can
+    // finish between the refresh that drew this row and the click on it. The
+    // raw 'not_found' reads like a bug in the console.
+    tell(resp.status === 404
+      ? "job " + j.id + " is no longer there — it finished between the last "
+        + "refresh and this click"
+      : (body.detail || body.error || ("HTTP " + resp.status)), true);
+    return;
+  }
+  tell("stopping — " + body.result.stopped);
+  await refreshJobs();
 }
 
 async function refreshJobs() {
@@ -1047,6 +1143,10 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   $("xs-save").addEventListener("click", () => saveExtractionSetup().catch(() => {}));
+  $("xs-new-save").addEventListener("click", () => addSource().catch(() => {}));
+  $("xs-new-ref").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") addSource().catch(() => {});
+  });
 
   $("ld-start").addEventListener("click", () => startIngest().catch(() => {}));
   $("ld-path").addEventListener("keydown", (e) => {

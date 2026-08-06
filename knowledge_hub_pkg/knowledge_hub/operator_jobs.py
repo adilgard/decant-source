@@ -62,6 +62,20 @@ logger = logging.getLogger(__name__)
 _MAX_DRAIN_PASSES = 200
 
 
+class JobCancelled(Exception):
+    """The operator asked this job to stop and it has (migration 015).
+
+    An exception because it unwinds the executor cleanly from wherever the
+    drain loop is, but NOT a failure of the work: it carries the counters as
+    of the last completed pass so the row records what actually happened
+    instead of a stack trace. `_execute` handles it before the generic
+    handler for exactly that reason."""
+
+    def __init__(self, message: str, counts: Optional[dict[str, Any]] = None):
+        self.counts = dict(counts or {})
+        super().__init__(message)
+
+
 class JobRunner:
     """Claims and executes operator_jobs rows. start() spawns the daemon
     thread; run_pending() executes synchronously (tests, one-shot use)."""
@@ -133,6 +147,15 @@ class JobRunner:
         logger.info("job %d (%s, tenant %s): starting", job_id, kind, tenant)
         try:
             counts = executor(job)
+        except JobCancelled as e:
+            # Asked for and delivered, so it is not an incident: no traceback,
+            # and the counters from the last completed pass are kept. Terminal
+            # status is 'failed' because the job did not finish its work —
+            # chk_job_status has four values and this needs no fifth.
+            logger.info("job %d cancelled: %s", job_id, e)
+            self._store.finish_job(tenant, job_id, status="failed",
+                                   counts=e.counts, error=str(e))
+            return
         except Exception as e:
             logger.exception("job %d failed", job_id)
             self._store.finish_job(
@@ -213,6 +236,25 @@ class JobRunner:
                                        svc["embedder"])
         return extraction, resolution
 
+    def _stop_if_cancelled(self, tenant: str, job_id: int,
+                           counts: dict[str, Any]) -> None:
+        """Raise JobCancelled if the operator has asked this job to stop.
+
+        Called at every batch boundary a long job has, because "how long until
+        it stops" is measured from the operator's click, not from the shape of
+        the loop. It never interrupts a batch that is already running — the
+        counters and the queues only agree between them."""
+        if self._store.job_cancel_requested(tenant, job_id):
+            counts["cancelled"] = True
+            self._store.update_job_counts(tenant, job_id, counts)
+            raise JobCancelled(
+                f"cancelled by the operator after "
+                f"{counts.get('drain_passes', 0)} drain pass(es): "
+                f"{counts.get('docs_processed', 0)} document(s) processed, "
+                f"{counts.get('facts_promoted', 0)} fact(s) promoted. Work "
+                f"already done is kept; anything still queued stays queued "
+                f"for a later job.", counts)
+
     # -------------------------------------------------------- folder ingest --
     def _run_folder_ingest(self, job: dict[str, Any]) -> dict[str, Any]:
         """One console-triggered folder pull, end to end: capture the
@@ -251,13 +293,28 @@ class JobRunner:
         # Register/refresh the source: job_only=true keeps the CLI sweep
         # away (watched folders are out of scope — this folder re-runs only
         # via a new job); the config records what the operator asked for.
-        svc["capture"].registry.register(
-            tenant, p["source_ref"], "filesystem",
+        #
+        # MERGED ONTO THE EXISTING CONFIG, never written over it. `register()`
+        # replaces config wholesale (capture.py: SET config = EXCLUDED.config),
+        # so building this dict fresh deleted every key the source already
+        # carried — including the `parser` / `extraction_strategy` /
+        # `fact_parser` that `set_extraction_setup` exists to put there. A
+        # plugin source therefore lost its components at job start, before a
+        # single document was processed, and did so SILENTLY: with those keys
+        # gone, parser selection falls back to docling and strategy selection
+        # falls back to the data_track branch, both of which are legal
+        # defaults, so the job reported success over a wrong parse. This job
+        # owns the keys below and nothing else.
+        existing = svc["capture"].registry.get(tenant, p["source_ref"])
+        config = dict((existing.config if existing else None) or {})
+        config.update(
             {"root": str(Path(p["path"]).resolve()), "job_only": True,
              "recurse": p.get("recurse", True),
              "include": p.get("include"), "exclude": p.get("exclude"),
              "extensions": sorted(extensions),
              "ontology_version": p["ontology_version"]})
+        svc["capture"].registry.register(
+            tenant, p["source_ref"], "filesystem", config)
 
         result = svc["capture"].run_source(tenant, adapter)
         counts: dict[str, Any] = {
@@ -277,8 +334,19 @@ class JobRunner:
         # is a sweep; each document extracts under ITS OWN pin or the
         # active default, so interleaving is provenance-safe.
         for _ in range(_MAX_DRAIN_PASSES):
+            # CHECKED BEFORE EACH STAGE, not only once per pass. A pass is three
+            # batch calls and the first of them parses, chunks and EMBEDS up to
+            # 100 documents — minutes of work. Checking only at the pass
+            # boundary meant an operator clicking Kill watched documents keep
+            # landing for minutes and reasonably concluded it had not worked
+            # (2026-08-04, a run cancelled to stop a known-bad parser from
+            # reaching more files). One indexed read per stage is nothing
+            # against the batch it guards.
+            self._stop_if_cancelled(tenant, job_id, counts)
             processed = svc["processing"].consume(tenant, limit=100)
+            self._stop_if_cancelled(tenant, job_id, counts)
             extracted = extraction.consume(tenant, limit=100)
+            self._stop_if_cancelled(tenant, job_id, counts)
             summary = resolution.sweep(tenant, limit=500)
             counts["docs_processed"] += len(processed)
             counts["docs_extracted"] += len(extracted)
@@ -288,6 +356,13 @@ class JobRunner:
             self._store.update_job_counts(tenant, job_id, counts)
             if not processed and not extracted and summary.swept == 0:
                 break
+            # CANCELLATION (migration 015), checked HERE and only here: a pass
+            # boundary is the one point where the counters just written and the
+            # queues actually agree. Everything already processed stays — it is
+            # real work with real provenance — and everything still queued
+            # stays queued, so a later job drains it. Stopping mid-document
+            # would trade an unwanted run for an inconsistent one.
+            self._stop_if_cancelled(tenant, job_id, counts)
 
         # Honesty check: anything still queued/errored for this tenant is
         # reported, never silently dropped from the summary.
@@ -367,6 +442,11 @@ class JobRunner:
             if not batch:
                 break
             for raw_id in batch:
+                # Per DOCUMENT here, not per batch of 50: this is the long loop
+                # of a re-extraction, and the population is fixed and marked
+                # document by document, so stopping between two of them leaves
+                # a resumable ledger rather than a torn batch.
+                self._stop_if_cancelled(tenant, job_id, counts)
                 try:
                     summary = extraction.extract(tenant, raw_id,
                                                  ontology_version=target)
@@ -411,6 +491,10 @@ class JobRunner:
             counts["facts_promoted"] += len(summary.promoted_facts)
             if summary.swept == 0 and not summary.promoted_facts:
                 break
+            # Cancellable at the same boundary as folder ingest (015). A
+            # re-extraction is the longer of the two jobs, so being unable to
+            # stop it is the worse of the two gaps.
+            self._stop_if_cancelled(tenant, job_id, counts)
 
         with self._store.transaction(tenant) as conn:
             superseded = conn.execute(

@@ -428,6 +428,17 @@ a:hover{color:#c3d5ff;text-decoration:underline}
                 <input id="ld-path" type="text" spellcheck="false" placeholder="D:\clientdocs\policies  ·  /srv/docs/policies"
                        style="width:100%;box-sizing:border-box;padding:9px 12px;border-radius:10px;border:1px solid rgba(160,190,255,.4);background:rgba(0,2,12,.6);color:#e9f0ff;font-family:Consolas,monospace;font-size:12px;outline:none">
               </div>
+              <div>
+                <div style="font-size:11px;color:#8fa8d8;margin-bottom:4px">Source <span style="color:#5c6f9e">(optional — defaults to one derived from the path)</span></div>
+                <!-- Placeholder is deliberately NOT a name anyone would
+                     actually want: greyed placeholder text reads as a filled
+                     field at a glance, and a plausible one invites an
+                     operator to hit Start on an empty form. -->
+                <input id="ld-source" type="text" spellcheck="false" list="ld-source-list" placeholder="— leave blank, or pick a registered source —"
+                       style="width:100%;box-sizing:border-box;padding:8px 11px;border-radius:10px;border:1px solid rgba(255,255,255,.18);background:rgba(0,2,12,.5);color:#e9f0ff;font-family:Consolas,monospace;font-size:11.5px;outline:none">
+                <datalist id="ld-source-list"></datalist>
+                <div style="font-size:10.5px;color:#5c6f9e;margin-top:4px">name it when the folder needs a non-default reader or fact plugin: register it below, set it up, then type it here. Left blank, the job invents a name from the path — which cannot be configured beforehand, so the first run uses this deployment's defaults.</div>
+              </div>
               <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:#b9cdf5;cursor:pointer">
                 <input id="ld-recurse" type="checkbox" checked> include subfolders
               </label>
@@ -489,6 +500,27 @@ a:hover{color:#c3d5ff;text-decoration:underline}
         <div style="padding:16px 18px;clip-path:polygon(16px 0,100% 0,100% calc(100% - 16px),calc(100% - 16px) 100%,0 100%,0 16px);border:1px solid rgba(255,255,255,.14);background:linear-gradient(160deg,rgba(120,150,255,.08),rgba(255,255,255,.03));backdrop-filter:blur(12px)">
           <div style="font-family:Silkscreen,Consolas,monospace;font-size:8.5px;letter-spacing:.2em;color:#7db4e8;margin-bottom:6px">EXTRACTION SETUP : PER SOURCE</div>
           <div style="font-size:12px;color:#8fa8d8;margin-bottom:12px;line-height:1.6">Choose how one registered source is read and where its facts come from. Leave a field blank to keep this deployment's default. <span style="color:#b9cdf5">Parser-supplied</span> means a registered plugin produces the facts deterministically — no language model runs for that source — while prose is still chunked and embedded for retrieval as usual. Everything a plugin emits is checked against the active ontology exactly like model output; whatever the vocabulary does not permit is quarantined, never stored.</div>
+          <!-- Register a source. A folder's source row is normally created by
+               its first ingest job, which is too late for a folder that needs
+               a plugin: the first run would already have read every file with
+               the default reader. Registering it here means it can be set up
+               BEFORE anything lands, and named on the ingest form above. -->
+          <div style="display:grid;grid-template-columns:2fr 1fr auto;gap:10px;align-items:end;margin-bottom:14px;padding-bottom:14px;border-bottom:1px solid rgba(255,255,255,.10)">
+            <div>
+              <div style="font-size:11px;color:#8fa8d8;margin-bottom:4px">New source name</div>
+              <input id="xs-new-ref" type="text" spellcheck="false" placeholder="usc-title26"
+                     style="width:100%;box-sizing:border-box;padding:9px 11px;border-radius:10px;border:1px solid rgba(255,255,255,.18);background:rgba(0,2,12,.5);color:#e9f0ff;font-family:Consolas,monospace;font-size:11.5px;outline:none">
+            </div>
+            <div>
+              <div style="font-size:11px;color:#8fa8d8;margin-bottom:4px">System</div>
+              <select id="xs-new-system" style="width:100%;box-sizing:border-box;padding:9px 11px;border-radius:10px;border:1px solid rgba(255,255,255,.18);background:rgba(0,2,12,.6);color:#e9f0ff;font-size:12px;outline:none">
+                <option value="filesystem">filesystem</option>
+                <option value="msgraph">msgraph</option>
+                <option value="qbo">qbo</option>
+              </select>
+            </div>
+            <div id="xs-new-save" style="cursor:pointer;font-size:12px;font-weight:500;color:#e9f0ff;padding:9px 18px;clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);border:1px solid rgba(160,190,255,.45);background:rgba(120,150,255,.16)">Register</div>
+          </div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
             <div>
               <div style="font-size:11px;color:#8fa8d8;margin-bottom:4px">Source</div>

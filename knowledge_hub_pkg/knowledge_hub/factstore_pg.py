@@ -587,6 +587,35 @@ class PostgresFactStore(FactStore):
                 (status, Jsonb(counts) if counts is not None else None,
                  error, tenant_id, job_id))
 
+    def request_job_cancel(self, tenant_id: str, job_id: int,
+                           requested_by: str) -> Optional[str]:
+        """Ask a job to stop (migration 015). Returns the status it was in, or
+        None if there is no such job.
+
+        Only marks it — the runner does the stopping, at a drain-pass boundary
+        where the counters and the queues agree. Idempotent: asking twice keeps
+        the FIRST request's timestamp, because the first ask is when the
+        operator decided and that is the audit-relevant moment."""
+        with self.transaction(tenant_id) as conn:
+            row = conn.execute(
+                "UPDATE operator_jobs"
+                " SET cancel_requested_at = coalesce(cancel_requested_at, now()),"
+                "     cancel_requested_by = coalesce(cancel_requested_by, %s)"
+                " WHERE tenant_id = %s AND id = %s"
+                " RETURNING status",
+                (requested_by, tenant_id, job_id)).fetchone()
+        return row["status"] if row else None
+
+    def job_cancel_requested(self, tenant_id: str, job_id: int) -> bool:
+        """Has this job been asked to stop? Read by the runner once per drain
+        pass, which is why 015 indexes exactly this predicate."""
+        with self.transaction(tenant_id) as conn:
+            row = conn.execute(
+                "SELECT cancel_requested_at IS NOT NULL AS asked"
+                " FROM operator_jobs WHERE tenant_id = %s AND id = %s",
+                (tenant_id, job_id)).fetchone()
+        return bool(row and row["asked"])
+
     def get_job(self, tenant_id: str, job_id: int) -> Optional[dict[str, Any]]:
         with self.transaction(tenant_id) as conn:
             row = conn.execute(

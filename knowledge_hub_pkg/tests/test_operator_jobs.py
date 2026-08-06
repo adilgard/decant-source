@@ -180,6 +180,139 @@ def test_ingest_folder_validates_server_side(gate_and_service, tenant,
                                        "ontology_version": "typo-9.9"}, op)
 
 
+def test_an_elided_path_says_so_instead_of_just_missing(gate_and_service,
+                                                        store, tenant,
+                                                        tmp_path):
+    """A path with an ellipsis in it was abbreviated for display somewhere and
+    then pasted. 'Does not exist' is true and useless: in a 148-character path
+    the one wrong character is invisible, so the operator goes looking for a
+    missing folder that is actually sitting right there. Real failure, first
+    full-title attempt, 2026-08-04."""
+    gate, _ = gate_and_service
+    op = operator(tenant)
+    deep = tmp_path / "a" / "b" / "target"
+    deep.mkdir(parents=True)
+    for elided in (str(tmp_path / "a" / "…" / "target"),
+                   str(tmp_path / "a" / "..." / "target")):
+        with pytest.raises(WriteCallError, match="shortened for display"):
+            gate.execute("ingest_folder", {"path": elided}, op)
+    # The unabbreviated one is accepted, so the guard cannot be swallowing
+    # a path that would have worked.
+    out = gate.execute("ingest_folder", {"path": str(deep)}, op)
+    assert out["result"]["path"] == str(deep.resolve())
+    # ...and close it out. claim_next_job takes the oldest QUEUED row of any
+    # tenant, so a job left queued here is a job some later test's runner
+    # claims instead of its own.
+    store.finish_job(tenant, out["result"]["job_id"], status="done", counts={})
+
+
+def test_cancelling_a_queued_job_stops_it_before_it_runs(gate_and_service,
+                                                         store, tenant,
+                                                         tmp_path):
+    """Nothing has claimed it, so there is nobody to cooperate with: it is
+    finished on the spot and the runner never sees it."""
+    gate, _ = gate_and_service
+    op = operator(tenant)
+    out = gate.execute("ingest_folder", {"path": str(tmp_path)}, op)
+    job_id = out["result"]["job_id"]
+
+    killed = gate.execute("cancel_job", {"job_id": job_id,
+                                         "reason": "wrong folder"}, op)
+    assert killed["result"]["was"] == "queued"
+    assert killed["result"]["stopped"] == "now"
+
+    job = store.get_job(tenant, job_id)
+    assert job["status"] == "failed"
+    assert "wrong folder" in job["error"]
+    assert job["cancel_requested_at"] is not None
+    assert job["cancel_requested_by"] == op.principal_id
+    # And it is gone from the queue, so no runner can pick it up.
+    assert store.claim_next_job() is None
+
+
+def test_cancelling_a_finished_job_is_refused(gate_and_service, store, tenant,
+                                              tmp_path):
+    """A control that pretends to stop something already over is worse than
+    no control: the honest answer is that undoing it is a different action."""
+    gate, _ = gate_and_service
+    op = operator(tenant)
+    out = gate.execute("ingest_folder", {"path": str(tmp_path)}, op)
+    job_id = out["result"]["job_id"]
+    store.finish_job(tenant, job_id, status="done", counts={})
+
+    with pytest.raises(WriteCallError, match="already finished"):
+        gate.execute("cancel_job", {"job_id": job_id}, op)
+
+
+def test_cancel_is_idempotent_and_keeps_the_first_asks_timestamp(
+        gate_and_service, store, tenant, tmp_path):
+    """The first ask is when the operator decided, and that is the moment the
+    audit trail should carry."""
+    gate, _ = gate_and_service
+    op = operator(tenant)
+    job_id = gate.execute("ingest_folder", {"path": str(tmp_path)},
+                          op)["result"]["job_id"]
+    store.request_job_cancel(tenant, job_id, requested_by="first-asker")
+    first = store.get_job(tenant, job_id)["cancel_requested_at"]
+    store.request_job_cancel(tenant, job_id, requested_by="second-asker")
+    again = store.get_job(tenant, job_id)
+    assert again["cancel_requested_at"] == first
+    assert again["cancel_requested_by"] == "first-asker"
+    store.finish_job(tenant, job_id, status="failed", counts={})
+
+
+def test_cancelling_an_unknown_job_is_a_lookup_error(gate_and_service, tenant):
+    gate, _ = gate_and_service
+    with pytest.raises(LookupError, match="not found"):
+        gate.execute("cancel_job", {"job_id": 99999999}, operator(tenant))
+
+
+def test_a_running_job_stops_at_a_pass_boundary_and_keeps_its_work(
+        gate_and_service, store, test_dsn, tenant, tmp_path):
+    """The whole point of cooperative cancellation: the run stops, the counters
+    survive, and the queue is left in a state a later job can drain.
+
+    The flag is set through the STORE rather than the write op, because the op
+    short-circuits a queued job to finished and the runner would then never see
+    it — that shortcut is covered separately. Setting the flag and then letting
+    the runner claim it puts the job in exactly the state a mid-run click
+    produces (running, flag set) with no race to lose.
+    """
+    from knowledge_hub.operator_jobs import JobRunner
+
+    gate, _ = gate_and_service
+    op = operator(tenant)
+    (tmp_path / "a.md").write_text("# One\n\nSome prose.\n", encoding="utf-8")
+    (tmp_path / "b.md").write_text("# Two\n\nMore prose.\n", encoding="utf-8")
+    job_id = gate.execute("ingest_folder", {"path": str(tmp_path)},
+                          op)["result"]["job_id"]
+
+    store.request_job_cancel(tenant, job_id, requested_by="mid-run-clicker")
+    assert store.get_job(tenant, job_id)["status"] == "queued"
+
+    # dsn + bucket explicitly: a bare JobRunner() reads settings and would
+    # point at the PILOT database and the long-retention bucket.
+    runner = JobRunner(dsn=test_dsn, s3_bucket=TEST_BUCKET,
+                       s3_retention=timedelta(minutes=15))
+    assert runner.run_pending() == 1             # it DID run, then stopped
+
+    job = store.get_job(tenant, job_id)
+    assert job["status"] == "failed"
+    assert "cancelled by the operator" in job["error"]
+    assert "drain pass" in job["error"]
+    # The counters from the last completed pass survived — not a traceback.
+    assert job["counts"]["cancelled"] is True
+    assert job["counts"]["files_landed"] == 2
+    assert "Traceback" not in (job["error"] or "")
+    # And capture's work stands: the files are landed, so a later job replays
+    # them as duplicates instead of re-ingesting.
+    with store.transaction(tenant) as conn:
+        landed = conn.execute(
+            "SELECT count(*) AS n FROM raw_documents WHERE tenant_id = %s",
+            (tenant,)).fetchone()["n"]
+    assert landed == 2
+
+
 def test_eligible_extensions_are_per_job_not_global(gate_and_service, store,
                                                     tenant, tmp_path):
     """A folder holding an unusual format widens ITS OWN eligibility.

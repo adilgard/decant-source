@@ -662,7 +662,8 @@ def test_action_catalog_is_role_scoped_and_registry_generated(
         "import_ontology", "select_ontology",   # d.s Stage 1
         "ingest_folder",                        # d.s Stage 2
         "reextract_scope",                      # d.s Stage 3
-        "set_extraction_setup"}                 # parser_supplied seam
+        "set_extraction_setup",                 # parser_supplied seam
+        "cancel_job"}                           # migration 015
 
     # The endpoint list IS the registry, spelled as URLs.
     generated = {e for e in operator_app.endpoints()

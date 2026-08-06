@@ -632,6 +632,7 @@ class OperatorService:
                 "parser": plugins.PARSER_KEY,
                 "extraction_strategy": plugins.STRATEGY_KEY,
                 "fact_parser": plugins.FACT_PARSER_KEY,
+                "extraction_model": plugins.MODEL_KEY,
             },
             "parsers": plugins.PARSERS.names(),
             "default_parser": plugins.DEFAULT_PARSER,
@@ -744,7 +745,8 @@ class OperatorService:
         for key, supplied in ((plugins.STRATEGY_KEY,
                                p.get("extraction_strategy")),
                               (plugins.PARSER_KEY, p.get("parser")),
-                              (plugins.FACT_PARSER_KEY, p.get("fact_parser"))):
+                              (plugins.FACT_PARSER_KEY, p.get("fact_parser")),
+                              (plugins.MODEL_KEY, p.get("extraction_model"))):
             value = supplied.strip() if isinstance(supplied, str) else supplied
             if value:
                 config[key] = value
@@ -1059,8 +1061,7 @@ class OperatorService:
                 f"this API")
         return config
 
-    @staticmethod
-    def _guard_components(config: dict[str, Any]) -> dict[str, Any]:
+    def _guard_components(self, config: dict[str, Any]) -> dict[str, Any]:
         """Resolve every component this config names, NOW, at save time.
 
         Same principle as ingest_folder refusing an unimported ontology
@@ -1096,6 +1097,27 @@ class OperatorService:
                     f"{plugins.PARSER_SUPPLIED_STRATEGY!r}, or drop the key")
         except plugins.PluginError as e:
             raise WriteCallError(str(e)) from e
+        # d.s Stage 5: a pinned extraction model is validated against what
+        # the inference box ACTUALLY serves, the same save-time honesty the
+        # plugin names get. An unreachable box refuses rather than trusts —
+        # a typo saved blind surfaces at the first failed document instead
+        # of here, which is exactly the 3am failure this guard exists for.
+        model = config.get(plugins.MODEL_KEY)
+        if model:
+            inf = self.inference_status()
+            if not inf["reachable"]:
+                raise WriteCallError(
+                    f"{plugins.MODEL_KEY!r} = {model!r} cannot be verified: "
+                    f"the inference box at {inf['target']} is not answering "
+                    f"({inf['error'] or 'no detail'}) — bring it up, then "
+                    f"save again")
+            if not any(t == model or t.startswith(f"{model}:")
+                       for t in inf["models"]):
+                raise WriteCallError(
+                    f"{plugins.MODEL_KEY!r} = {model!r} is not served by "
+                    f"{inf['target']} — it serves: "
+                    f"{', '.join(inf['models']) or '(nothing)'}. Pull the "
+                    f"model onto the box, or pick a served one")
         return config
 
     def _credential_info(self, tenant: str,
@@ -1244,16 +1266,20 @@ def register_operator_defaults(gate: OperatorGate,
             description="Point one source at the components it should use:"
                         " a reader (bytes -> text), a fact producer, and,"
                         " for 'parser_supplied', the plugin that produces"
-                        " the facts deterministically. Merges into the"
-                        " source's existing config — an empty value clears"
-                        " that key and restores the default. Every named"
-                        " component is resolved and type-checked NOW, so a"
-                        " typo or a plugin missing from this box fails"
-                        " here rather than mid-sweep.",
+                        " the facts deterministically — plus, for the"
+                        " language-model producer, which SERVED model reads"
+                        " this source's prose (d.s Stage 5; validated"
+                        " against the inference box's live list). Merges"
+                        " into the source's existing config — an empty"
+                        " value clears that key and restores the default."
+                        " Every named component is resolved and"
+                        " type-checked NOW, so a typo or a plugin missing"
+                        " from this box fails here rather than mid-sweep.",
             params={"source_ref": P(type="str", required=True),
                     "extraction_strategy": P(type="str"),
                     "parser": P(type="str"),
-                    "fact_parser": P(type="str")},
+                    "fact_parser": P(type="str"),
+                    "extraction_model": P(type="str")},
             scope=OPERATE_SCOPE), service.set_extraction_setup),
         (WriteOperation(
             name="ingest_folder",
@@ -1680,6 +1706,12 @@ class OperatorApp:
             # distinction; "sealed" simply cannot occur for a file.
             "credential_store": type(self._resolver).__name__,
             "posture": settings.posture,
+            # Stage 5 (via the posture-login contract): the console renders
+            # this line VERBATIM — posture phrasing lives here so the
+            # browser keeps zero posture logic of its own.
+            "posture_line": ("local posture · this machine only"
+                             if settings.is_local
+                             else f"{settings.posture} posture"),
             "actions": len(self.gate.operations()),
         }
 

@@ -1136,11 +1136,17 @@ def run_ingest(tenants: list[str], add_sources: list[str],
             b = PostgresOntologyBinding(store, version=version)
             return b, LLMJointExtractionStrategy(b), StructuredMapStrategy(b)
 
+        def llm_for(b, model: str):
+            # d.s Stage 5: honor a source's pinned extraction model here
+            # too — the CLI sweep drains the same queues the console fills.
+            return LLMJointExtractionStrategy(b, model=model)
+
         binding = PostgresOntologyBinding(store)
         extraction = ExtractionService(
             pipeline, raw_store, binding, LLMJointExtractionStrategy(binding),
             StructuredMapStrategy(binding), SpanGrounder(),
-            dispatcher=ext_dispatcher, strategy_factory=trio_for)
+            dispatcher=ext_dispatcher, strategy_factory=trio_for,
+            llm_strategy_factory=llm_for)
         resolution = ResolutionService(pipeline, scorer, embedder)
         return binding, extraction, resolution
 

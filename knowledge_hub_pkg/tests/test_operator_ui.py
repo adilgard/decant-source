@@ -48,6 +48,7 @@ from knowledge_hub.operator_http import (
     OperatorApp,
     OperatorGate,
     OperatorService,
+    WriteCallError,
     register_operator_defaults,
 )
 from knowledge_hub.operator_reads import OperatorReadService
@@ -882,6 +883,87 @@ def test_inference_read_is_role_gated(op_client, resolver, tenant):
         assert key in body
     assert body["embedding"]["model"] == settings.embedding_model
     assert body["extraction"]["model"] == settings.extraction_model
+
+
+def test_setup_model_pin_validates_against_the_box(store, pipeline, scorer,
+                                                   embedder, secrets, tenant):
+    """d.s Stage 5: extraction_model rides set_extraction_setup (the
+    merge-safe op), validated at save time against what the inference box
+    ACTUALLY serves — a served model saves and merges without touching
+    adjacent config; an unserved one is refused naming the served list; an
+    unreachable box refuses rather than trusts; an empty value clears."""
+    def svc(probe):
+        return OperatorService(store,
+                               ResolutionService(pipeline, scorer, embedder),
+                               SourceRegistry(store), secrets,
+                               inference_probe=probe)
+
+    principal = Principal(tenant_id=tenant, principal_id="stage5-op",
+                          roles=["operator"])
+    registry = SourceRegistry(store)
+    ref = f"fs-mp-{uuid.uuid4().hex[:6]}"
+    registry.register(tenant, ref, "filesystem",
+                      config={"data_track": "prose", "doc_type": "sop"})
+
+    served = svc(lambda h: _FakeOllamaReport(
+        models=["fake-tiny:latest", "big-model:27b"]))
+    out = served.set_extraction_setup(
+        principal, {"source_ref": ref, "extraction_model": "fake-tiny"})
+    assert out.result["changed"] == {"extraction_model": "fake-tiny"}
+    entry = registry.get(tenant, ref)
+    assert entry.config["extraction_model"] == "fake-tiny"
+    assert entry.config["data_track"] == "prose"     # merge, not overwrite
+    assert entry.config["doc_type"] == "sop"
+
+    with pytest.raises(WriteCallError) as refused:
+        served.set_extraction_setup(
+            principal, {"source_ref": ref, "extraction_model": "nope-7b"})
+    assert "not served" in str(refused.value)
+    assert "fake-tiny:latest" in str(refused.value)   # names what IS served
+
+    down = svc(lambda h: _FakeOllamaReport(reachable=False, version=None,
+                                           error="refused"))
+    with pytest.raises(WriteCallError) as blind:
+        down.set_extraction_setup(
+            principal, {"source_ref": ref, "extraction_model": "fake-tiny"})
+    assert "not answering" in str(blind.value)
+
+    out = served.set_extraction_setup(
+        principal, {"source_ref": ref, "extraction_model": ""})
+    assert out.result["changed"] == {"extraction_model": None}
+    assert "extraction_model" not in registry.get(tenant, ref).config
+
+
+def test_stage5_pickers_reflect_real_availability(op_client, resolver,
+                                                  tenant):
+    """d.s Stage 5: the model picker is fed by /v1/inference (live), the
+    ontology options say what they are, the save sends the model through
+    the merge-safe op, and the shared inference-target reassurance line
+    exists. Nothing is hardcoded in the shell."""
+    html = op_client.get("/ui/").text
+    js = op_client.get("/ui/app.js").text
+
+    assert 'id="xs-model"' in html
+    assert "fillModelPicker" in js
+    assert "deployment default" in js       # blank = named default
+    # No model NAMES anywhere in shell or JS (Stage 2 already pinned this;
+    # the picker must not regress it).
+    for frozen in ("bge-m3", "qwen3.6"):
+        assert frozen not in html and frozen not in js
+    # The save carries the model through set_extraction_setup.
+    assert "extraction_model" in js
+    # Ontology options carry their one-line 'what this is': counts ride
+    # the option text.
+    assert "predicates" in js
+    # The shared reassurance line: footer + Inference tab read the same
+    # /v1/inference answer.
+    assert 'id="footer-inference"' in html
+    assert "inference : " in js
+    # /v1/components advertises the new config key, so a manifest author
+    # sees the same contract the console uses.
+    operator = grant(resolver, tenant, ["operator"])
+    body = op_client.get("/v1/components", headers=bearer(operator)).json()
+    assert body["config_keys"]["extraction_model"] == "extraction_model"
 
 
 def test_console_tab_disposition_wire_two_hide_two_defer_one(op_client):

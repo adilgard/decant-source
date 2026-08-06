@@ -62,12 +62,18 @@ from knowledge_hub.models import PROSE_TRACK, RawDocument
 logger = logging.getLogger(__name__)
 
 # --------------------------------------------------------------- config keys
-# The three source-config keys this module reads. Named as constants because
-# they are a contract with the operator console and with whoever hand-writes
-# a manifest, not incidental strings.
+# The source-config keys this seam reads. Named as constants because they
+# are a contract with the operator console and with whoever hand-writes a
+# manifest, not incidental strings.
 PARSER_KEY = "parser"
 STRATEGY_KEY = "extraction_strategy"
 FACT_PARSER_KEY = "fact_parser"
+# d.s Stage 5: which SERVED model reads this source's prose. Only consulted
+# when the source's strategy is 'llm'; extraction.py routes it through the
+# injected llm_strategy_factory, and the console validates it against the
+# inference box's live list at save time. Absent = the deployment default
+# (settings.extraction_model).
+MODEL_KEY = "extraction_model"
 
 # ------------------------------------------------------------ strategy names
 # The extraction strategies core ships. 'llm' and 'structured_map' are what

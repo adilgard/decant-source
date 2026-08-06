@@ -72,6 +72,7 @@ from knowledge_hub.models import (
 from knowledge_hub.pipeline import Pipeline
 from knowledge_hub.plugins import (
     LLM_STRATEGY,
+    MODEL_KEY,
     PARSER_SUPPLIED_STRATEGY,
     STRUCTURED_STRATEGY,
     build_fact_parser,
@@ -180,7 +181,9 @@ class ExtractionService:
                  dispatcher: Optional[PostgresDispatcher] = None,
                  strategy_factory: Optional[Callable[
                      [str], tuple[OntologyBinding, ExtractionStrategy,
-                                  ExtractionStrategy]]] = None):
+                                  ExtractionStrategy]]] = None,
+                 llm_strategy_factory: Optional[Callable[
+                     [OntologyBinding, str], ExtractionStrategy]] = None):
         self.pipeline = pipeline
         self.store = pipeline.store
         self.raw_store = raw_store
@@ -208,6 +211,15 @@ class ExtractionService:
         # two different plugins under the same ontology.
         self._parser_strategies: dict[tuple[str, str],
                                       ParserSuppliedStrategy] = {}
+        # d.s Stage 5: per-source model pinning, same shape as the version
+        # pin above — a source whose config carries extraction_model runs
+        # its prose under THAT served model. The factory builds an llm
+        # strategy for (binding, model); instances are cached per
+        # (ontology version, model) because the strategy caches its own
+        # extractor_version stamp (model@digest). Injected, like
+        # strategy_factory, so the service stays typed against the seam.
+        self._llm_strategy_factory = llm_strategy_factory
+        self._llm_by_model: dict[tuple[str, str], ExtractionStrategy] = {}
 
     def _trio_for(self, raw: RawDocument,
                   ontology_version: Optional[str] = None) -> tuple[
@@ -298,8 +310,10 @@ class ExtractionService:
         config = source_config(self.store, raw)
         strategy_name = strategy_name_for(config, document.data_track)
         if strategy_name == LLM_STRATEGY:
-            summary = self._extract_prose(raw, document, binding,
-                                          llm_strategy)
+            summary = self._extract_prose(
+                raw, document, binding,
+                self._llm_for(raw, binding, llm_strategy,
+                              config.get(MODEL_KEY)))
         elif strategy_name == STRUCTURED_STRATEGY:
             summary = self._extract_structured(raw, document, binding,
                                                structured_strategy, config)
@@ -331,6 +345,29 @@ class ExtractionService:
             self._parser_strategies[key] = ParserSuppliedStrategy(
                 binding, build_fact_parser(ref))
         return self._parser_strategies[key]
+
+    def _llm_for(self, raw: RawDocument, binding: OntologyBinding,
+                 default: ExtractionStrategy,
+                 model: Optional[str]) -> ExtractionStrategy:
+        """The llm strategy this document's prose runs under: its source's
+        pinned model if one is configured (d.s Stage 5), else the injected
+        default. Same hard-error rule as the version pin: silently
+        extracting under the wrong model would stamp a provenance lie, so
+        a pin with no factory nacks and stays visible on the queue."""
+        if not model or model == getattr(default, "model", None):
+            return default
+        key = (binding.version, model)
+        if key not in self._llm_by_model:
+            if self._llm_strategy_factory is None:
+                raise ExtractionError(
+                    raw.tenant_id, None, None,
+                    f"raw_document id={raw.id}'s source pins "
+                    f"extraction_model {model!r} but this ExtractionService "
+                    f"has no llm_strategy_factory — wire one "
+                    f"(operator_jobs/deploy_launch do) or clear the pin")
+            self._llm_by_model[key] = self._llm_strategy_factory(binding,
+                                                                 model)
+        return self._llm_by_model[key]
 
     # ------------------------------------------------------- prose track --
     def _extract_prose(self, raw: RawDocument, document: Document,

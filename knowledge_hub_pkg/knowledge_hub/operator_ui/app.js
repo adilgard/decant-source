@@ -275,12 +275,9 @@ function renderMonitor() {
   // structurally 0 while documents failed.
   $("badge-health").textContent = fmt(m.alerts_open);
   // Stage 2: the footer's posture line is sourced from /v1/health, not a
-  // static claim ("appliance · single box" was written into the shell).
-  if (h && h.posture) {
-    $("footer-posture").textContent = h.posture === "local"
-      ? "local posture · this machine only"
-      : h.posture + " posture";
-  }
+  // static claim. Rendered VERBATIM — the server phrases it, because the
+  // browser keeps no posture logic of its own (posture-login contract).
+  if (h && h.posture_line) $("footer-posture").textContent = h.posture_line;
 }
 
 function sourceRow(s) {
@@ -869,7 +866,10 @@ async function populateOntologySelect() {
   body.versions.forEach((v) => {
     const opt = document.createElement("option");
     opt.value = v.version;
-    opt.textContent = v.version + (v.active ? " (active)" : "");
+    // Stage 5: each option says what it is, not just its name.
+    opt.textContent = v.version + (v.active ? " (active)" : "")
+      + " · " + fmt(v.entity_types) + " types · "
+      + fmt(v.predicates) + " predicates";
     sel.appendChild(opt);
   });
   sel.value = current;   // keep the operator's pick across refreshes
@@ -945,6 +945,33 @@ async function loadComponents() {
   fillDatalist("xs-parser-list", c.parsers || []);
   fillDatalist("xs-plugin-list", c.fact_parsers || []);
   $("xs-parser").placeholder = c.default_parser || "docling";
+  fillModelPicker();   // Stage 5: served models, from state.inference
+}
+
+/* Stage 5: the model picker offers ONLY what the inference box serves
+ * right now (state.inference, the /v1/inference read) — never a hardcoded
+ * list. A model pulled onto the box appears on the next refresh; one
+ * removed disappears (and the server refuses it at save time either way).
+ * Blank = the deployment default, named so picking it is informed. */
+function fillModelPicker() {
+  const sel = $("xs-model");
+  if (!sel) return;
+  const previous = sel.value;
+  const inf = state.inference;
+  sel.innerHTML = "";
+  const dflt = document.createElement("option");
+  dflt.value = "";
+  dflt.textContent = "— deployment default"
+    + (inf ? " (" + inf.extraction.model + ")" : "") + " —";
+  sel.appendChild(dflt);
+  (inf && inf.reachable ? inf.models : []).forEach((m) => {
+    const opt = document.createElement("option");
+    opt.value = m;
+    opt.textContent = m;
+    sel.appendChild(opt);
+  });
+  sel.value = previous;
+  if (sel.value !== previous) sel.value = "";  // its model left the box
 }
 
 function fillDatalist(id, names) {
@@ -1022,6 +1049,7 @@ async function saveExtractionSetup() {
     extraction_strategy: $("xs-strategy").value,
     parser: $("xs-parser").value.trim(),
     fact_parser: $("xs-plugin").value.trim(),
+    extraction_model: $("xs-model").value,
   };
   let resp;
   try {
@@ -1245,6 +1273,12 @@ async function refreshInference() {
   if (resp.status !== 200) return;
   const inf = await resp.json();
   state.inference = inf;    // the monitor strip's model names read this
+  // Stage 5: the shared reassurance line (footer) + the model picker both
+  // follow the same live read.
+  $("footer-inference").textContent = "inference : " + inf.target
+    + (inf.reachable ? " · answering" : " · not answering");
+  $("footer-inference").style.color = inf.reachable ? "#5c6f9e" : "#ffcabb";
+  fillModelPicker();
   $("inf-checked").textContent =
     "checked " + new Date().toTimeString().slice(0, 8);
   $("inf-target").textContent = inf.target;

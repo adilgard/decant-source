@@ -565,22 +565,34 @@ a:hover{color:#c3d5ff;text-decoration:underline}
             <div>
               <div style="font-size:11px;color:#8fa8d8;margin-bottom:4px">Source</div>
               <select id="xs-source" style="width:100%;box-sizing:border-box;padding:9px 11px;border-radius:10px;border:1px solid rgba(160,190,255,.4);background:rgba(0,2,12,.6);color:#e9f0ff;font-size:12px;outline:none"></select>
+              <div style="font-size:10.5px;color:#5c6f9e;margin-top:4px">the folder or connector this setup applies to</div>
             </div>
             <div>
               <div style="font-size:11px;color:#8fa8d8;margin-bottom:4px">Fact producer</div>
               <select id="xs-strategy" style="width:100%;box-sizing:border-box;padding:9px 11px;border-radius:10px;border:1px solid rgba(160,190,255,.4);background:rgba(0,2,12,.6);color:#e9f0ff;font-size:12px;outline:none"></select>
+              <div style="font-size:10.5px;color:#5c6f9e;margin-top:4px">who turns this source's documents into facts — each option says how</div>
             </div>
             <div>
               <div style="font-size:11px;color:#8fa8d8;margin-bottom:4px">Reader <span style="color:#5c6f9e">(turns bytes into text)</span></div>
               <input id="xs-parser" type="text" spellcheck="false" list="xs-parser-list" placeholder="docling"
                      style="width:100%;box-sizing:border-box;padding:9px 11px;border-radius:10px;border:1px solid rgba(255,255,255,.18);background:rgba(0,2,12,.5);color:#e9f0ff;font-family:Consolas,monospace;font-size:11.5px;outline:none">
               <datalist id="xs-parser-list"></datalist>
+              <div style="font-size:10.5px;color:#5c6f9e;margin-top:4px">suggestions are what this build has registered; a plugin reader can be typed as package.module:Class</div>
             </div>
             <div>
               <div style="font-size:11px;color:#8fa8d8;margin-bottom:4px">Fact plugin <span style="color:#5c6f9e">(parser-supplied only)</span></div>
               <input id="xs-plugin" type="text" spellcheck="false" list="xs-plugin-list" placeholder="package.module:ClassName"
                      style="width:100%;box-sizing:border-box;padding:9px 11px;border-radius:10px;border:1px solid rgba(255,255,255,.18);background:rgba(0,2,12,.5);color:#e9f0ff;font-family:Consolas,monospace;font-size:11.5px;outline:none">
               <datalist id="xs-plugin-list"></datalist>
+              <div style="font-size:10.5px;color:#5c6f9e;margin-top:4px">the code that produces facts deterministically when the producer is parser-supplied</div>
+            </div>
+            <!-- d.s Stage 5: the model picker offers ONLY what the inference
+                 box serves right now (/v1/inference) — never a hardcoded
+                 list. The save refuses a model the box stopped serving. -->
+            <div>
+              <div style="font-size:11px;color:#8fa8d8;margin-bottom:4px">Model <span style="color:#5c6f9e">(language-model producer only)</span></div>
+              <select id="xs-model" style="width:100%;box-sizing:border-box;padding:9px 11px;border-radius:10px;border:1px solid rgba(160,190,255,.4);background:rgba(0,2,12,.6);color:#e9f0ff;font-family:Consolas,monospace;font-size:12px;outline:none"></select>
+              <div style="font-size:10.5px;color:#5c6f9e;margin-top:4px">which served model reads this source's prose — the list is live from the inference box, and the default follows this deployment's setting</div>
             </div>
           </div>
           <div style="display:flex;align-items:center;gap:12px;margin-top:12px">
@@ -678,6 +690,10 @@ a:hover{color:#c3d5ff;text-decoration:underline}
            box, so it is gone. -->
       <div id="footer-operator" style="flex:none;font-size:10px;color:#5c6f9e">operator console · act is audited</div>
       <div id="footer-posture" style="flex:none;font-size:10px;color:#5c6f9e">—</div>
+      <!-- d.s Stage 5: the inference-target reassurance line, shared with
+           the Inference tab (same /v1/inference read). Confirmation, not
+           warning: which box model work resolves to, and that it answers. -->
+      <div id="footer-inference" style="flex:none;font-size:10px;color:#5c6f9e">inference : —</div>
       <div style="flex:none;display:flex;gap:4px">
         <div style="width:8px;height:8px;transform:rotate(45deg);background:#9fc0ff;box-shadow:0 0 6px rgba(140,170,255,.7)"></div>
         <div style="width:8px;height:8px;transform:rotate(45deg);background:#7be0c8;box-shadow:0 0 6px rgba(110,230,200,.7)"></div>

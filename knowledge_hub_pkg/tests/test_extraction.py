@@ -540,3 +540,86 @@ def test_coreference_resolves_to_earlier_mention(store, pipeline, raw_store,
     assert any(f["subject_ref"] in marsh_refs for f in later_facts), (
         "a fact from the 'She ...' parent should resolve its subject to the "
         f"Dr. Elena Marsh mention: {[(f['subject_ref'], f['predicate']) for f in later_facts]}")
+
+
+# ---------------------------------------------------------------------------
+# d.s Stage 5 — per-source model pinning (the console's model picker)
+# ---------------------------------------------------------------------------
+def test_source_pinned_model_routes_through_the_llm_factory(
+        store, pipeline, raw_store, dispatcher, parser, chunker, embedder,
+        binding, llm_strategy, structured_strategy, grounder,
+        extraction_dispatcher, tmp_path_factory):
+    """A source whose config pins extraction_model runs its prose under
+    THAT model via the injected llm_strategy_factory — the deployment
+    default is never consulted for it. Same seam shape (and same hard-error
+    rule) as the ontology-version pin: a pin with no factory nacks instead
+    of silently extracting under the wrong model."""
+    from knowledge_hub.interfaces import ExtractionResult
+    from knowledge_hub.processing import ProcessingService
+
+    tenant = f"t-{uuid.uuid4().hex[:12]}"
+    land_file.root = tmp_path_factory.mktemp("model-pin")
+
+    class PinnedStrategy:
+        extractor = "llm_joint"
+
+        def __init__(self, model):
+            self.model = model
+            self.version = f"{model}@pinned-fake/p0"
+            self.calls = 0
+
+        def extract(self, unit):
+            self.calls += 1
+            return ExtractionResult()
+
+    built: list[tuple[str, str]] = []
+    strategies: dict[str, PinnedStrategy] = {}
+
+    def llm_for(b, model):
+        built.append((b.version, model))
+        strategies[model] = PinnedStrategy(model)
+        return strategies[model]
+
+    land_file(store, pipeline, raw_store, dispatcher, tenant,
+              "pinned/note.md", SOP_MD,
+              config={"data_track": "prose", "doc_type": "sop",
+                      "extraction_model": "fake-tiny"},
+              source_ref="fs-pinned")
+    processing = ProcessingService(
+        pipeline, raw_store, parser, chunker, embedder,
+        dispatcher=dispatcher, extraction_dispatcher=extraction_dispatcher)
+    assert processing.consume(tenant, limit=10)
+    extraction = ExtractionService(
+        pipeline, raw_store, binding, llm_strategy, structured_strategy,
+        grounder, dispatcher=extraction_dispatcher,
+        llm_strategy_factory=llm_for)
+    extracted = extraction.consume(tenant, limit=10)
+    assert len(extracted) == 1 and extracted[0].status == "extracted"
+    assert built == [(binding.version, "fake-tiny")]
+    assert strategies["fake-tiny"].calls >= 1
+    # The run is stamped with the PINNED strategy's version — provenance
+    # names the model that actually read the prose.
+    with store.transaction(tenant) as conn:
+        run = conn.execute(
+            "SELECT extractor_version FROM extraction_runs"
+            " WHERE tenant_id = %s ORDER BY id DESC LIMIT 1",
+            (tenant,)).fetchone()
+    assert run["extractor_version"].startswith("fake-tiny@")
+
+    # A pin with NO factory is a hard error: the item nacks and stays
+    # visible on the queue with the reason, never a silent fall-through.
+    land_file(store, pipeline, raw_store, dispatcher, tenant,
+              "pinned/note2.md", COREF_MD,
+              config={"data_track": "prose", "doc_type": "sop",
+                      "extraction_model": "fake-tiny"},
+              source_ref="fs-pinned")
+    assert processing.consume(tenant, limit=10)
+    bare = ExtractionService(
+        pipeline, raw_store, binding, llm_strategy, structured_strategy,
+        grounder, dispatcher=extraction_dispatcher)
+    assert bare.consume(tenant, limit=10) == []
+    with store.transaction(tenant) as conn:
+        item = conn.execute(
+            "SELECT last_error FROM extraction_queue WHERE tenant_id = %s"
+            " ORDER BY id DESC LIMIT 1", (tenant,)).fetchone()
+    assert "llm_strategy_factory" in item["last_error"]

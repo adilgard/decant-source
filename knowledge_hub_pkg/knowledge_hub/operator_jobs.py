@@ -226,12 +226,18 @@ class JobRunner:
             return (binding, LLMJointExtractionStrategy(binding),
                     StructuredMapStrategy(binding))
 
+        def llm_for(binding, model: str):
+            # d.s Stage 5: a source pinned to a served model (console
+            # extraction setup) runs its prose under that model.
+            return LLMJointExtractionStrategy(binding, model=model)
+
         binding = PostgresOntologyBinding(self._store)  # active selection
         extraction = ExtractionService(
             svc["pipeline"], svc["raw_store"], binding,
             LLMJointExtractionStrategy(binding),
             StructuredMapStrategy(binding), SpanGrounder(),
-            dispatcher=svc["ext_dispatcher"], strategy_factory=trio_for)
+            dispatcher=svc["ext_dispatcher"], strategy_factory=trio_for,
+            llm_strategy_factory=llm_for)
         resolution = ResolutionService(svc["pipeline"], svc["scorer"],
                                        svc["embedder"])
         return extraction, resolution

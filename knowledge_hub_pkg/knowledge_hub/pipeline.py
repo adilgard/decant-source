@@ -428,6 +428,21 @@ class Pipeline:
             # NEW corpus. Found pre-flighting the Title 26 re-extract:
             # 1,560 old-version pending facts were one junk-mention
             # resolution away from rolling back fresh cutovers.
+            # The CTE's NOT-clauses are a RESOLVABILITY PRE-FILTER: a
+            # pending fact whose mention ref EXISTS BUT HASN'T RESOLVED
+            # cannot promote this call, and selecting it anyway meant
+            # loading it (get_pending_fact + a mention lookup per ref,
+            # each its own savepoint round-trip) just to skip it — per
+            # fact, per sweep. On the Title 26 drain that was the
+            # ~100k-row backlog reloaded ~130 times: millions of point
+            # queries whose answer was "not yet". The filter excludes
+            # EXACTLY _rewrite_refs' one quiet-skip case and nothing
+            # else: a dangling mention ref or an unparseable ref is
+            # deliberately ADMITTED so it still reaches Python and fails
+            # as loudly as it always did (LookupError/ValueError rolls
+            # the poisoned group back — test_reversion_supersession pins
+            # this). _rewrite_refs still runs on every selected row, so
+            # Python stays the authoritative check either way.
             selection_sql = """
                 WITH pending AS (
                     SELECT p.id, p.ontology_version,
@@ -438,6 +453,23 @@ class Pipeline:
                     FROM pending_facts p
                     WHERE p.tenant_id = %s
                       AND p.resolution_status = 'pending'
+                      AND NOT (p.subject_ref ~ '^mention:[0-9]+$'
+                               AND EXISTS (
+                                   SELECT 1 FROM entity_mentions m
+                                   WHERE m.tenant_id = %s
+                                     AND m.id = split_part(
+                                         p.subject_ref, ':', 2)::bigint
+                                     AND (m.resolution_status <> 'resolved'
+                                          OR m.resolved_entity_id IS NULL)))
+                      AND NOT (p.object_ref IS NOT NULL
+                               AND p.object_ref ~ '^mention:[0-9]+$'
+                               AND EXISTS (
+                                   SELECT 1 FROM entity_mentions m
+                                   WHERE m.tenant_id = %s
+                                     AND m.id = split_part(
+                                         p.object_ref, ':', 2)::bigint
+                                     AND (m.resolution_status <> 'resolved'
+                                          OR m.resolved_entity_id IS NULL)))
                 )
                 SELECT id, ontology_version, anchor_document_id
                 FROM pending p
@@ -467,7 +499,7 @@ class Pipeline:
                                            p.anchor_document_id))))
                 ORDER BY anchor_document_id NULLS LAST, id
                 """
-            selection_params = (tenant_id, tenant_id, tenant_id, tenant_id)
+            selection_params = (tenant_id,) * 6
             # Timing probe (KH_DRAIN_TIMING, observe-only): on the capture
             # sweeps the same read-only SELECT runs once more under
             # EXPLAIN ANALYZE so the plan is on record — labeled, so its

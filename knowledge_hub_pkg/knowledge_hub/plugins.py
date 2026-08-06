@@ -126,6 +126,14 @@ class PluginRegistry:
         at import."""
         self._factories[name] = factory
 
+    def unregister(self, name: str) -> None:
+        """Remove a short name. The registries are process-global, so a
+        registration made for one test run's benefit outlives it unless
+        removed — and other tests assert on exactly what `names()` returns.
+        Absent names are ignored: teardown must not fail because setup
+        never ran."""
+        self._factories.pop(name, None)
+
     def names(self) -> list[str]:
         """Registered short names, sorted. The operator console reads this
         to populate a picker, so it must never include a dotted reference —

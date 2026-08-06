@@ -133,43 +133,49 @@ def e2e(store, pipeline, raw_store, dispatcher, parser, chunker, embedder,
     from knowledge_hub.processing import ProcessingService
     from knowledge_hub.resolution import ResolutionService
 
+    # Registered into the PROCESS-GLOBAL registry, so it must come back out:
+    # the plugin suite's import guard asserts FACT_PARSERS.names() == [], and
+    # a leaked double here fails it whenever both suites share one process.
     plugin = E2EFactParser()
     FACT_PARSERS.register(PLUGIN_REF, lambda: plugin)
+    try:
+        tenant = f"t-{uuid.uuid4().hex[:12]}"
+        root = tmp_path_factory.mktemp("ps-e2e")
+        (root / "overview.md").write_bytes(DOC)
 
-    tenant = f"t-{uuid.uuid4().hex[:12]}"
-    root = tmp_path_factory.mktemp("ps-e2e")
-    (root / "overview.md").write_bytes(DOC)
+        capture = CaptureService(pipeline, raw_store, dispatcher)
+        # THE ONLY REASON THE PLUGIN RUNS. No call site below names it.
+        capture.registry.register(tenant, "fs-ps", "filesystem",
+                                  config={"data_track": "prose",
+                                          "doc_type": "prose",
+                                          "extraction_strategy":
+                                              "parser_supplied",
+                                          "fact_parser": PLUGIN_REF})
+        landed = capture.run_source(
+            tenant, FilesystemSourceAdapter(source_ref="fs-ps", root=root),
+            mode="backfill")
+        assert landed.landed == 1
 
-    capture = CaptureService(pipeline, raw_store, dispatcher)
-    # THE ONLY REASON THE PLUGIN RUNS. No call site below names it.
-    capture.registry.register(tenant, "fs-ps", "filesystem",
-                              config={"data_track": "prose",
-                                      "doc_type": "prose",
-                                      "extraction_strategy": "parser_supplied",
-                                      "fact_parser": PLUGIN_REF})
-    landed = capture.run_source(
-        tenant, FilesystemSourceAdapter(source_ref="fs-ps", root=root),
-        mode="backfill")
-    assert landed.landed == 1
+        processing = ProcessingService(
+            pipeline, raw_store, parser, chunker, embedder,
+            dispatcher=dispatcher, extraction_dispatcher=extraction_dispatcher)
+        processed = processing.consume(tenant, limit=10)
+        assert len(processed) == 1 and processed[0].status == "processed"
 
-    processing = ProcessingService(
-        pipeline, raw_store, parser, chunker, embedder,
-        dispatcher=dispatcher, extraction_dispatcher=extraction_dispatcher)
-    processed = processing.consume(tenant, limit=10)
-    assert len(processed) == 1 and processed[0].status == "processed"
+        counting = CountingStrategy(llm_strategy)
+        extraction = ExtractionService(
+            pipeline, raw_store, binding, counting, structured_strategy,
+            grounder, dispatcher=extraction_dispatcher)
+        extracted = extraction.consume(tenant, limit=10)
+        assert len(extracted) == 1, extracted
 
-    counting = CountingStrategy(llm_strategy)
-    extraction = ExtractionService(
-        pipeline, raw_store, binding, counting, structured_strategy,
-        grounder, dispatcher=extraction_dispatcher)
-    extracted = extraction.consume(tenant, limit=10)
-    assert len(extracted) == 1, extracted
-
-    resolution = ResolutionService(pipeline, scorer, embedder)
-    summary = resolution.sweep(tenant)
-    return {"tenant": tenant, "processed": processed[0],
-            "extracted": extracted[0], "llm": counting, "plugin": plugin,
-            "summary": summary}
+        resolution = ResolutionService(pipeline, scorer, embedder)
+        summary = resolution.sweep(tenant)
+        yield {"tenant": tenant, "processed": processed[0],
+               "extracted": extracted[0], "llm": counting, "plugin": plugin,
+               "summary": summary}
+    finally:
+        FACT_PARSERS.unregister(PLUGIN_REF)
 
 
 def rows(store, tenant: str, table: str) -> list[dict]:

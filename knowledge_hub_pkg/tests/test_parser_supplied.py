@@ -408,6 +408,16 @@ def test_registered_short_name_builds():
     assert registry.names() == ["fake"]
 
 
+def test_unregister_removes_and_tolerates_absent_names():
+    """Registries are process-global, so a test double must be removable —
+    and removing it twice is teardown, which must not raise."""
+    registry = plugins.PluginRegistry("fact_parser", FactParser)
+    registry.register("fake", lambda: FakeFactParser())
+    registry.unregister("fake")
+    assert registry.names() == []
+    registry.unregister("fake")
+
+
 def test_reference_into_core_is_refused():
     """THE boundary guard. A 'plugin' inside knowledge_hub would be domain
     logic in the corpus-agnostic package, which is the one thing this seam

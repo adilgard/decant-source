@@ -450,9 +450,19 @@ a:hover{color:#c3d5ff;text-decoration:underline}
             <div style="font-family:Silkscreen,Consolas,monospace;font-size:8.5px;letter-spacing:.2em;color:#7db4e8;margin-bottom:12px">NEW : INGEST JOB</div>
             <div style="display:flex;flex-direction:column;gap:10px">
               <div>
-                <div style="font-size:11px;color:#8fa8d8;margin-bottom:4px">Absolute folder path (server-side)</div>
-                <input id="ld-path" type="text" spellcheck="false" placeholder="D:\clientdocs\policies  ·  /srv/docs/policies"
-                       style="width:100%;box-sizing:border-box;padding:9px 12px;border-radius:10px;border:1px solid rgba(160,190,255,.4);background:rgba(0,2,12,.6);color:#e9f0ff;font-family:Consolas,monospace;font-size:12px;outline:none">
+                <div style="font-size:11px;color:#8fa8d8;margin-bottom:4px">Folder to ingest (on this machine)</div>
+                <!-- d.s Stage 6: Browse opens a NATIVE OS folder dialog via
+                     the operator service (console + files are colocated per
+                     instance). The button only appears when the server's
+                     probe says a dialog can actually render here — a Browse
+                     that can't browse is a lying control. The typed field
+                     stays as the fallback, checked live server-side. -->
+                <div style="display:flex;gap:8px">
+                  <input id="ld-path" type="text" spellcheck="false" placeholder="D:\clientdocs\policies  ·  /srv/docs/policies"
+                         style="flex:1;min-width:0;box-sizing:border-box;padding:9px 12px;border-radius:10px;border:1px solid rgba(160,190,255,.4);background:rgba(0,2,12,.6);color:#e9f0ff;font-family:Consolas,monospace;font-size:12px;outline:none">
+                  <div id="ld-browse" class="kh-hide" style="cursor:pointer;flex:none;font-size:12px;font-weight:500;color:#e9f0ff;padding:9px 16px;clip-path:polygon(10px 0,100% 0,100% calc(100% - 10px),calc(100% - 10px) 100%,0 100%,0 10px);border:1px solid rgba(160,190,255,.45);background:rgba(120,150,255,.16);white-space:nowrap">Browse…</div>
+                </div>
+                <div id="ld-path-status" style="font-size:10.5px;color:#5c6f9e;margin-top:4px">checked on this machine as you type — green means the ingest will accept it</div>
               </div>
               <div>
                 <div style="font-size:11px;color:#8fa8d8;margin-bottom:4px">Source <span style="color:#5c6f9e">(optional — defaults to one derived from the path)</span></div>

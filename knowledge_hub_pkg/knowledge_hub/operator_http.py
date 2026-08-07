@@ -67,6 +67,9 @@ import json
 import logging
 import os
 import re
+import shutil
+import subprocess
+import sys
 import threading
 import time
 import uuid
@@ -949,45 +952,10 @@ class OperatorService:
 
     @staticmethod
     def _require_folder(raw_path: Any):
-        if not isinstance(raw_path, str) or not raw_path.strip():
-            raise WriteCallError("ingest_folder: path must be a non-empty "
-                                 "string")
-        folder = Path(raw_path.strip())
-        if not folder.is_absolute():
-            raise WriteCallError(
-                f"ingest_folder: path must be ABSOLUTE (got {raw_path!r}) — "
-                f"the folder lives on the server, so a relative path would "
-                f"resolve against the service's working directory, not "
-                f"yours")
-        if not folder.exists():
-            # A path carrying an ellipsis is almost never a real path: it is
-            # a path that was ABBREVIATED for display somewhere — a chat
-            # message, a log line, a narrow table — and then pasted. The
-            # generic "does not exist" is true but sends an operator hunting
-            # for a missing folder instead of showing them the one character
-            # that is wrong, which in a 148-character path is invisible.
-            if "…" in raw_path or "..." in raw_path:
-                raise WriteCallError(
-                    f"ingest_folder: {str(folder)!r} contains an ellipsis, so "
-                    f"it looks like a path that was shortened for display and "
-                    f"then copied. Paste the full path — nothing between the "
-                    f"drive letter and the folder name may be left out")
-            raise WriteCallError(
-                f"ingest_folder: {str(folder)!r} does not exist on this box")
-        if not folder.is_dir():
-            raise WriteCallError(
-                f"ingest_folder: {str(folder)!r} is not a directory")
-        if not os.access(folder, os.R_OK):
-            raise WriteCallError(
-                f"ingest_folder: {str(folder)!r} is not readable by the "
-                f"operator service account")
-        try:
-            next(iter(folder.iterdir()), None)  # prove listability, not just the bit
-        except OSError as e:
-            raise WriteCallError(
-                f"ingest_folder: cannot list {str(folder)!r} "
-                f"({type(e).__name__})")
-        return folder.resolve()
+        status = folder_status(raw_path)
+        if not status["ok"]:
+            raise WriteCallError(f"ingest_folder: {status['detail']}")
+        return Path(status["path"])
 
     # --------------------------------------------------------------- ontology
     def import_ontology(self, principal: Principal,
@@ -1162,6 +1130,159 @@ class OperatorService:
             return True
         except Exception:
             return False
+
+
+# ---------------------------------------------------- folder path validation
+def folder_status(raw_path: Any) -> dict[str, Any]:
+    """Classify a typed server-side folder path, deterministically — the ONE
+    source of truth for both the console's live green/red check
+    (GET /v1/validate-folder) and ingest_folder's refusal, so the check the
+    operator watches while typing and the check that gates the job can
+    never disagree. Returns {"ok", "path", "detail"}; never raises."""
+    if not isinstance(raw_path, str) or not raw_path.strip():
+        return {"ok": False, "path": None,
+                "detail": "path must be a non-empty string"}
+    folder = Path(raw_path.strip())
+    if not folder.is_absolute():
+        return {"ok": False, "path": None,
+                "detail": f"path must be ABSOLUTE (got {raw_path!r}) — "
+                          f"the folder lives on the server, so a relative "
+                          f"path would resolve against the service's "
+                          f"working directory, not yours"}
+    if not folder.exists():
+        # A path carrying an ellipsis is almost never a real path: it is
+        # a path that was ABBREVIATED for display somewhere — a chat
+        # message, a log line, a narrow table — and then pasted. The
+        # generic "does not exist" is true but sends an operator hunting
+        # for a missing folder instead of showing them the one character
+        # that is wrong, which in a 148-character path is invisible.
+        if "…" in raw_path or "..." in raw_path:
+            return {"ok": False, "path": None,
+                    "detail": f"{str(folder)!r} contains an ellipsis, so "
+                              f"it looks like a path that was shortened "
+                              f"for display and then copied. Paste the "
+                              f"full path — nothing between the drive "
+                              f"letter and the folder name may be left "
+                              f"out"}
+        return {"ok": False, "path": None,
+                "detail": f"{str(folder)!r} does not exist on this box"}
+    if not folder.is_dir():
+        return {"ok": False, "path": None,
+                "detail": f"{str(folder)!r} is not a directory"}
+    if not os.access(folder, os.R_OK):
+        return {"ok": False, "path": None,
+                "detail": f"{str(folder)!r} is not readable by the "
+                          f"operator service account"}
+    try:
+        next(iter(folder.iterdir()), None)  # prove listability, not the bit
+    except OSError as e:
+        return {"ok": False, "path": None,
+                "detail": f"cannot list {str(folder)!r} "
+                          f"({type(e).__name__})"}
+    return {"ok": True, "path": str(folder.resolve()), "detail": "folder "
+            "found · readable"}
+
+
+# ---------------------------------------------------- native folder dialog --
+# d.s Stage 6. The console and the files are COLOCATED per instance (local
+# posture), so the operator service can open a real OS folder dialog on the
+# operator's own machine and hand the picked path back to the form. Every
+# backend is a SUBPROCESS: the HTTP thread blocks on the user (that is the
+# point), the server keeps answering polls (ThreadingHTTPServer), and no GUI
+# state ever lives in the service process. One dialog at a time — a second
+# request answers 'busy' instead of stacking windows.
+_DIALOG_LOCK = threading.Lock()
+_DIALOG_TIMEOUT_S = 600
+
+# Windows PowerShell 5.1 / .NET Framework: FolderBrowserDialog, STA. The
+# owner is a SHOWN, ACTIVATED, TopMost 1-pixel form parked off-screen — a
+# minimized owner turned out to front the dialog only sometimes (found
+# live: the second open rendered no visible window), while a shown+
+# activated owner deterministically owns the foreground and the modal
+# dialog rides it. The initial directory travels an ENV VAR, never string
+# interpolation — a path with quotes must not become code.
+_PS_FOLDER_DIALOG = (
+    "Add-Type -AssemblyName System.Windows.Forms | Out-Null; "
+    "$f = New-Object System.Windows.Forms.FolderBrowserDialog; "
+    "$f.Description = 'decant.Source - choose the folder to ingest'; "
+    "$f.ShowNewFolderButton = $false; "
+    "$init = $env:KH_PICK_INIT; "
+    "if ($init -and (Test-Path -LiteralPath $init)) "
+    "{ $f.SelectedPath = $init }; "
+    "$owner = New-Object System.Windows.Forms.Form; "
+    "$owner.TopMost = $true; $owner.ShowInTaskbar = $false; "
+    "$owner.FormBorderStyle = 'None'; "
+    "$owner.StartPosition = 'Manual'; "
+    "$owner.Location = New-Object System.Drawing.Point(-32000, -32000); "
+    "$owner.Size = New-Object System.Drawing.Size(1, 1); "
+    "$owner.Show(); $owner.Activate(); "
+    "$result = $f.ShowDialog($owner); "
+    "$owner.Close(); "
+    "if ($result -eq [System.Windows.Forms.DialogResult]::OK) "
+    "{ [Console]::Out.Write($f.SelectedPath) }")
+
+
+def folder_dialog_backend() -> tuple[Optional[list[str]], str]:
+    """The dialog subprocess argv for this box, or (None, why-not)."""
+    if sys.platform == "win32":
+        exe = shutil.which("powershell")
+        if exe:
+            return ([exe, "-NoProfile", "-STA", "-ExecutionPolicy", "Bypass",
+                     "-Command", _PS_FOLDER_DIALOG], "")
+        return (None, "powershell.exe is not on PATH")
+    zenity = shutil.which("zenity")
+    if zenity:
+        return ([zenity, "--file-selection", "--directory",
+                 "--title=decant.Source - choose the folder to ingest"], "")
+    return (None, "no folder-dialog backend on this box (Linux needs "
+                  "zenity installed)")
+
+
+def folder_dialog_available() -> tuple[bool, str]:
+    """Whether a Browse button would WORK here. Two conditions: local
+    posture (the colocation guarantee — deployed, the console may be
+    reached over the network and the dialog would open on the server's
+    display, not the operator's), and a dialog backend on the box. The
+    console probes this and HIDES the button when false: a Browse that
+    can't browse is a lying control (the wire-or-hide bar)."""
+    if not settings.is_local:
+        return (False, "deployed posture — the console may be reached over "
+                       "the network, so a server-side dialog would open on "
+                       "the wrong display; type the path instead")
+    argv, reason = folder_dialog_backend()
+    return (argv is not None), reason
+
+
+def open_folder_dialog(initial: Optional[str] = None) -> dict[str, Any]:
+    """Open the native dialog and block until the human answers. Returns
+    {"status": "picked", "path"} | {"status": "cancelled"} |
+    {"status": "busy"} | {"status": "unavailable", "reason"}."""
+    argv, reason = folder_dialog_backend()
+    if argv is None:
+        return {"status": "unavailable", "reason": reason}
+    if not _DIALOG_LOCK.acquire(blocking=False):
+        return {"status": "busy",
+                "reason": "a folder dialog is already open on this "
+                          "machine — finish or cancel it first"}
+    try:
+        env = dict(os.environ)
+        if initial and isinstance(initial, str) and initial.strip():
+            env["KH_PICK_INIT"] = initial.strip()
+        try:
+            proc = subprocess.run(argv, capture_output=True, text=True,
+                                  timeout=_DIALOG_TIMEOUT_S, env=env)
+        except subprocess.TimeoutExpired:
+            # run() has already killed the subprocess (and the dialog).
+            return {"status": "cancelled",
+                    "reason": f"the dialog sat open past "
+                              f"{_DIALOG_TIMEOUT_S}s and was closed — "
+                              f"treated as cancel"}
+        picked = (proc.stdout or "").strip()
+        if picked:
+            return {"status": "picked", "path": picked}
+        return {"status": "cancelled"}
+    finally:
+        _DIALOG_LOCK.release()
 
 
 # ------------------------------------------------- the standard write surface
@@ -1361,11 +1482,16 @@ class OperatorApp:
                  resolver: CredentialResolver, *,
                  reads: Optional[OperatorReadService] = None,
                  stats: Optional[LatencyStats] = None,
-                 local_session: Optional[Callable[[], Optional[str]]] = None):
+                 local_session: Optional[Callable[[], Optional[str]]] = None,
+                 folder_dialog: Callable[[Optional[str]],
+                                         dict[str, Any]] = open_folder_dialog):
         self.gate = gate
         self.service = service
         self.reads = reads
         self._resolver = resolver
+        # d.s Stage 6: injectable so tests drive the endpoint without a
+        # real OS dialog; the default is the subprocess-backed native one.
+        self._folder_dialog = folder_dialog
         # d.s Stage 3. A callable, not a token: the value is fetched per request
         # so a store rewritten underneath us (khctl minting a second identity,
         # the file deleted and recreated) is picked up without a restart. None
@@ -1454,9 +1580,9 @@ class OperatorApp:
 
     def _route(self, method: str, raw_path: str, headers: Mapping[str, Any],
                body: bytes) -> tuple[int, Any]:
-        # Query strings exist for exactly one endpoint (the re-extraction
-        # preview); everywhere else the exact-match routing below sees the
-        # bare path, unchanged.
+        # Query strings exist for a handful of GET endpoints (re-extraction
+        # preview, validate-folder, pick-folder); everywhere else the
+        # exact-match routing below sees the bare path, unchanged.
         raw_path, _, raw_query = raw_path.partition("?")
         # d.s Stage 3: the local-posture session handoff. Registered ONLY when
         # build_operator_app decided this process qualifies (local posture AND a
@@ -1545,6 +1671,32 @@ class OperatorApp:
             if not {ROLE_REVIEWER, ROLE_OPERATOR} & set(principal.roles):
                 return 403, {"error": "forbidden"}
             return 200, self.service.inference_status()
+        if method == "GET" and path == "/v1/validate-folder":
+            # d.s Stage 6: the typed field's live check — the same
+            # classifier ingest_folder refuses with, so they can never
+            # disagree. Read-only, no store lock (filesystem only).
+            if not {ROLE_REVIEWER, ROLE_OPERATOR} & set(principal.roles):
+                return 403, {"error": "forbidden"}
+            qs = parse_qs(raw_query)
+            raw = qs["path"][0] if qs.get("path") else ""
+            return 200, folder_status(raw)
+        if method == "GET" and path == "/v1/pick-folder":
+            # d.s Stage 6: the native folder dialog, backend-invoked.
+            # Operator-only (it opens UI on the host machine). ?probe=1
+            # answers availability WITHOUT opening anything — the console
+            # hides the Browse button when this box can't render a dialog.
+            # No store lock: this blocks on a HUMAN, and the threading
+            # server keeps answering polls meanwhile.
+            if ROLE_OPERATOR not in principal.roles:
+                return 403, {"error": "forbidden"}
+            qs = parse_qs(raw_query)
+            available, reason = folder_dialog_available()
+            if qs.get("probe"):
+                return 200, {"available": available, "reason": reason}
+            if not available:
+                return 200, {"status": "unavailable", "reason": reason}
+            initial = qs["initial"][0] if qs.get("initial") else None
+            return 200, self._folder_dialog(initial)
         if method == "GET" and path == "/v1/reextract-preview":
             if not {ROLE_REVIEWER, ROLE_OPERATOR} & set(principal.roles):
                 return 403, {"error": "forbidden"}

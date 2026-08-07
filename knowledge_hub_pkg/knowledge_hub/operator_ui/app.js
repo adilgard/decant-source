@@ -841,6 +841,82 @@ async function importOntologyFile(file) {
   await refreshOntology();
 }
 
+/* ------------------------------------------- folder path check + browse */
+/* d.s Stage 6. The typed path is validated LIVE by the server — the same
+ * classifier ingest_folder refuses with, so the green light and the job
+ * gate can never disagree. Browse opens a NATIVE OS dialog through the
+ * operator service (console + files are colocated); the button exists
+ * only where the server's probe says a dialog can render. */
+let pathCheckTimer = null;
+let pathCheckSeq = 0;
+
+function schedulePathCheck() {
+  clearTimeout(pathCheckTimer);
+  pathCheckTimer = setTimeout(() => { validateFolderPath().catch(() => {}); },
+                              400);
+}
+
+async function validateFolderPath() {
+  const input = $("ld-path");
+  const status = $("ld-path-status");
+  const raw = input.value.trim();
+  const seq = ++pathCheckSeq;
+  if (!raw) {
+    input.style.border = "1px solid rgba(160,190,255,.4)";
+    status.style.color = "#5c6f9e";
+    status.textContent = "checked on this machine as you type — green "
+      + "means the ingest will accept it";
+    return;
+  }
+  const resp = await api("/v1/validate-folder?path=" + encodeURIComponent(raw));
+  if (resp.status !== 200) return;
+  const v = await resp.json();
+  if (seq !== pathCheckSeq) return;   // a newer keystroke owns the field
+  input.style.border = v.ok ? "1px solid rgba(123,224,200,.6)"
+                            : "1px solid rgba(255,150,130,.6)";
+  status.style.color = v.ok ? "#7be0c8" : "#ffcabb";
+  status.textContent = (v.ok ? "✓ " : "✗ ") + v.detail;
+}
+
+async function probeBrowse() {
+  try {
+    const resp = await api("/v1/pick-folder?probe=1");
+    if (resp.status !== 200) return;
+    const p = await resp.json();
+    $("ld-browse").classList.toggle("kh-hide", !p.available);
+  } catch (e) { /* offline banner already up */ }
+}
+
+async function browseFolder() {
+  const btn = $("ld-browse");
+  const status = $("ld-path-status");
+  btn.style.opacity = "0.5";
+  status.style.color = "#8fa8d8";
+  status.textContent = "a folder dialog is open on this machine — it may "
+    + "be behind this window";
+  try {
+    const initial = $("ld-path").value.trim();
+    const resp = await api("/v1/pick-folder"
+      + (initial ? "?initial=" + encodeURIComponent(initial) : ""));
+    if (resp.status !== 200) return;
+    const body = await resp.json();
+    if (body.status === "picked") {
+      $("ld-path").value = body.path;
+      await validateFolderPath();
+    } else if (body.status === "busy") {
+      status.textContent = body.reason;
+    } else if (body.status === "unavailable") {
+      btn.classList.add("kh-hide");   // the probe was wrong — stop offering
+      status.style.color = "#ffcabb";
+      status.textContent = body.reason;
+    } else {
+      await validateFolderPath();     // cancelled: restore the live check
+    }
+  } finally {
+    btn.style.opacity = "1";
+  }
+}
+
 /* ---------------------------------------------------------- data landing */
 // d.s Stage 2: console folder ingest. The path is typed (no browser
 // folder picker — it cannot return a real server path) and validated
@@ -1351,6 +1427,7 @@ function setTab(name) {
     refreshJobs().catch(() => {});
     populateOntologySelect().catch(() => {});
     loadComponents().catch(() => {});
+    probeBrowse();   // Stage 6: offer Browse only where a dialog renders
   }
   if (name === "health" && state.token) refreshAlerts().catch(() => {});
   if (name === "inference" && state.token) refreshInference().catch(() => {});
@@ -1430,6 +1507,8 @@ document.addEventListener("DOMContentLoaded", () => {
   $("ld-path").addEventListener("keydown", (e) => {
     if (e.key === "Enter") startIngest().catch(() => {});
   });
+  $("ld-path").addEventListener("input", schedulePathCheck);
+  $("ld-browse").addEventListener("click", () => browseFolder().catch(() => {}));
 
   $("onto-import").addEventListener("click", () => $("onto-file").click());
   $("onto-file").addEventListener("change", (e) => {

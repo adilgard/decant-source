@@ -966,6 +966,99 @@ def test_stage5_pickers_reflect_real_availability(op_client, resolver,
     assert body["config_keys"]["extraction_model"] == "extraction_model"
 
 
+def test_stage6_typed_path_validates_live_with_the_ingest_classifier(
+        op_client, resolver, tenant, tmp_path):
+    """d.s Stage 6: GET /v1/validate-folder answers with the SAME
+    classifier ingest_folder refuses with — the live green/red the
+    operator watches while typing can never disagree with the gate."""
+    operator = grant(resolver, tenant, ["operator"])
+    reviewer = grant(resolver, tenant, ["reviewer"])
+
+    good = tmp_path / "docs"
+    good.mkdir()
+    v = op_client.get("/v1/validate-folder", params={"path": str(good)},
+                      headers=bearer(operator)).json()
+    assert v["ok"] is True
+    assert v["path"] == str(good.resolve())
+
+    v = op_client.get("/v1/validate-folder",
+                      params={"path": str(tmp_path / "nope")},
+                      headers=bearer(operator)).json()
+    assert v["ok"] is False and "does not exist" in v["detail"]
+
+    v = op_client.get("/v1/validate-folder", params={"path": "relative/x"},
+                      headers=bearer(operator)).json()
+    assert v["ok"] is False and "ABSOLUTE" in v["detail"]
+
+    v = op_client.get("/v1/validate-folder", params={"path": ""},
+                      headers=bearer(operator)).json()
+    assert v["ok"] is False
+
+    # Reviewer may check (harmless read); no principal may not.
+    assert op_client.get("/v1/validate-folder", params={"path": "x"},
+                         headers=bearer(reviewer)).status_code == 200
+    assert op_client.get("/v1/validate-folder",
+                         params={"path": "x"}).status_code == 401
+
+
+def test_stage6_native_picker_endpoint_probe_open_and_roles(
+        store, pipeline, scorer, embedder, secrets, resolver, tenant):
+    """d.s Stage 6: /v1/pick-folder — ?probe=1 answers availability WITHOUT
+    opening anything; a real call routes through the injected dialog (the
+    native one is a subprocess in production) and hands back the picked
+    path or the cancel; operator-only, because it opens UI on the host."""
+    calls: list = []
+
+    def fake_dialog(initial):
+        calls.append(initial)
+        return {"status": "picked", "path": r"C:\picked\folder"}
+
+    service = OperatorService(store,
+                              ResolutionService(pipeline, scorer, embedder),
+                              SourceRegistry(store), secrets)
+    gate = OperatorGate(store)
+    register_operator_defaults(gate, service)
+    app = OperatorApp(gate, service, resolver,
+                      reads=OperatorReadService(store),
+                      folder_dialog=fake_dialog)
+    op_hdr = bearer(grant(resolver, tenant, ["operator"]))
+    rv_hdr = bearer(grant(resolver, tenant, ["reviewer"]))
+
+    # Probe: availability only, nothing opens. On the pilot bench (local
+    # posture, Windows + powershell) a dialog is available.
+    status, body = app.handle("GET", "/v1/pick-folder?probe=1", op_hdr, b"")
+    assert status == 200 and body["available"] is True
+    assert calls == []
+
+    # Open: the picked path comes back; the typed field's current value
+    # rides through as the dialog's starting point.
+    status, body = app.handle(
+        "GET", "/v1/pick-folder?initial=D%3A%5Cdocs", op_hdr, b"")
+    assert status == 200
+    assert body == {"status": "picked", "path": r"C:\picked\folder"}
+    assert calls == ["D:\\docs"]
+
+    # A reviewer reads dashboards; opening windows on the host machine is
+    # an operator act.
+    status, _ = app.handle("GET", "/v1/pick-folder", rv_hdr, b"")
+    assert status == 403
+    status, _ = app.handle("GET", "/v1/pick-folder?probe=1", rv_hdr, b"")
+    assert status == 403
+
+
+def test_stage6_console_shell_carries_browse_and_live_validation(op_client):
+    html = op_client.get("/ui/").text
+    js = op_client.get("/ui/app.js").text
+    # Browse is HIDDEN until the server's probe says a dialog renders here.
+    assert 'id="ld-browse" class="kh-hide"' in html
+    assert 'id="ld-path-status"' in html
+    # The JS drives both wires and keeps the typed field as the fallback.
+    for wire in ("/v1/validate-folder", "/v1/pick-folder", "probeBrowse",
+                 "browseFolder", "schedulePathCheck"):
+        assert wire in js
+    assert "ld-path" in js
+
+
 def test_console_tab_disposition_wire_two_hide_two_defer_one(op_client):
     """d.s Stage 1: every VISIBLE tab is fully wired — the placeholder
     surface is gone, the three unwired tabs are out of the visible set

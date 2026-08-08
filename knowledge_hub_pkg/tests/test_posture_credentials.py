@@ -634,7 +634,8 @@ def test_local_verify_swaps_openbao_for_the_posture_agnostic_check(local):
     assert "openbao" not in names
     # The protected checks are still selected, in local posture too.
     assert "migration ledger" in names
-    assert "side doors (§8.8 rider)" in names
+    assert "side doors (§8.8 negative)" in names
+    assert "usage attribution (§8.8 positive)" in names
     assert "core boundary (corpus-agnostic)" in names
 
 

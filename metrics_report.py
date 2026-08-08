@@ -168,11 +168,20 @@ BENCHMARK_SHEETS: dict[str, tuple[list[str], str]] = {
 
 
 def _dsn() -> str:
-    try:
-        from knowledge_hub import settings
-        return settings.postgres_dsn
-    except Exception:
-        return "host=localhost port=5432 dbname=knowledge_hub user=kh password=kh_pilot_pw"
+    """The reporting connection target, from config only.
+
+    There used to be an `except: return "<literal DSN with password>"` here.
+    Two problems, and the quiet one is worse: a credential lived in source,
+    and an import failure silently pointed the report at whatever happened to
+    be on localhost:5432 instead of saying it could not read the config. A
+    report that names the wrong database is worse than a report that refuses.
+    (§8.8 Stage 0 finding, 2026-08-07.)
+    """
+    from knowledge_hub import settings
+    # kh_report: SELECT-only. A reporting script has no business holding a
+    # write-capable connection, and this one is outside the three trusted
+    # services, so it must be distinguishable in pg_stat_activity.
+    return settings.report_dsn
 
 
 def _clean(v):

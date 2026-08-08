@@ -86,11 +86,24 @@ class Settings(BaseSettings):
                                     validation_alias="KH_LOCAL_SECRETS_FILE")
 
     # --- Postgres (host connection; the DB runs in Docker, exposed on localhost) ---
+    # postgres_user is the BOOTSTRAP account: it owns the schema, runs
+    # migrations, and creates the least-privilege roles below. Runtime
+    # consumers should NOT use it — see the per-consumer DSNs further down.
     postgres_user: str = "kh"
     postgres_password: str = "kh_pilot_pw"
     postgres_db: str = "knowledge_hub"
     postgres_host: str = "localhost"
     postgres_port: int = 5432
+
+    # --- Least-privilege role passwords (roles.py) --------------------------
+    # Empty means "not provisioned": the role is created NOLOGIN and the
+    # consumer falls back to the bootstrap account, LOUDLY (see
+    # role_dsn below). Absent rather than defaulted on purpose — a default
+    # password here would be a guessable credential on every deployment.
+    kh_pg_pipeline_password: str = ""
+    kh_pg_serving_password: str = ""
+    kh_pg_operator_password: str = ""
+    kh_pg_report_password: str = ""
 
     # --- SeaweedFS S3 gateway ---
     s3_endpoint: str = "http://localhost:8333"
@@ -166,9 +179,28 @@ class Settings(BaseSettings):
     # Comma-separated tenant ids the runner registers the default op surface
     # for (registration is build-time; the service exposes exactly these).
     serving_tenants: str = ""
-    # Append-only JSONL sink for EnvelopeUsage records (the strip-later
-    # evidence); a Postgres table is the bookmarked production sink.
+    # Where EnvelopeUsage records go. 'postgres' (default, migration 019) is
+    # the production sink: the §8.8 verification half asks "did principal X
+    # read through ops", which is a query, and a file cannot answer it
+    # without something parsing the whole file. 'jsonl' remains as a
+    # deliberate opt-out for a box with no usage table — chosen, never
+    # fallen into (PostgresUsageRecorder refuses to construct if the table
+    # is absent rather than dropping rows quietly).
+    serving_usage_sink: str = "postgres"
+    # The 'jsonl' sink's path. Still the strip-later evidence, same records.
     serving_usage_log: str = "serving_usage.jsonl"
+
+    @field_validator("serving_usage_sink")
+    @classmethod
+    def _check_usage_sink(cls, value: str) -> str:
+        text = (value or "").strip().lower() or "postgres"
+        if text not in ("postgres", "jsonl"):
+            raise ValueError(
+                f"unknown SERVING_USAGE_SINK {value!r} — must be 'postgres' "
+                f"or 'jsonl'. An unrecognized value is an error, not a "
+                f"fallback: reading it as 'jsonl' would silently drop the "
+                f"attribution the deployment believed it was recording.")
+        return text
 
     # --- Operator write API (Build Prompt 19) ---
     # The write-twin runs beside the read boundary on its own port; loopback
@@ -219,10 +251,66 @@ class Settings(BaseSettings):
 
     @property
     def postgres_dsn(self) -> str:
+        """The BOOTSTRAP connection: schema owner, migration runner, role
+        creator. Correct for apply and for the test harness that makes and
+        drops databases. Wrong for a runtime consumer — use role_dsn."""
         return (
             f"postgresql://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
+
+    def role_dsn(self, role: str) -> str:
+        """The DSN for one least-privilege role, or the bootstrap DSN with a
+        WARNING if that role has no password provisioned yet.
+
+        The fallback is deliberate and it is deliberately loud. Hard-failing
+        would brick every deployment that upgrades before running apply,
+        which is the modify-don't-extend failure this codebase avoids on
+        purpose. Silently falling back would re-open the exact side door the
+        roles exist to close. So: it degrades, it says so every time, and
+        `check_side_doors` fails on the resulting connection — config
+        reports the drift, the check refuses it.
+        """
+        from knowledge_hub import roles as _roles
+
+        password = {
+            _roles.PIPELINE_ROLE: self.kh_pg_pipeline_password,
+            _roles.SERVING_ROLE: self.kh_pg_serving_password,
+            _roles.OPERATOR_ROLE: self.kh_pg_operator_password,
+            _roles.REPORT_ROLE: self.kh_pg_report_password,
+        }.get(role, "").strip()
+        if not password:
+            logger.warning(
+                "role %s has no password provisioned (%s unset) — falling "
+                "back to the bootstrap account %r. Isolation is NOT in "
+                "force on this connection and check_side_doors will fail "
+                "it. Run `khctl apply` to provision the roles.",
+                role, _roles.PASSWORD_ENV.get(role, "?"), self.postgres_user)
+            return self.postgres_dsn
+        return (
+            f"postgresql://{role}:{password}"
+            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
+        )
+
+    @property
+    def pipeline_dsn(self) -> str:
+        from knowledge_hub import roles as _roles
+        return self.role_dsn(_roles.PIPELINE_ROLE)
+
+    @property
+    def serving_dsn(self) -> str:
+        from knowledge_hub import roles as _roles
+        return self.role_dsn(_roles.SERVING_ROLE)
+
+    @property
+    def operator_dsn(self) -> str:
+        from knowledge_hub import roles as _roles
+        return self.role_dsn(_roles.OPERATOR_ROLE)
+
+    @property
+    def report_dsn(self) -> str:
+        from knowledge_hub import roles as _roles
+        return self.role_dsn(_roles.REPORT_ROLE)
 
 
 settings = Settings()

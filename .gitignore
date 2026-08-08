@@ -1,8 +1,13 @@
 # --- Secrets and local environment (never commit; see .env.example) ---
 .env
 .env.deploy
-# phase_env's backup of the previous .env — carries the same credentials
+# phase_env's backup of the previous .env — carries the same credentials.
+# The glob (not just .env.bak) because any hand-made backup carries them
+# too: .env.bak.pre-roles was created by hand during the §8.8 role split and
+# would otherwise have been an untracked file full of live passwords sitting
+# one `git add -A` away from the history.
 .env.bak
+.env.bak.*
 # Local-posture credentials (d.s Stage 2): source credentials AND the console
 # principal registry live here. The .example.json companion IS tracked and
 # carries no real values. Both are also refused by the kit's no-secrets guard

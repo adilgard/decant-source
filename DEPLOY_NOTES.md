@@ -171,10 +171,22 @@ One library, two runners — landed as planned (pkg 0.13.0):
   is ON this box, and it reports the deploy as on-premises rather than
   borrowing the remote path's off-premises wording). Version integrity FIRST
   in both runners.
-- NEW `check_side_doors` (§8.8 rider, every visit): pg_stat_activity must
-  show no client-backend connections under non-allowlisted users, else
-  isolation is void. Heuristic v1 — the real enforcement is revoking direct
-  creds; this catches drift.
+- `check_side_doors` (§8.8 NEGATIVE half, every visit): pg_stat_activity
+  must show no client-backend connections under non-allowlisted users, else
+  isolation is void. **Rewritten 2026-08-07 — it had never been able to
+  fail.** Its allowlist defaulted to the DSN's own username, and the whole
+  stack connected as that one bootstrap superuser, so every connection was
+  allowlisted. It now allowlists the four least-privilege roles (roles.py:
+  `kh_pipeline` / `kh_serving` / `kh_operator` / `kh_report`), refuses when
+  those roles are not provisioned at all, and reports a connection still on
+  the bootstrap account as its own finding class (split exists, consumer
+  hasn't adopted it) distinct from an unknown user (a genuine side door).
+  Verified failing in both states, not just passing in the good one.
+- NEW `check_usage_attribution` (§8.8 POSITIVE half, every visit): serves a
+  record through the real sink and finds it again BY principal_id. side
+  doors proves nothing unauthorized is connected; this proves the consumers
+  that should be reading through ops actually are. Either half alone is a
+  partial answer that reads like a whole one.
 - Caveat to remember on adopted client stores: `check_s3_worm`'s
   `verify_worm()` writes a sacrificial object into THEIR bucket — agree
   with the client first; it is the one verify step that writes.

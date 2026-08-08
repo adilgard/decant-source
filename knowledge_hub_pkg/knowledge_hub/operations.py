@@ -74,7 +74,11 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from knowledge_hub.choke_point import PostgresChokePoint
 from knowledge_hub.factstore_pg import vector_literal
-from knowledge_hub.interfaces import Embedder
+from knowledge_hub.interfaces import (
+    GROUNDED_STATUSES,
+    GROUNDING_STATUSES,
+    Embedder,
+)
 from knowledge_hub.serving import (
     EntityRef,
     EvidenceEnvelope,
@@ -120,7 +124,18 @@ MAX_TRAVERSAL_DEPTH = 5
 
 # Grounding verdicts that mean "asserted but weakly supported" (the grounder
 # flags instead of rejecting — migration 004).
-_FLAGGED_GROUNDING = ("span_missing", "components_missing")
+#
+# DERIVED, not listed. This was a hand-written pair and it silently excluded
+# 'span_mismatch' — the parser_supplied verdict for "the producer's own
+# offsets did not match the text there", which is a grounding FAILURE and
+# must serve as known_low_confidence, not known_confident. A hardcoded list
+# of the failure cases is a list somebody forgets to extend, and the one
+# they forget is the one that serves a falsified span as if it were solid.
+# Everything in the vocabulary that is not a GROUNDED status is flagged, so
+# a new verdict is safe-by-default: it counts as weak until someone
+# deliberately adds it to GROUNDED_STATUSES.
+_FLAGGED_GROUNDING = tuple(s for s in GROUNDING_STATUSES
+                           if s not in GROUNDED_STATUSES)
 
 
 # ---------------------------------------------------------------- refusals --

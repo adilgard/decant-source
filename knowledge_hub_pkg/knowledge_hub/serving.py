@@ -52,7 +52,7 @@ label_role_grants reference tables.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Mapping, Optional
 
@@ -102,10 +102,28 @@ class UncertaintyState(str, Enum):
     retracted = "retracted"
 
 
-# Mirrors pending_facts.grounding (migration 004) — the vocabulary a served
-# fact's grounding verdict is drawn from (via promoted_fact_id join).
-GROUNDING_STATUSES = ("pass", "span_missing", "components_missing",
-                      "construction")
+# The vocabulary a served fact's grounding verdict is drawn from. IMPORTED,
+# not re-declared — this module used to carry its own copy of the tuple and
+# the two drifted, which is not a hypothetical:
+#
+#   The parser_supplied path (Title 26 / USLM plugin) added 'declared_span'
+#   and 'span_mismatch' to the producer vocabulary in interfaces.py. This
+#   copy was never extended. Every fact the deterministic parser grounded
+#   therefore failed FactEnvelope validation on the way out — 206,482 of
+#   206,508 facts, 99.99% of the corpus, and every get_facts / get_by_key /
+#   get_entity / neighbors / facts_citing call over real data answered 500.
+#   It went unnoticed from the day the parser landed until 2026-08-07,
+#   because no envelope had ever actually been served: the usage log was
+#   still 0 bytes. Found by making one live call.
+#
+# So serving.py now takes a dependency on interfaces.py, which it otherwise
+# would not have. That is the deliberate trade: this module's independence
+# was worth less than the guarantee that a producer cannot emit a verdict
+# the serving layer will reject. One vocabulary, one owner.
+from knowledge_hub.interfaces import (  # noqa: E402
+    GROUNDED_STATUSES,
+    GROUNDING_STATUSES,
+)
 
 
 # =============================================================================
@@ -438,19 +456,35 @@ ENVELOPE_KINDS = ("fact", "evidence")
 
 
 class EnvelopeUsage(BaseModel):
-    """One envelope's observed usage in one served request: which fields the
-    caller actually read, and which uncertainty states it branched on. This
-    is the Decision 4a/4b mechanism — serve maximal now, strip a field ONLY
-    when these records show non-use, fold a state only when nobody branches
-    on it."""
+    """One envelope's observed usage in one served request: WHO read it,
+    when, which fields they actually read, and which uncertainty states they
+    branched on. This is the Decision 4a/4b mechanism — serve maximal now,
+    strip a field ONLY when these records show non-use, fold a state only
+    when nobody branches on it.
+
+    `principal_id` and `served_at` were added 2026-08-07, and the gap they
+    close is the §8.8 verification half. SERVICE_NOTES had called that half
+    "unbuilt", which understated it: the record TYPE could not express
+    attribution, so "the agents' reads flow through ops" was unanswerable
+    from the log no matter how the log was wired. A tenant is not an
+    identity — several principals share one — so tenant_id alone could never
+    tell you which consumer read what.
+
+    principal_id is REQUIRED, with no default. An "unknown" fallback would
+    let unattributed records exist, and a log that is only sometimes
+    attributable cannot answer the question it exists to answer.
+    """
     model_config = ConfigDict(extra="forbid")
 
     request_id: str
     tenant_id: str
+    principal_id: str                   # WHO read it — the resolved identity
     envelope_kind: str                  # 'fact' | 'evidence'
     envelope_key: str                   # 'fact:<id>' | 'chunk:<id>'
     fields_read: list[str]              # sorted, deduplicated
     states_branched: list[str]          # state VALUES observed via .state
+    served_at: datetime = Field(
+        default_factory=lambda: datetime.now(timezone.utc))
 
     @model_validator(mode="after")
     def _check_kind(self) -> "EnvelopeUsage":
@@ -517,10 +551,13 @@ class UsageTracker:
     out. Context-manager use flushes automatically."""
 
     def __init__(self, recorder: UsageRecorder, request_id: str,
-                 tenant_id: str):
+                 tenant_id: str, principal_id: str):
         self.recorder = recorder
         self.request_id = request_id
         self.tenant_id = tenant_id
+        # Required, not defaulted: see EnvelopeUsage on why an unattributed
+        # usage record is worse than a missing one.
+        self.principal_id = principal_id
         self._tracked: list[tuple[str, str, TrackedEnvelope]] = []
 
     def track(self, env: FactEnvelope | EvidenceEnvelope) -> TrackedEnvelope:
@@ -540,6 +577,7 @@ class UsageTracker:
             usage = EnvelopeUsage(
                 request_id=self.request_id,
                 tenant_id=self.tenant_id,
+                principal_id=self.principal_id,
                 envelope_kind=kind,
                 envelope_key=key,
                 fields_read=sorted(proxy._fields_read),

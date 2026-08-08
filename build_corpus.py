@@ -97,7 +97,15 @@ def _ingest(corpus_dir: Path, scale: str) -> None:
 def _summary(scale: str) -> None:
     import psycopg
     from psycopg.rows import dict_row
-    dsn = "host=localhost port=5432 dbname=knowledge_hub user=kh password=kh_pilot_pw"
+
+    from knowledge_hub.config import settings
+
+    # The DSN comes from config, never from a literal here. A hardcoded
+    # fallback carrying a password is a credential in source AND a second
+    # place the connection target can drift from .env — this script read a
+    # different database than the pipeline it summarizes the moment either
+    # moved (§8.8 Stage 0 finding, 2026-08-07).
+    dsn = settings.report_dsn
     with psycopg.connect(dsn, row_factory=dict_row,
                          connect_timeout=10) as conn:
         for label, q in [

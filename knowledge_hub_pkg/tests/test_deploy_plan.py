@@ -368,7 +368,13 @@ def test_shape_a_verify_runs_the_full_pilot_gate_plus_side_doors(monkeypatch):
     plan = resolve_plan(PROFILES, "appliance", make_probe(), tenants=["ops"])
     names = _check_names(plan)
     assert names[0] == "version integrity"          # drift fails first
-    assert "side doors (§8.8 rider)" in names       # every visit, always
+    # BOTH halves of §8.8, every visit, always. side doors is the negative
+    # (nothing unauthorized is connected); usage attribution is the positive
+    # (a served read is traceable to the principal who made it). Either
+    # alone is a partial answer that reads like a whole one, which is how
+    # side doors spent months green over a void property.
+    assert "side doors (§8.8 negative)" in names
+    assert "usage attribution (§8.8 positive)" in names
     # every pilot check present: same primitives as check_stack.py
     for expected in ("postgres", "seaweedfs (s3)", "openbao", "ollama",
                      "extraction (ontology·llm·ground)",

@@ -339,7 +339,14 @@ def verify_checks_for(plan: DeployPlan) -> list[tuple[str, object]]:
         if "secrets" in plan.seams:
             selected.append(("operator write API (BP19)",
                              checks.check_operator))
-        selected.append(("side doors (§8.8 rider)", checks.check_side_doors))
+        # The §8.8 property needs BOTH halves on every visit. side doors is
+        # the negative (nothing is connected that shouldn't be); usage
+        # attribution is the positive (a served read is traceable to the
+        # principal who made it). Either alone is a half-answer that reads
+        # like a whole one.
+        selected.append(("side doors (§8.8 negative)", checks.check_side_doors))
+        selected.append(("usage attribution (§8.8 positive)",
+                         checks.check_usage_attribution))
     return selected
 
 

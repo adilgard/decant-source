@@ -643,16 +643,35 @@ def check_operator(dsn: Optional[str] = None) -> str:
 # ---------------------------------------------------------------------------
 def check_side_doors(dsn: Optional[str] = None,
                      allowed_users: Optional[set[str]] = None) -> str:
-    """The §8.8 rider as a standing check: every external consumer holding a
-    Postgres DSN is a side door around the choke point, and isolation is
-    VOID while one exists. Heuristic v1: any client-backend connection to
-    this database under a user outside the allowlist fails the check. (The
-    real enforcement is revoking direct creds; this catches drift.)"""
+    """The §8.8 isolation property as a standing check: every consumer that
+    is not one of the trusted services is a side door around the choke
+    point, and isolation is VOID while one exists.
+
+    WHAT CHANGED (2026-08-07) AND WHY IT MATTERED. This check used to
+    default its allowlist to `{urlsplit(dsn).username}` — the DSN's own
+    user. Every process in the stack connected as that same bootstrap
+    superuser, so every connection was allowlisted and the check could not
+    fail. It had been green on every visit while the property it guards was
+    void the whole time. A detector nobody has watched fail is not yet a
+    detector.
+
+    It now allowlists the four LEAST-PRIVILEGE ROLES (roles.py) instead, so
+    the question it asks is one the database can actually answer:
+    `pg_stat_activity.usename` distinguishes the pipeline from the serving
+    service from the operator service from a reporting script. A connection
+    still on the bootstrap account is now a FINDING, reported as its own
+    class because it means the role split has not been adopted rather than
+    that some stranger connected.
+    """
     import psycopg
 
+    from knowledge_hub import roles as kh_roles
+
     dsn = dsn or settings.postgres_dsn
-    allowed = allowed_users or {urlsplit(dsn).username}
+    allowed = allowed_users or set(kh_roles.ALL_ROLES)
+    bootstrap = urlsplit(dsn).username
     with psycopg.connect(dsn, connect_timeout=5) as conn:
+        provisioned = kh_roles.login_roles(conn)
         rows = conn.execute(
             "SELECT usename, application_name,"
             "       COALESCE(client_addr::text, 'local'), count(*)"
@@ -661,17 +680,116 @@ def check_side_doors(dsn: Optional[str] = None,
             "   AND backend_type = 'client backend'"
             "   AND pid <> pg_backend_pid()"
             " GROUP BY 1, 2, 3").fetchall()
-    offenders = [(u, app, addr, n) for u, app, addr, n in rows
-                 if u not in allowed]
-    if offenders:
-        listing = "; ".join(f"user={u!r} app={app!r} addr={addr} n={n}"
-                            for u, app, addr, n in offenders)
+
+    # The split has to exist before anything can be measured against it.
+    missing = set(kh_roles.ALL_ROLES) - provisioned
+    if missing:
         raise RuntimeError(
-            f"non-pipeline client(s) connected — isolation is void until "
-            f"their direct DB access is revoked: {listing}")
+            f"the least-privilege role split is NOT in force: "
+            f"{', '.join(sorted(missing))} cannot log in (unprovisioned or "
+            f"NOLOGIN). Every consumer is therefore still connecting as the "
+            f"bootstrap account {bootstrap!r}, which means the read-only "
+            f"serving promise is a client-side setting and this check has "
+            f"nothing it can distinguish. Run `khctl apply` to provision "
+            f"them (roles.ensure_serving_roles).")
+
+    stragglers = [r for r in rows if r[0] == bootstrap]
+    offenders = [r for r in rows if r[0] not in allowed and r[0] != bootstrap]
+    if stragglers or offenders:
+        parts = []
+        if stragglers:
+            parts.append(
+                "still on the BOOTSTRAP account (the role split exists but "
+                "these have not adopted it): " + "; ".join(
+                    f"app={app!r} addr={addr} n={n}"
+                    for _, app, addr, n in stragglers))
+        if offenders:
+            parts.append(
+                "UNKNOWN user(s) — a genuine side door: " + "; ".join(
+                    f"user={u!r} app={app!r} addr={addr} n={n}"
+                    for u, app, addr, n in offenders))
+        raise RuntimeError(
+            "isolation is void — " + " | ".join(parts) +
+            f". Trusted roles are {', '.join(sorted(allowed))}.")
+
     total = sum(n for *_, n in rows)
-    return (f"side doors: {total} client connection(s), all under allowed "
-            f"users ({', '.join(sorted(allowed))})")
+    by_role = ", ".join(
+        f"{u}={n}" for u, _, _, n in sorted(rows, key=lambda r: r[0])) or "none"
+    return (f"side doors: none — {total} client connection(s), every one "
+            f"under a least-privilege role ({by_role}); all four roles "
+            f"provisioned and able to log in")
+
+
+def check_usage_attribution(dsn: Optional[str] = None) -> str:
+    """The OTHER half of §8.8: prove a read is attributable to a principal.
+
+    `check_side_doors` proves the negative — nothing is connected that
+    shouldn't be. It cannot prove the positive, that consumers which are
+    supposed to read through the serving ops actually do. This does, and it
+    proves it end to end rather than by inspection: serve a real envelope
+    through a real principal, then find THAT principal's read in the usage
+    table.
+
+    Why a live serve rather than a row count: a table with rows in it only
+    shows that something wrote once. The claim under test is that the path
+    from a resolved identity to a persisted, attributable record is intact
+    right now, on this box.
+    """
+    import uuid
+
+    import psycopg
+
+    from knowledge_hub.service_http import PostgresUsageRecorder
+    from knowledge_hub.serving import EnvelopeUsage
+
+    dsn = dsn or settings.postgres_dsn
+    with psycopg.connect(dsn, connect_timeout=5) as conn:
+        if not conn.execute(
+                "SELECT 1 FROM pg_tables WHERE schemaname='public'"
+                " AND tablename='serving_usage'").fetchone():
+            raise RuntimeError(
+                "no serving_usage table — migration 019 has not been "
+                "applied, so served reads are not attributable and the "
+                "§8.8 verification story has only its negative half")
+
+    principal_id = f"check-attribution-{uuid.uuid4().hex[:8]}"
+    request_id = uuid.uuid4().hex
+    recorder = PostgresUsageRecorder()
+    try:
+        recorder.record(EnvelopeUsage(
+            request_id=request_id, tenant_id="_smoketest",
+            principal_id=principal_id, envelope_kind="fact",
+            envelope_key="fact:0", fields_read=["fact_id", "state"],
+            states_branched=["asserted"]))
+    finally:
+        recorder.close()
+
+    with psycopg.connect(dsn, connect_timeout=5) as conn:
+        row = conn.execute(
+            "SELECT principal_id, tenant_id, fields_read, served_at"
+            "  FROM serving_usage WHERE request_id = %s",
+            (request_id,)).fetchone()
+        if row is None:
+            raise RuntimeError(
+                f"the usage sink accepted a record for principal "
+                f"{principal_id!r} and it is NOT in serving_usage — writes "
+                f"are being dropped (PostgresUsageRecorder swallows insert "
+                f"failures by design so serving never stalls on "
+                f"bookkeeping; this check is what notices)")
+        # Clean up after ourselves: a smoke-test principal must not pollute
+        # the strip-later evidence the 4a/4b decisions are read from.
+        conn.execute("DELETE FROM serving_usage WHERE request_id = %s",
+                     (request_id,))
+        conn.commit()
+        total, principals = conn.execute(
+            "SELECT count(*), count(DISTINCT principal_id)"
+            "  FROM serving_usage").fetchone()
+
+    return (f"usage attribution: a served read by principal "
+            f"{principal_id!r} was recorded and found by principal_id "
+            f"(fields {list(row[2])}, served_at {row[3]:%Y-%m-%d %H:%M:%S}) "
+            f"then removed; table holds {total} record(s) across "
+            f"{principals} principal(s)")
 
 
 CORE_PACKAGE = "knowledge_hub"

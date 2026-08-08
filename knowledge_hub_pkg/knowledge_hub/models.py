@@ -666,3 +666,34 @@ class BenchmarkRunItem(BaseModel):
     run_id: int
     gold_set_item_id: int
     outcome: dict[str, Any]
+
+
+# ---------------------------------------------------------------------------
+# Serving usage (migration 019) — the attribution half of the §8.8 property
+# ---------------------------------------------------------------------------
+class EnvelopeUsageRow(BaseModel):
+    """One persisted usage record: WHO read which envelope, when, and which
+    of its fields they actually serialized.
+
+    The lock-step mirror of `serving_usage` (migration 019). Deliberately
+    NOT the same class as `serving.EnvelopeUsage`: that one is the in-flight
+    instrumentation record the tracker emits and it must stay free of
+    persistence concerns (it is constructed on every served envelope, in the
+    request path). This is the row shape. `PostgresUsageRecorder` is the one
+    place that converts between them.
+    """
+    id: Optional[int] = None
+    request_id: str
+    tenant_id: str = DEFAULT_TENANT
+    principal_id: str
+    envelope_kind: str                   # 'fact' | 'evidence'
+    envelope_key: str
+    fields_read: list[str] = Field(default_factory=list)
+    states_branched: list[str] = Field(default_factory=list)
+    served_at: Optional[datetime] = None
+
+    @model_validator(mode="after")
+    def _check_kind(self) -> "EnvelopeUsageRow":
+        if self.envelope_kind not in ("fact", "evidence"):
+            raise ValueError("envelope_kind must be 'fact' or 'evidence'")
+        return self

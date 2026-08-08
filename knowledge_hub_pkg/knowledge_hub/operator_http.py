@@ -1935,7 +1935,10 @@ def build_operator_app(*, dsn: Optional[str] = None,
         # d.s Stage 3: posture picks the implementation (local file vs OpenBao).
         from knowledge_hub.credentials import make_secrets_provider
         secrets = make_secrets_provider()
-    store = store or PostgresFactStore(dsn=dsn)
+    # The OPERATOR role — write-capable like the pipeline's, but a distinct
+    # login, so the audit trail's "who wrote this" has a matching answer in
+    # pg_stat_activity.
+    store = store or PostgresFactStore(dsn=dsn or settings.operator_dsn)
     pipeline = Pipeline(store=store)
     from knowledge_hub.scoring_tiered import TieredScorer
     resolution = ResolutionService(pipeline, TieredScorer(store), embedder)

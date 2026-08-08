@@ -302,7 +302,12 @@ class PostgresChokePoint(ChokePoint):
 
     def __init__(self, dsn: Optional[str] = None,
                  resolver: Optional[CredentialResolver] = None):
-        self.__dsn = dsn or settings.postgres_dsn
+        # The SERVING role: SELECT-only at the grant level. The
+        # `SET default_transaction_read_only = on` below is now belt AND
+        # braces rather than the only thing standing there — the server
+        # refuses a write on this connection whether or not the client asks
+        # it to.
+        self.__dsn = dsn or settings.serving_dsn
         self.__resolver = resolver
         self.__connection: Optional[psycopg.Connection] = None
         # Per-instance sentinel: only enforce() can stamp it onto a query,

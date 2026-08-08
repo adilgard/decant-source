@@ -70,6 +70,7 @@ from __future__ import annotations
 import argparse
 import importlib.metadata
 import json
+import logging
 import threading
 import time
 import uuid
@@ -78,6 +79,10 @@ from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Mapping, Optional
+
+# psycopg is already a hard dependency via the choke point; "stdlib-only"
+# above is about the HTTP framework (there isn't one), not the DB driver.
+from psycopg.types.json import Jsonb
 
 from knowledge_hub.choke_point import (
     CredentialResolver,
@@ -119,6 +124,8 @@ LATENCY_BUDGET_P95_MS = 300
 LATENCY_WINDOW = 2048
 
 _JSON = "application/json"
+
+logger = logging.getLogger(__name__)
 
 
 class RawResponse:
@@ -214,6 +221,75 @@ class JsonlUsageRecorder(UsageRecorder):
                 self._fh.close()
 
 
+class PostgresUsageRecorder(UsageRecorder):
+    """The production usage sink (migration 019) — the bookmarked one, now
+    built, because the §8.8 verification story needs to QUERY these records
+    and a JSONL file cannot answer "did principal X read through ops in the
+    last hour" without something parsing the whole file.
+
+    Writes on its OWN connection, deliberately not the choke point's. Two
+    reasons: the choke point is SELECT-only at the grant level now
+    (kh_serving), so it physically cannot write this; and instrumentation
+    that shares the serving connection would serialize behind served
+    queries on the same psycopg connection, which is exactly the "may never
+    slow serving" rule this class inherits.
+
+    Failure is LOGGED AND SWALLOWED. That is the uncomfortable call, so it
+    is written down: a usage-log outage must not turn into a serving
+    outage — losing the strip-later evidence for a few requests is
+    recoverable, refusing to answer a caller because bookkeeping is down is
+    not. The check (`check_usage_attribution`) is what notices a sink that
+    has silently stopped accepting rows.
+    """
+
+    def __init__(self, dsn: Optional[str] = None):
+        import psycopg
+
+        # The OPERATOR role: this is a write, and it is not domain data
+        # written by the ingest path, so it should not present as the
+        # pipeline in pg_stat_activity.
+        self._dsn = dsn or settings.operator_dsn
+        self._lock = threading.Lock()
+        self._conn = psycopg.connect(self._dsn, autocommit=True,
+                                     connect_timeout=10)
+        # Verified at CONSTRUCTION, not discovered at first write. record()
+        # swallows failures by design, so a missing table would otherwise
+        # mean every usage row is silently dropped for the life of the
+        # process — the exact silence this whole section exists to remove.
+        if not self._conn.execute(
+                "SELECT 1 FROM pg_tables WHERE schemaname='public'"
+                " AND tablename='serving_usage'").fetchone():
+            self._conn.close()
+            raise RuntimeError(
+                "serving_usage table is missing — migration 019 has not "
+                "been applied to this database. Run `khctl apply`, or set "
+                "SERVING_USAGE_SINK=jsonl to fall back to the file sink "
+                "deliberately rather than by accident.")
+
+    def record(self, usage) -> None:
+        try:
+            with self._lock:
+                self._conn.execute(
+                    "INSERT INTO serving_usage (request_id, tenant_id,"
+                    " principal_id, envelope_kind, envelope_key,"
+                    " fields_read, states_branched, served_at)"
+                    " VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                    (usage.request_id, usage.tenant_id, usage.principal_id,
+                     usage.envelope_kind, usage.envelope_key,
+                     Jsonb(usage.fields_read), Jsonb(usage.states_branched),
+                     usage.served_at))
+        except Exception:
+            logger.exception(
+                "usage record dropped for principal %r request %r — the "
+                "sink is not accepting rows; serving continues",
+                usage.principal_id, usage.request_id)
+
+    def close(self) -> None:
+        with self._lock:
+            if not self._conn.closed:
+                self._conn.close()
+
+
 def _dump_tracked(tracker: UsageTracker,
                   env: FactEnvelope | EvidenceEnvelope) -> dict[str, Any]:
     """Serialize one envelope AS-IS (S1 shape, pydantic JSON mode) while
@@ -279,7 +355,7 @@ class KnowledgeHubServingService(ServingService):
                            include_retracted=include_retracted),
             principal, enrich=enrich)
         tracker = UsageTracker(self._recorder, request_id,
-                               principal.tenant_id)
+                               principal.tenant_id, principal.principal_id)
         evidence = [_dump_tracked(tracker, env) for env in envelopes]
         tracker.flush()
         return {
@@ -302,7 +378,7 @@ class KnowledgeHubServingService(ServingService):
         result = self._catalog.execute(operation, dict(params or {}),
                                        principal)
         tracker = UsageTracker(self._recorder, request_id,
-                               principal.tenant_id)
+                               principal.tenant_id, principal.principal_id)
 
         facts: list[FactEnvelope] = []
         evidence: list[EvidenceEnvelope] = []
@@ -620,7 +696,15 @@ def build_serving_app(*, dsn: Optional[str] = None,
     for tenant_id in tenants:
         register_serving_defaults(catalog, tenant_id)
     retrieval = DenseRetrievalService(choke, embedder, catalog)
-    recorder = recorder or JsonlUsageRecorder(settings.serving_usage_log)
+    if recorder is None:
+        # Default POSTGRES: the attribution query is the point, and a file
+        # cannot answer it. `SERVING_USAGE_SINK=jsonl` is the deliberate
+        # opt-out — chosen, never fallen into (the Postgres sink refuses to
+        # construct rather than degrading quietly).
+        if settings.serving_usage_sink == "jsonl":
+            recorder = JsonlUsageRecorder(settings.serving_usage_log)
+        else:
+            recorder = PostgresUsageRecorder()
     service = KnowledgeHubServingService(choke, catalog, retrieval, recorder)
     return ServingApp(service, resolver)
 

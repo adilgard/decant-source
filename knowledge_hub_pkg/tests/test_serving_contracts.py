@@ -35,6 +35,9 @@ from knowledge_hub.serving import (
 )
 
 TENANT = "t-serving-contracts"
+# A tenant is not an identity — several principals share one — so usage
+# records carry the resolved principal too (§8.8 attribution half).
+PRINCIPAL = "p-serving-contracts"
 
 
 def spine(**over) -> ProvenanceSpine:
@@ -255,7 +258,8 @@ def test_serving_response_wraps_both_envelope_kinds():
 def test_usage_tracker_records_fields_read_and_states_branched():
     recorder = InMemoryUsageRecorder()
     fact = FactEnvelope(**fact_kwargs())
-    with UsageTracker(recorder, request_id="req-1", tenant_id=TENANT) as t:
+    with UsageTracker(recorder, request_id="req-1", tenant_id=TENANT,
+                      principal_id=PRINCIPAL) as t:
         tracked = t.track(fact)
         _ = tracked.predicate
         if tracked.state is UncertaintyState.known_confident:
@@ -274,7 +278,8 @@ def test_usage_tracker_records_fields_read_and_states_branched():
 
 def test_usage_tracker_evidence_key_and_field_counts():
     recorder = InMemoryUsageRecorder()
-    tracker = UsageTracker(recorder, request_id="req-2", tenant_id=TENANT)
+    tracker = UsageTracker(recorder, request_id="req-2", tenant_id=TENANT,
+                            principal_id=PRINCIPAL)
     for _ in range(2):
         tracked = tracker.track(EvidenceEnvelope(**evidence_kwargs()))
         _ = tracked.content
@@ -288,7 +293,8 @@ def test_usage_tracker_evidence_key_and_field_counts():
 
 def test_tracked_envelope_delegates_without_recording_non_fields():
     recorder = InMemoryUsageRecorder()
-    tracker = UsageTracker(recorder, request_id="req-3", tenant_id=TENANT)
+    tracker = UsageTracker(recorder, request_id="req-3", tenant_id=TENANT,
+                            principal_id=PRINCIPAL)
     tracked = tracker.track(FactEnvelope(**fact_kwargs()))
     dumped = tracked.model_dump()          # method access: delegated, unrecorded
     assert dumped["fact_id"] == 101
@@ -300,5 +306,82 @@ def test_tracked_envelope_delegates_without_recording_non_fields():
 
 def test_envelope_usage_kind_vocabulary():
     with pytest.raises(ValidationError):
-        EnvelopeUsage(request_id="r", tenant_id=TENANT, envelope_kind="blob",
+        EnvelopeUsage(request_id="r", tenant_id=TENANT,
+                      principal_id=PRINCIPAL, envelope_kind="blob",
                       envelope_key="x", fields_read=[], states_branched=[])
+
+
+def test_usage_record_carries_the_principal_not_just_the_tenant():
+    """§8.8 attribution: a tenant is shared by several principals, so a
+    record keyed only by tenant cannot answer 'which consumer read this'."""
+    recorder = InMemoryUsageRecorder()
+    for pid in ("agent-a", "agent-b"):
+        tracker = UsageTracker(recorder, request_id=f"req-{pid}",
+                               tenant_id=TENANT, principal_id=pid)
+        _ = tracker.track(FactEnvelope(**fact_kwargs())).predicate
+        tracker.flush()
+
+    assert {r.principal_id for r in recorder.records} == {"agent-a", "agent-b"}
+    # Same tenant throughout — which is exactly why tenant_id alone was not
+    # enough to tell these two reads apart.
+    assert {r.tenant_id for r in recorder.records} == {TENANT}
+    assert all(r.served_at is not None for r in recorder.records)
+
+
+def test_usage_record_refuses_to_be_unattributed():
+    """principal_id has no default ON PURPOSE: a log that is only sometimes
+    attributable cannot answer the question it exists to answer."""
+    with pytest.raises(ValidationError):
+        EnvelopeUsage(request_id="r", tenant_id=TENANT, envelope_kind="fact",
+                      envelope_key="fact:1", fields_read=[],
+                      states_branched=[])
+
+
+# ------------------------------------------------- grounding vocabulary drift --
+def test_serving_grounding_vocabulary_is_the_producers_vocabulary():
+    """The serving layer must accept every verdict a producer can emit.
+
+    REGRESSION (2026-08-07). serving.py carried its own hand-written copy of
+    GROUNDING_STATUSES. The parser_supplied path added 'declared_span' and
+    'span_mismatch' to the producer vocabulary in interfaces.py; the copy was
+    never extended. Result: 206,482 of 206,508 facts — 99.99% of the real
+    corpus — failed FactEnvelope validation on the way out, and every fact op
+    over real data answered HTTP 500. Undetected from the day the parser
+    landed, because no envelope had ever been served.
+
+    Identity, not equality: the tuple must be the SAME object, so a future
+    edit cannot re-fork it into two lists that agree today and drift later.
+    """
+    from knowledge_hub import interfaces
+    from knowledge_hub import serving as serving_mod
+
+    assert serving_mod.GROUNDING_STATUSES is interfaces.GROUNDING_STATUSES
+
+
+@pytest.mark.parametrize("verdict", [
+    "pass", "span_missing", "components_missing",
+    "construction", "declared_span", "span_mismatch",
+])
+def test_every_producer_grounding_verdict_serves(verdict):
+    """Each verdict a grounder can produce must survive envelope validation.
+    Parameterized off the vocabulary's real values so a NEW verdict added to
+    interfaces.py arrives here as a new case automatically."""
+    env = FactEnvelope(**fact_kwargs(grounding=verdict))
+    assert env.grounding == verdict
+
+
+def test_flagged_grounding_is_derived_and_covers_span_mismatch():
+    """'asserted but weakly supported' = everything not GROUNDED.
+
+    _FLAGGED_GROUNDING used to be a hand-written pair that omitted
+    'span_mismatch' — the verdict for "the producer's own offsets did not
+    match the text there". A falsified span would have served as
+    known_confident.
+    """
+    from knowledge_hub.interfaces import GROUNDED_STATUSES, GROUNDING_STATUSES
+    from knowledge_hub.operations import _FLAGGED_GROUNDING
+
+    assert "span_mismatch" in _FLAGGED_GROUNDING
+    assert set(_FLAGGED_GROUNDING) == set(GROUNDING_STATUSES) - set(GROUNDED_STATUSES)
+    # A grounded verdict must never be flagged as weak.
+    assert not set(_FLAGGED_GROUNDING) & set(GROUNDED_STATUSES)

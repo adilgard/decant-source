@@ -74,7 +74,12 @@ def _jsonb(d: Optional[dict]) -> Optional[Jsonb]:
 
 class PostgresFactStore(FactStore):
     def __init__(self, dsn: Optional[str] = None, graph_name: str = GRAPH_NAME):
-        self._dsn = dsn or settings.postgres_dsn
+        # Defaults to the PIPELINE role, not the bootstrap account: this
+        # store's unqualified user is the ingest path. The operator service
+        # holds the same class but a different identity, and passes its own
+        # DSN in (build_operator_app) so pg_stat_activity can tell an
+        # operator-initiated write from an ingest one.
+        self._dsn = dsn or settings.pipeline_dsn
         self._graph = graph_name
         self._conns: dict[str, psycopg.Connection] = {}
 

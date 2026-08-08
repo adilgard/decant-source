@@ -563,6 +563,17 @@ def render_env(plan: DeployPlan, pilot_defaults: dict[str, str]) -> str:
         env["ADJUDICATION_MODEL"] = plan.extraction_model
     if plan.tenants:
         env["SERVING_TENANTS"] = ",".join(plan.tenants)
+    # §8.8: one minted password per least-privilege Postgres role. Same
+    # discipline as the S3 pair above — fresh on every plan, and phase_env
+    # preserves a LIVE deployment's values so a re-plan never rotates the
+    # credentials out from under running services. These are what turn the
+    # isolation property from a client-side promise into a server-side
+    # grant; a deployment rendered without them leaves every role NOLOGIN
+    # and every consumer loudly falling back to the bootstrap account.
+    from knowledge_hub.roles import PASSWORD_ENV
+
+    for var in PASSWORD_ENV.values():
+        env[var] = pysecrets.token_hex(24)
     # ASCII-only header: .env files get read by naive tooling.
     lines = [f"# Rendered by khctl plan - profile={plan.profile} "
              f"shape={plan.shape} (do not hand-edit; re-plan instead)"]

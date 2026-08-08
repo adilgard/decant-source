@@ -312,6 +312,7 @@ def phase_env(ctx: ApplyContext) -> list[str]:
     # credential revocation.
     preserved: Optional[str] = None
     preserved_s3: Optional[tuple[str, str]] = None
+    preserved_roles: list[str] = []
     if target.exists():
         deployed = parse_env_file(target)
         existing = deployed.get("BAO_ROOT_TOKEN", "")
@@ -333,13 +334,28 @@ def phase_env(ctx: ApplyContext) -> list[str]:
             preserved_s3 = (old_ak, old_sk)
             ctx.env["S3_ACCESS_KEY"] = old_ak
             ctx.env["S3_SECRET_KEY"] = old_sk
+        # §8.8, the same counterpart for the least-privilege role passwords:
+        # render_env mints fresh ones every plan, but a live box has running
+        # services holding open connections under those credentials.
+        # phase_schema re-asserts whatever ends up here via ALTER ROLE, so
+        # preserving is consistent — and rotating on a re-plan would drop
+        # every serving and operator connection mid-flight.
+        from knowledge_hub.roles import PASSWORD_ENV
+
+        for var in PASSWORD_ENV.values():
+            existing_pw = deployed.get(var, "")
+            if existing_pw and existing_pw != ctx.env.get(var):
+                preserved_roles.append(var)
+                ctx.env[var] = existing_pw
     if ctx.dry_run:
         return [f"[dry-run] would install {ctx.env_file.name} -> .env "
                 f"({len(ctx.env)} settings)"
                 + (", preserving the deployed vault root token"
                    if preserved else "")
                 + (", preserving the deployed S3 credential pair"
-                   if preserved_s3 else "")]
+                   if preserved_s3 else "")
+                + (f", preserving {len(preserved_roles)} deployed role "
+                   f"password(s)" if preserved_roles else "")]
     lines = []
     if target.exists() and target.read_text(encoding="utf-8") != \
             ctx.env_file.read_text(encoding="utf-8"):
@@ -367,6 +383,16 @@ def phase_env(ctx: ApplyContext) -> list[str]:
         target.write_text("\n".join(content) + "\n", encoding="utf-8")
         lines.append("deployed S3 credentials preserved — a re-plan's "
                      "fresh mint never strands a live object store")
+    if preserved_roles:
+        prefixes = tuple(f"{var}=" for var in preserved_roles)
+        content = [line for line in
+                   target.read_text(encoding="utf-8").splitlines()
+                   if not line.startswith(prefixes)]
+        content += [f"{var}={ctx.env[var]}" for var in preserved_roles]
+        target.write_text("\n".join(content) + "\n", encoding="utf-8")
+        lines.append(f"deployed role password(s) preserved "
+                     f"({', '.join(preserved_roles)}) — a re-plan's fresh "
+                     f"mint never drops live serving/operator connections")
     lines.append(f".env installed from {ctx.env_file.name} "
                  f"({len(ctx.env)} settings)")
     return lines
@@ -608,6 +634,14 @@ def phase_schema(ctx: ApplyContext) -> list[str]:
             applied_n += 1
         lines.append(f"migrations: {applied_n} applied, "
                      f"{len(migrations) - applied_n} already present")
+        # Roles LAST, and every run — not once. They must be granted over
+        # the tables that exist AFTER this apply's migrations, or the newest
+        # table is the one kh_serving cannot read. Idempotent by
+        # construction; see roles.py on why this is not a numbered file.
+        from knowledge_hub import roles as kh_roles
+
+        lines.extend(kh_roles.ensure_serving_roles(
+            conn, kh_roles.passwords_from_env(ctx.env)))
     return lines
 
 

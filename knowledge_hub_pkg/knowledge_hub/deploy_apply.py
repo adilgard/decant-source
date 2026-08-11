@@ -105,8 +105,27 @@ def parse_env_file(path: Path) -> dict[str, str]:
     return env
 
 
-def dsn_from_env(env: dict[str, str]) -> str:
-    return (f"postgresql://{quote(env.get('POSTGRES_USER', 'kh'))}:"
+def dsn_from_env(env: dict[str, str], *, candidate: bool = False) -> str:
+    """Build the bootstrap DSN from a parsed .env dict.
+
+    This is the SECOND bootstrap funnel beside settings.postgres_dsn (apply's
+    phases, khctl migrations, the launcher's stack checks all come through
+    here without ever constructing Settings), so it asks the same guard: an
+    unset / pilot-default password refuses in deployed posture or against a
+    non-local host. `candidate=True` is the one explicit opt-out, for probe's
+    discovery sweep — trying the known pilot credential to see whether a
+    pilot stack answers is probe's job, and that DSN is a guess to test, not
+    a credential to trust."""
+    from knowledge_hub.config import (deployed_posture_in,
+                                      require_safe_postgres_password)
+
+    user = env.get("POSTGRES_USER", "kh")
+    if not candidate:
+        require_safe_postgres_password(env.get("POSTGRES_PASSWORD", ""),
+                                       env.get("POSTGRES_HOST", "localhost"),
+                                       deployed=deployed_posture_in(env),
+                                       user=user)
+    return (f"postgresql://{quote(user)}:"
             f"{quote(env.get('POSTGRES_PASSWORD', ''))}@"
             f"{env.get('POSTGRES_HOST', 'localhost')}:"
             f"{env.get('POSTGRES_PORT', '5432')}/"
@@ -313,6 +332,7 @@ def phase_env(ctx: ApplyContext) -> list[str]:
     preserved: Optional[str] = None
     preserved_s3: Optional[tuple[str, str]] = None
     preserved_roles: list[str] = []
+    preserved_pg_password: Optional[str] = None
     if target.exists():
         deployed = parse_env_file(target)
         existing = deployed.get("BAO_ROOT_TOKEN", "")
@@ -334,6 +354,21 @@ def phase_env(ctx: ApplyContext) -> list[str]:
             preserved_s3 = (old_ak, old_sk)
             ctx.env["S3_ACCESS_KEY"] = old_ak
             ctx.env["S3_SECRET_KEY"] = old_sk
+        # Isolation close-out, the same counterpart for the postgres
+        # BOOTSTRAP password: render_env now mints one per plan, but the
+        # container only reads POSTGRES_PASSWORD at FIRST init (empty data
+        # volume) — a live database still authenticates the value it started
+        # with, so installing a fresh mint over it would break every
+        # bootstrap connection while changing nothing server-side. ANY
+        # deployed value wins, the committed pilot default included (the
+        # pilot's own database really was initialized with it; the runtime
+        # guard in config.require_safe_postgres_password owns the safety
+        # question). Rotation is a deliberate day-2 op: ALTER USER + .env.
+        old_pg_password = deployed.get("POSTGRES_PASSWORD", "")
+        if old_pg_password and old_pg_password != ctx.env.get(
+                "POSTGRES_PASSWORD"):
+            preserved_pg_password = old_pg_password
+            ctx.env["POSTGRES_PASSWORD"] = old_pg_password
         # §8.8, the same counterpart for the least-privilege role passwords:
         # render_env mints fresh ones every plan, but a live box has running
         # services holding open connections under those credentials.
@@ -354,6 +389,8 @@ def phase_env(ctx: ApplyContext) -> list[str]:
                    if preserved else "")
                 + (", preserving the deployed S3 credential pair"
                    if preserved_s3 else "")
+                + (", preserving the deployed Postgres bootstrap password"
+                   if preserved_pg_password else "")
                 + (f", preserving {len(preserved_roles)} deployed role "
                    f"password(s)" if preserved_roles else "")]
     lines = []
@@ -383,6 +420,15 @@ def phase_env(ctx: ApplyContext) -> list[str]:
         target.write_text("\n".join(content) + "\n", encoding="utf-8")
         lines.append("deployed S3 credentials preserved — a re-plan's "
                      "fresh mint never strands a live object store")
+    if preserved_pg_password is not None:
+        content = [line for line in
+                   target.read_text(encoding="utf-8").splitlines()
+                   if not line.startswith("POSTGRES_PASSWORD=")]
+        content.append(f"POSTGRES_PASSWORD={preserved_pg_password}")
+        target.write_text("\n".join(content) + "\n", encoding="utf-8")
+        lines.append("deployed Postgres bootstrap password preserved — a "
+                     "re-plan's fresh mint never rotates a live database's "
+                     "credential out from under it")
     if preserved_roles:
         prefixes = tuple(f"{var}=" for var in preserved_roles)
         content = [line for line in

@@ -171,7 +171,10 @@ def _cmd_probe(args: argparse.Namespace) -> int:
         # BP34's counterpart for Postgres: a deploy that moved off 5432
         # (declined client Postgres holding it) must still find ITSELF on
         # a re-probe — the static 5432 candidate now points at THEIRS.
-        deployed_dsn = dsn_from_env(deployed)
+        # candidate=True: this DSN is a probe GUESS (does a stack answer on
+        # these creds?), not a connection the process will trust — the
+        # bootstrap-password guard deliberately stands aside here.
+        deployed_dsn = dsn_from_env(deployed, candidate=True)
         if deployed_dsn != LOCAL_CANDIDATES["postgres"]:
             pg_candidates.insert(0, deployed_dsn)
     for spec in args.s3_endpoint or []:
@@ -1347,10 +1350,17 @@ def main(argv: list[str] | None = None) -> int:
     # command line, so this prints exactly when real work is about to happen.
     # Full banner where the posture changes what the command DOES, one line
     # where it only colors a report (see FULL_BANNER_COMMANDS).
-    from knowledge_hub.config import print_posture_banner
+    from knowledge_hub.config import (InsecurePostgresPasswordError,
+                                      print_posture_banner)
     print_posture_banner(brief=not wants_full_banner(args))
     print("")
-    return args.fn(args)
+    try:
+        return args.fn(args)
+    except InsecurePostgresPasswordError as e:
+        # The guard's message IS the fix, one read — a traceback would bury
+        # it under twelve frames of machinery the operator can't act on.
+        print(f"[FAIL] {e}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

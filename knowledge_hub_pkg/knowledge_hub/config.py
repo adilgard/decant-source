@@ -43,8 +43,9 @@ quarantine run identically in both postures and read nothing from this field.
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable, Mapping, Optional
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -63,6 +64,77 @@ DEFAULT_ENV_FILE = ".env"
 POSTURE_LOCAL = "local"
 POSTURE_DEPLOYED = "deployed"
 POSTURES = (POSTURE_LOCAL, POSTURE_DEPLOYED)
+
+# --- Postgres bootstrap password guard (isolation rider close-out) ----------
+# The committed pilot value, named so the guard and render_env compare against
+# the same constant the field defaults to. If the pilot value ever changes,
+# this is the one place it changes.
+PILOT_POSTGRES_PASSWORD = "kh_pilot_pw"
+
+# What counts as "this box" for the guard below. Deliberately narrow: a
+# hostname that RESOLVES to loopback still reads as remote here, because the
+# guard cannot know that without a DNS lookup at config time.
+LOOPBACK_HOSTS = frozenset({"localhost", "127.0.0.1", "::1"})
+
+
+class InsecurePostgresPasswordError(RuntimeError):
+    """The bootstrap DSN was requested where an unset / pilot-default
+    password is unsafe. Raised instead of connecting: a deployment must not
+    come up on a publicly known schema-owner credential."""
+
+
+def require_safe_postgres_password(password: str, host: str, *,
+                                   deployed: bool, user: str = "kh") -> None:
+    """Refuse an unset / pilot-default bootstrap password anywhere it is
+    unsafe: deployed posture, or a database host that is not this box.
+
+    Module-level, not a Settings method, because there are TWO funnels every
+    bootstrap connection goes through and both must ask the same question:
+    Settings.postgres_dsn (checks, launcher preflight, role_dsn's loud
+    fallback) and deploy_apply.dsn_from_env (apply's phases, khctl
+    migrations, the launcher's stack checks) — the second reads a parsed
+    .env dict and never touches Settings, which is exactly how the first
+    draft of this guard got walked around on its first live fire test.
+
+    The one legitimate holder of the default is the local single-user pilot
+    (local posture, loopback DB) — its plaintext-local credential model is
+    deliberate, so it passes untouched.
+    """
+    cleaned = (password or "").strip()
+    if cleaned and cleaned != PILOT_POSTGRES_PASSWORD:
+        return
+    if not deployed and (host or "").strip().lower() in LOOPBACK_HOSTS:
+        return
+    what = ("unset" if not cleaned
+            else f"the committed pilot default {PILOT_POSTGRES_PASSWORD!r}")
+    where = (f"posture is {POSTURE_DEPLOYED}" if deployed
+             else f"the database host {host!r} is not this box")
+    raise InsecurePostgresPasswordError(
+        f"POSTGRES_PASSWORD is {what}, and {where} — refusing to build "
+        f"the bootstrap DSN on a known credential.\n"
+        f"Fix, one of:\n"
+        f"  fresh deploy: re-run `khctl plan` with this build — it mints "
+        f"a per-deploy POSTGRES_PASSWORD into .env.deploy, and apply "
+        f"installs it.\n"
+        f"  this box now: set POSTGRES_PASSWORD in the deployment "
+        f"home's .env (cwd: {Path.cwd()}) or the environment, AND "
+        f"rotate the server to match:\n"
+        f"                ALTER USER {user} PASSWORD "
+        f"'<the new value>';  -- .env changes only what clients SEND\n"
+        f"The local single-user pilot (KH_POSTURE unset/local, DB on "
+        f"loopback) keeps its committed default and never hits this.")
+
+
+def deployed_posture_in(env: Optional[Mapping[str, str]] = None) -> bool:
+    """Posture as the guard sees it OUTSIDE Settings: the OS environment
+    first (pydantic's own precedence), then the provided parsed-.env
+    mapping, then the local default. For dsn_from_env, which carries a
+    dict, not a Settings. An unrecognized value reads as not-deployed here
+    rather than raising — any real process constructs Settings at startup,
+    where the posture validator already refuses it loudly."""
+    raw = (os.environ.get("KH_POSTURE")
+           or (env or {}).get("KH_POSTURE") or "")
+    return raw.strip().lower() == POSTURE_DEPLOYED
 
 
 class Settings(BaseSettings):
@@ -90,7 +162,11 @@ class Settings(BaseSettings):
     # migrations, and creates the least-privilege roles below. Runtime
     # consumers should NOT use it — see the per-consumer DSNs further down.
     postgres_user: str = "kh"
-    postgres_password: str = "kh_pilot_pw"
+    # The default is legitimate ONLY for the local single-user pilot on a
+    # loopback DB — everywhere else postgres_dsn refuses to build with it
+    # (require_safe_postgres_password below). render_env mints a real value
+    # per deploy, so a rendered deployment never carries this default.
+    postgres_password: str = PILOT_POSTGRES_PASSWORD
     postgres_db: str = "knowledge_hub"
     postgres_host: str = "localhost"
     postgres_port: int = 5432
@@ -249,11 +325,33 @@ class Settings(BaseSettings):
         """Hardened posture: today's behavior, in full."""
         return self.posture == POSTURE_DEPLOYED
 
+    def require_safe_postgres_password(self) -> None:
+        """The Settings-side entry to the module-level guard above.
+
+        Enforced at DSN build, not at Settings construction, on purpose:
+        the bench flips KH_POSTURE=deployed to run make-kit against a .env
+        that legitimately carries the pilot password, and make-kit never
+        touches the DB. Construction-time enforcement would refuse exactly
+        that documented flow. Every process that DOES touch the DB builds
+        a DSN at startup (both HTTP services warm a connection before
+        serving), so in practice this still fails at boot, not mid-work.
+        """
+        require_safe_postgres_password(self.postgres_password,
+                                       self.postgres_host,
+                                       deployed=self.is_deployed,
+                                       user=self.postgres_user)
+
     @property
     def postgres_dsn(self) -> str:
         """The BOOTSTRAP connection: schema owner, migration runner, role
         creator. Correct for apply and for the test harness that makes and
-        drops databases. Wrong for a runtime consumer — use role_dsn."""
+        drops databases. Wrong for a runtime consumer — use role_dsn.
+
+        Refuses to build on an unset / pilot-default password outside the
+        local pilot (require_safe_postgres_password) — this property is one
+        of the TWO bootstrap funnels; deploy_apply.dsn_from_env is the
+        other, and it asks the same guard."""
+        self.require_safe_postgres_password()
         return (
             f"postgresql://{self.postgres_user}:{self.postgres_password}"
             f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"

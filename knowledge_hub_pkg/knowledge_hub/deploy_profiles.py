@@ -508,8 +508,9 @@ def _qualify_endpoint(seam: str, rules: list[str], endpoint: str,
 # ---------------------------------------------------------------------------
 def render_env(plan: DeployPlan, pilot_defaults: dict[str, str]) -> str:
     """Render .env.deploy for pydantic Settings. 'ours' seams keep the pilot
-    compose defaults; 'theirs'/'remote' seams override from plan endpoints.
-    Secrets values here are the OURS-stack bootstrap creds — theirs-postgres
+    compose defaults EXCEPT credentials, which are minted per deploy (S3
+    pair, role passwords, and the postgres bootstrap password); 'theirs'/
+    'remote' seams override from plan endpoints — theirs-postgres
     credentials ride inside the DSN the operator supplied."""
     env = dict(pilot_defaults)
     pg = plan.seams.get("postgres")
@@ -534,6 +535,18 @@ def render_env(plan: DeployPlan, pilot_defaults: dict[str, str]) -> str:
         # through to IPv4 (the pilot .env carried this pin by hand; a
         # re-plan must not strip it).
         env["POSTGRES_HOST"] = "127.0.0.1"
+    if not (pg and pg.choice == "theirs"):
+        # Isolation close-out: an OURS postgres never deploys on the
+        # committed pilot bootstrap password — the schema owner was the one
+        # credential still riding through as the known pilot value while the
+        # S3 pair (BP28 #21) and the role passwords (§8.8) were minted. Same
+        # discipline now: fresh per plan; compose initializes the container
+        # with it on first start; phase_env preserves a LIVE deployment's
+        # value so a re-plan never rotates a running database's credential.
+        # (Theirs-postgres keeps the operator-supplied DSN's password above;
+        # settings.require_safe_postgres_password refuses an empty one at
+        # runtime where that is unsafe.)
+        env["POSTGRES_PASSWORD"] = pysecrets.token_hex(24)
     s3 = plan.seams.get("object_store")
     if s3 and s3.choice == "theirs":
         env["S3_ENDPOINT"] = s3.endpoint

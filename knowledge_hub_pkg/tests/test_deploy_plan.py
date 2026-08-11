@@ -1008,6 +1008,39 @@ def test_render_env_mints_unique_s3_credentials():
     assert first["S3_ENDPOINT"] == "http://localhost:8333"
 
 
+def test_render_env_mints_the_postgres_bootstrap_password():
+    """Isolation close-out: the schema owner was the one credential still
+    rendered as the committed pilot value while the S3 pair and the role
+    passwords were minted — so a deployment that did everything right still
+    came up on a KNOWN password. Same discipline now: fresh per plan."""
+    plan = resolve_plan(PROFILES, "appliance", make_probe(), tenants=["ops"])
+    first = dict(line.split("=", 1) for line in
+                 render_env(plan, PILOT_DEFAULTS).splitlines()
+                 if "=" in line and not line.startswith("#"))
+    second = dict(line.split("=", 1) for line in
+                  render_env(plan, PILOT_DEFAULTS).splitlines()
+                  if "=" in line and not line.startswith("#"))
+    assert first["POSTGRES_PASSWORD"] != "kh_pilot_pw"
+    assert first["POSTGRES_PASSWORD"]  # minted, never empty
+    assert first["POSTGRES_PASSWORD"] != second["POSTGRES_PASSWORD"]
+    # the bootstrap USER is connection config, not a credential — still rides
+    assert first["POSTGRES_USER"] == "kh"
+
+
+def test_render_env_theirs_postgres_keeps_the_operator_supplied_password():
+    """An adopted database's credentials are the operator's business: the
+    DSN's password must ride through exactly, never be minted over — a mint
+    here would be a password their server has never heard of."""
+    probe = make_probe(postgres=[qualified_pg()])
+    plan = resolve_plan(
+        PROFILES, "client-gpu", probe,
+        use=["postgres=theirs:postgresql://svc:theirpw@pg.client.lan:5433/khdb"])
+    env = dict(line.split("=", 1) for line in
+               render_env(plan, PILOT_DEFAULTS).splitlines()
+               if "=" in line and not line.startswith("#"))
+    assert env["POSTGRES_PASSWORD"] == "theirpw"
+
+
 def test_render_env_theirs_object_store_keeps_its_endpoint():
     plan = resolve_plan(PROFILES, "appliance", make_probe(), tenants=["ops"])
     plan.seams["object_store"] = plan.seams["object_store"].model_copy(

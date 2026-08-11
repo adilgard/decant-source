@@ -880,6 +880,37 @@ def test_phase_env_preserves_live_s3_credentials(tmp_path):
     assert any("S3 credentials preserved" in line for line in lines)
 
 
+def test_phase_env_preserves_the_live_postgres_bootstrap_password(tmp_path):
+    """The container reads POSTGRES_PASSWORD only at FIRST init: a live
+    database still authenticates the value it started with, so a re-plan's
+    fresh mint must never be installed over it — that would break every
+    bootstrap connection while rotating nothing server-side."""
+    ctx = make_ctx(tmp_path, env_text="POSTGRES_PASSWORD=freshmint123\n")
+    (tmp_path / ".env").write_text("POSTGRES_PASSWORD=live-db-password\n",
+                                   encoding="utf-8")
+
+    lines = phase_env(ctx)
+
+    assert parse_env_file(tmp_path / ".env")["POSTGRES_PASSWORD"] \
+        == "live-db-password"
+    # later phases (schema, roles) connect via ctx.env — they need the value
+    # the database actually accepts
+    assert ctx.env["POSTGRES_PASSWORD"] == "live-db-password"
+    assert any("bootstrap password preserved" in line for line in lines)
+
+
+def test_phase_env_fresh_box_installs_the_minted_password_plainly(tmp_path):
+    """No .env on the target yet = first deploy: the mint IS the password
+    the container will initialize with. Nothing to preserve, no message."""
+    ctx = make_ctx(tmp_path, env_text="POSTGRES_PASSWORD=freshmint123\n")
+
+    lines = phase_env(ctx)
+
+    assert parse_env_file(tmp_path / ".env")["POSTGRES_PASSWORD"] \
+        == "freshmint123"
+    assert not any("bootstrap password preserved" in line for line in lines)
+
+
 def test_phase_services_s3config_carries_the_preserved_pair(tmp_path):
     ctx = make_ctx(tmp_path, env_text=(
         "S3_ACCESS_KEY=kh-s3-freshmint\nS3_SECRET_KEY=freshsecret\n"))

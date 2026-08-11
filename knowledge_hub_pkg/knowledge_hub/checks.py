@@ -363,9 +363,15 @@ def check_processing(ollama_host: Optional[str] = None) -> str:
 # ---------------------------------------------------------------------------
 def check_extraction(dsn: Optional[str] = None) -> str:
     # Extraction readiness without touching queue/staging tables: the binding
-    # builds from the seeded ontology row (migration 004 data included), one
-    # LIVE schema-constrained call validates + conforms, and the grounder
-    # verifies a span deterministically.
+    # builds from the ACTIVE ontology row, one LIVE schema-constrained call
+    # validates + conforms, and the grounder verifies a span deterministically.
+    #
+    # Every probe input is DERIVED from that active row, never hardcoded:
+    # this check once pinned the pilot-baseline alias pair ("owned by" ->
+    # owns) and a QA-Team smoke sentence, and went red the day the active
+    # ontology flipped to tax-statute — with a message blaming migration 004,
+    # which was applied and innocent. A smoke check that only works against
+    # the corpus it was written on is testing its author, not the box.
     from knowledge_hub.extraction_llm import LLMJointExtractionStrategy
     from knowledge_hub.factstore_pg import PostgresFactStore
     from knowledge_hub.grounding import SpanGrounder
@@ -374,11 +380,46 @@ def check_extraction(dsn: Optional[str] = None) -> str:
     from knowledge_hub.ontology import PostgresOntologyBinding
 
     binding = PostgresOntologyBinding(PostgresFactStore(dsn=dsn))
-    assert binding.normalize_predicate("owned by") == ("owns", True), \
-        "predicate alias data missing — is migration 004 applied?"
-    assert "e.g." in binding.prompt_vocabulary(), "ontology examples missing"
 
-    text = "The QA Team owns the smoke-check log."
+    # Alias plumbing, probed with the row's own RAW alias spellings (spaces
+    # and all, so canonicalization is exercised the way real model output
+    # exercises it). Reading the private definition is deliberate: the check
+    # must see the same data the binding built from, not re-fetch it.
+    raw_aliases = binding._definition.get("predicate_aliases") or {}
+    if raw_aliases:
+        alias, target = sorted(raw_aliases.items())[0]
+        expected = ((target, False) if isinstance(target, str)
+                    else (target["predicate"], bool(target.get("swap", False))))
+        assert binding.normalize_predicate(alias) == expected, \
+            (f"ontology {binding.version!r} defines alias {alias!r} -> "
+             f"{expected[0]!r} but the binding does not resolve it — alias "
+             f"target missing from the predicate vocabulary, or the row is "
+             f"corrupt")
+        alias_note = f"alias {alias!r}->{expected[0]!r} ok"
+    else:
+        alias_note = "no aliases defined by this ontology (skipped)"
+    assert "e.g." in binding.prompt_vocabulary(), \
+        f"ontology {binding.version!r} carries no examples — the extraction " \
+        f"prompt would ship without them"
+
+    # Smoke text woven from the active ontology's own entity examples, so
+    # the live call always has something in-vocabulary to find (and the
+    # grounder a literal span to verify). Declarative statements, no meta
+    # framing: probed live 2026-08-10, "this text mentions X, Y, Z" reads as
+    # non-factual to the model and reliably yields NOTHING, where "X is a
+    # <type>" yields entities and facts on every run. The borrowed English
+    # relations below need not exist in the vocabulary — an out-of-ontology
+    # fact quarantines, and quarantine counts as the machinery answering.
+    examples = (binding._definition.get("examples") or {}) \
+        .get("entity_types") or {}
+    seed = next(((t, xs) for t, xs in sorted(examples.items()) if xs), None)
+    assert seed, (f"ontology {binding.version!r} has an examples block but "
+                  f"no entity-type examples — nothing to anchor the live "
+                  f"extraction probe on")
+    seed_type, seed_names = seed
+    names = (list(seed_names) * 3)[:3]  # pad by reuse below three examples
+    text = (f"{names[0]} is a {seed_type}. {names[1]} is part of "
+            f"{names[0]}. {names[0]} references {names[2]}.")
     document = Document(id=0, tenant_id="_smoketest", raw_document_id=0,
                         doc_type=DocType.sop, title="Smoke",
                         metadata={"data_track": "prose"})
@@ -389,9 +430,9 @@ def check_extraction(dsn: Optional[str] = None) -> str:
     result = strategy.extract(ExtractionUnit(
         document=document, source_system="check", chunk=chunk, text=text))
     assert result.entities or result.quarantined, "model returned nothing"
-    grounded = SpanGrounder().ground(text, ["QA Team"], text)
+    grounded = SpanGrounder().ground(text, [seed_names[0]], text)
     assert grounded.status == "pass"
-    return (f"extraction: binding {binding.version} ok, "
+    return (f"extraction: binding {binding.version} ok ({alias_note}), "
             f"{strategy.version} conformed {len(result.facts)} fact(s) / "
             f"{len(result.entities)} entities / {len(result.quarantined)} "
             f"quarantined in {result.stats.wall_ms}ms, grounder ok")

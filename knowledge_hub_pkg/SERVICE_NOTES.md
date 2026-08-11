@@ -41,17 +41,39 @@ on `GET /v1/ops` and gets `404 unknown_operation` on every call — the
 absence rule working exactly as designed, and indistinguishable from "that
 op does not exist" if you are not expecting it.
 
-The registered set comes from `SERVING_TENANTS`. **Measured on the pilot
-2026-08-07: `SERVING_TENANTS=ops,finance`, while every one of the 206,506
-facts lives in tenant `default`.** `ops` holds a single `labels` row and the
-console's operator principals; `finance` appears nowhere in the database at
-all. So the service as configured serves two tenants that hold no data,
-while the corpus sits in a tenant it does not serve.
+The registered set comes from `SERVING_TENANTS`, which `khctl plan` renders
+from `deploy_plan.json`'s `tenants`.
 
-That is a configuration fork nobody has recorded a decision for — add
-`default` to `SERVING_TENANTS`, or move the corpus into `ops` — and it is
-NOT settled here. What is settled is that the symptom is a 404, not an empty
-result set, so it reads like a missing op rather than a tenancy mismatch.
+**Found on the pilot 2026-08-07: `SERVING_TENANTS=ops,finance`, while every
+one of the 206,506 facts lived in tenant `default`.** `ops` held a single
+`labels` row and the console's operator principals; `finance` appeared
+nowhere in the database at all. The service served two empty tenants while
+the corpus sat in one it did not serve, so a freshly minted `default`-tenant
+agent credential answered `404 unknown_operation` on every op — verified
+live, `GET /v1/ops` returned `[]`.
+
+**DECIDED (operator, 2026-08-07): add `default` to the served set** rather
+than migrate the corpus into `ops`. `SERVING_TENANTS=ops,finance,default`.
+`ops` and `finance` stay registered — they cost nothing, and removing them
+is a separate decision about what the deployment is for.
+
+Changed in THREE places on the pilot box, because any one alone silently
+reverts:
+
+  * `deploy_plan.json` `tenants` — what the other two are derived FROM.
+    `render_env` builds SERVING_TENANTS out of it and `deploy_launch` reads
+    `plan.tenants` directly. Edit only the `.env` and the next `khctl plan`
+    puts the old value back. Note this file is **gitignored** — it is a
+    per-box artifact `khctl plan` produces from that machine's probe, so do
+    not go looking for it in the repo. On a NEW deployment the tenant list
+    is an input at plan time (`khctl plan --tenants ops,finance,default`),
+    not something inherited from here.
+  * `.env.deploy` — the rendered artifact `phase_env` installs as `.env`.
+  * `.env` — the live value, for effect without a re-plan.
+
+Verified after: the `default` catalog exposes all six base ops plus
+`entity_dossier`, `get_facts` serves 201 real envelopes, and a re-render
+from the plan still yields `ops,finance,default`.
 
 ## Identity: resolved at the boundary, never asserted
 

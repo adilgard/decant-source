@@ -77,6 +77,7 @@ from knowledge_hub.deploy_apply import (
     ApplyError,
     verify_kit_manifest,
 )
+from knowledge_hub.secret_names import FORBIDDEN_NAMES
 
 KIT_FORMAT = 1
 
@@ -152,27 +153,11 @@ KIT_RUNTIME_DIRS = ("tokenizer",)
 PKG_DIR = "knowledge_hub_pkg"
 PKG_EXCLUDE = ("__pycache__", "*.egg-info", ".venv", ".pytest_cache")
 
-# Anything matching these anywhere in a finished kit fails the build —
-# the second net behind the allowlist. Kits carry NO secrets, NO
-# engagement artifacts, NO usage logs.
-#
-# `.secrets.local*` (d.s Stage 2): the local-posture credential file. It lives
-# in the infra dir beside .env, which is exactly where the bundle stage reads
-# from, so it is one glob away from riding to another machine — and it holds
-# BOTH source credentials and the console principal registry. That would be the
-# single worst thing this build could cause, so it is caught here as well as by
-# the make-kit posture gate and .gitignore. Three nets, because the ones that
-# matter get more than one: the posture gate stops the ordinary mistake, this
-# stops it on a deliberately hardened build too.
-#
-# NOTE this guard is posture-BLIND on purpose. Everything else about kit
-# ceremony became conditional in Stage 2; this did not. It is a safety check on
-# what leaves the bench, not product ceremony, and a kit built in either posture
-# must never carry a credential.
-FORBIDDEN_NAMES = re.compile(
-    r"^(\.env.*|\.secrets\.local.*|deploy_plan\.json|probe_report\.json|"
-    r"\.apply_progress\.json|s3config\.json|.*usage.*\.jsonl|"
-    r".*\.(bak|key|pem))$")
+# The no-secrets definition (and the tracked files that deliberately wear
+# the shape) live in knowledge_hub.secret_names — imported at the top of
+# this module so the kit gate and the pre-commit hook read ONE definition.
+# assert_no_secrets uses FORBIDDEN_NAMES only: COMMIT_ALLOWLIST is a repo
+# concept, and none of its paths is ever staged into a kit.
 
 _WIN_MARKER = re.compile(r";\s*sys_platform\s*==\s*[\"']win32[\"']")
 

@@ -12,3 +12,8 @@ Dockerfile text eol=lf
 # Binary — never touch
 *.docx binary
 *.xlsx binary
+
+# Git hooks execute under sh (Git for Windows' sh.exe on this bench), so a CRLF
+# shebang would break them on checkout. The hook shim has no .sh extension, so
+# the rule above does not reach it.
+hooks/pre-commit text eol=lf

@@ -1,0 +1,43 @@
+#!/bin/sh
+# decant-source pre-commit guard — refuses staged files with secret-shaped
+# names. The rule itself lives in knowledge_hub/secret_names.py (ONE
+# definition, shared with the kit gate); this script only finds a Python and
+# hands off to hooks/check_staged_secrets.py.
+#
+# Installed with:   git config core.hooksPath hooks
+#
+# On Windows this runs under the sh.exe that ships with Git for Windows, not
+# cmd or PowerShell, so POSIX sh is correct here. Keep it POSIX: no bashisms,
+# and the file must stay LF (.gitattributes pins it).
+set -e
+
+REPO_ROOT=$(git rev-parse --show-toplevel)
+CHECKER="$REPO_ROOT/hooks/check_staged_secrets.py"
+
+# Repo venv first — it is the interpreter this project is developed against and
+# it needs no PATH luck. Then the Windows launcher, then a plain python3/python.
+# Nothing here needs the package INSTALLED; the checker loads the rule by path.
+for candidate in \
+    "$REPO_ROOT/.venv/Scripts/python.exe" \
+    "$REPO_ROOT/.venv/bin/python"
+do
+    if [ -x "$candidate" ]; then
+        exec "$candidate" "$CHECKER"
+    fi
+done
+
+for candidate in py python3 python; do
+    if command -v "$candidate" >/dev/null 2>&1; then
+        exec "$candidate" "$CHECKER"
+    fi
+done
+
+# FAIL-CLOSED. No interpreter means the guard cannot check, and a secret guard
+# that cannot check must not wave the commit through. This repo is a Python
+# project, so in practice this fires only on a genuinely broken environment.
+printf '\n\033[31m\033[1mpre-commit: commit refused\033[0m\n' >&2
+printf '  No Python found, so the staged-secret guard could not run.\n' >&2
+printf '  Looked for: .venv/Scripts/python.exe, .venv/bin/python, py, python3, python\n' >&2
+printf '  Install Python (or create the repo venv), or use --no-verify if you\n' >&2
+printf '  are certain nothing secret is staged.\n\n' >&2
+exit 1

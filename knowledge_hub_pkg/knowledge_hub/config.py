@@ -182,9 +182,14 @@ class Settings(BaseSettings):
     kh_pg_report_password: str = ""
 
     # --- SeaweedFS S3 gateway ---
+    # The key pair below is a LOCAL BRING-UP PLACEHOLDER, not a credential:
+    # it is published in .env.example and seaweedfs/s3config.json, and the
+    # gateway only listens on 127.0.0.1. Deployed posture never sees it
+    # (render_env mints a pair and writes s3config.json on site). Named so
+    # nobody has to guess whether it is safe to have in a public repo.
     s3_endpoint: str = "http://localhost:8333"
-    s3_access_key: str = "kh_s3_admin"
-    s3_secret_key: str = "kh_s3_secret_pw"
+    s3_access_key: str = "local_dev_only_s3_admin"
+    s3_secret_key: str = "local_dev_only_not_a_secret"
     s3_raw_bucket: str = "kh-raw"
     # Object-lock (WORM) retention stamped on every landed object. COMPLIANCE
     # mode: not removable via the S3 API until it expires — long by design.

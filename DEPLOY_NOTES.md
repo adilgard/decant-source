@@ -84,11 +84,11 @@ point the whole process was on `localhost` instead of the `.env`'s pinned
 per fresh connection. One test took **160s in that state versus 0.78s clean**.
 
 Their restore assertions passed the entire time because they checked
-`s3_access_key`, whose `.env` value (`kh_s3_admin`) is identical to its class
-default — the one field that could not reveal the problem. They now restore
-from a NAMED file and assert on `postgres_host`, which is the field that
-differs. `tests/test_bounded_io.py` documents that blind spot explicitly, so
-the next person does not re-learn it.
+`s3_access_key`, whose `.env` value (`local_dev_only_s3_admin`) is identical
+to its class default — the one field that could not reveal the problem.
+They now restore from a NAMED file and assert on `postgres_host`, which is the
+field that differs. `tests/test_bounded_io.py` documents that blind spot
+explicitly, so the next person does not re-learn it.
 
 **Run pytest from the INFRA ROOT.** From `knowledge_hub_pkg/` there is no
 `.env`, so settings fall back to `localhost` and the same stall applies to the

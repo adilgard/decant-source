@@ -36,7 +36,7 @@ PROFILES = load_profiles(INFRA_DIR / "profiles.toml")
 PILOT_DEFAULTS = {
     "POSTGRES_USER": "kh", "POSTGRES_PASSWORD": "kh_pilot_pw",
     "POSTGRES_DB": "knowledge_hub", "S3_ENDPOINT": "http://localhost:8333",
-    "S3_ACCESS_KEY": "kh_s3_admin", "S3_SECRET_KEY": "kh_s3_secret_pw",
+    "S3_ACCESS_KEY": "local_dev_only_s3_admin", "S3_SECRET_KEY": "local_dev_only_not_a_secret",
     "S3_RAW_BUCKET": "kh-raw", "BAO_ADDR": "http://localhost:8200",
     "BAO_ROOT_TOKEN": "kh_pilot_root_token",
 }
@@ -999,8 +999,8 @@ def test_render_env_mints_unique_s3_credentials():
                   render_env(plan, PILOT_DEFAULTS).splitlines()
                   if "=" in line and not line.startswith("#"))
     # per-deploy mint: never the committed pilot pair, never repeated
-    assert first["S3_ACCESS_KEY"] != "kh_s3_admin"
-    assert first["S3_SECRET_KEY"] != "kh_s3_secret_pw"
+    assert first["S3_ACCESS_KEY"] != "local_dev_only_s3_admin"
+    assert first["S3_SECRET_KEY"] != "local_dev_only_not_a_secret"
     assert first["S3_ACCESS_KEY"] != second["S3_ACCESS_KEY"]
     assert first["S3_SECRET_KEY"] != second["S3_SECRET_KEY"]
     # everything else still renders from the defaults
@@ -1051,7 +1051,7 @@ def test_render_env_theirs_object_store_keeps_its_endpoint():
                if "=" in line and not line.startswith("#"))
     assert env["S3_ENDPOINT"] == "http://minio.client.lan:9000"
     # adopted store: their creds are their business — no mint, defaults ride
-    assert env["S3_ACCESS_KEY"] == "kh_s3_admin"
+    assert env["S3_ACCESS_KEY"] == "local_dev_only_s3_admin"
 
 
 def test_compose_publishes_loopback_only():

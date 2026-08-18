@@ -4,8 +4,8 @@
       "name": "kh_admin",
       "credentials": [
         {
-          "accessKey": "kh_s3_admin",
-          "secretKey": "kh_s3_secret_pw"
+          "accessKey": "local_dev_only_s3_admin",
+          "secretKey": "local_dev_only_not_a_secret"
         }
       ],
       "actions": [

@@ -64,14 +64,13 @@ COMMIT_ALLOWLIST = frozenset({
     # same claim, enforced at commit time.
     ".env.example",
     ".secrets.local.example.json",
-    # The local-posture SeaweedFS identity. The values in it are the published
-    # local defaults (they also appear in .env.example and in deploy_cli's
-    # LOCAL_DEFAULTS — three places that must agree, per .env.example's own
-    # "These MUST match" note). This tracked copy is a bring-up default and is
-    # never the file a real box runs: deploy_apply.render_s3config writes
-    # s3config.json on site from the plan's env, and the kit refuses to carry
-    # one at all. If this file ever holds a value that is NOT the published
-    # default, delete this line rather than editing the file.
+    # The local-posture SeaweedFS identity. Its key pair is named
+    # local_dev_only_* precisely so this entry needs no defending: the values
+    # are published in .env.example and config.py as well, the gateway only
+    # listens on 127.0.0.1, and a real box never runs this file at all
+    # (deploy_apply.render_s3config mints a pair and writes it on site; the
+    # kit refuses to carry one). If this file ever holds a value that is NOT
+    # a local_dev_only_* placeholder, delete this line rather than edit it.
     "seaweedfs/s3config.json",
 })
 

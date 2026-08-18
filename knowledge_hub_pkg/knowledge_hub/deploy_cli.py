@@ -80,8 +80,8 @@ PILOT_ENV_DEFAULTS = {
     "POSTGRES_PASSWORD": "kh_pilot_pw",
     "POSTGRES_DB": "knowledge_hub",
     "S3_ENDPOINT": "http://localhost:8333",
-    "S3_ACCESS_KEY": "kh_s3_admin",
-    "S3_SECRET_KEY": "kh_s3_secret_pw",
+    "S3_ACCESS_KEY": "local_dev_only_s3_admin",
+    "S3_SECRET_KEY": "local_dev_only_not_a_secret",
     "S3_RAW_BUCKET": "kh-raw",
     "BAO_ADDR": "http://localhost:8200",
     "BAO_ROOT_TOKEN": PILOT_PLACEHOLDER_TOKEN,
@@ -91,7 +91,7 @@ PILOT_ENV_DEFAULTS = {
 # tries, so a box already running pieces of the stack reports them.
 LOCAL_CANDIDATES = {
     "postgres": "postgresql://kh:kh_pilot_pw@localhost:5432/knowledge_hub",
-    "s3": ("http://localhost:8333", "kh_s3_admin", "kh_s3_secret_pw", "kh-raw"),
+    "s3": ("http://localhost:8333", "local_dev_only_s3_admin", "local_dev_only_not_a_secret", "kh-raw"),
     "vault": "http://localhost:8200",
     "ollama": "http://localhost:11434",
 }

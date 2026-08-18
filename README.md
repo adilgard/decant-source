@@ -26,11 +26,13 @@ embeddings. No hosted services.
 | `DEPLOY_NOTES.md`, `NOTES.md` | Design decisions and open items |
 | `SANITY_CHECK_FINDINGS.md` | User-readiness red-team findings (BP24) |
 | `design/` | Operator console HTML mocks |
+| `hooks/` | Tracked git hooks — the commit-time secret guard. Needs a one-time install, see Quickstart |
 | `.kit_manifests/` | Signed image/package pin manifests per kit version |
 
 ## Quickstart (local pilot)
 
 ```bash
+git config core.hooksPath hooks   # once per clone: the secret guard
 cp .env.example .env
 docker compose up -d
 py -3.12 -m venv .venv
@@ -51,6 +53,27 @@ gitignored; `.env.example` carries throwaway pilot defaults only. Real
 deployments mint credentials during the deploy ceremony and keep them in
 OpenBao — see `REFCARD_credentials.md`. The kit-signing secret key lives
 offline and is never in the repo or the kit.
+
+A pre-commit hook enforces this at the moment it matters. It refuses any
+staged file whose NAME is secret-shaped, using the SAME definition the kit
+gate uses (`knowledge_hub/secret_names.py`), so the two can never drift.
+Install it once per clone:
+
+```bash
+git config core.hooksPath hooks
+```
+
+This repo is public, so a committed credential is world-readable history:
+fixing it means ROTATING the credential, not reverting the commit. That is
+why the guard stops you before the commit rather than after.
+
+Three tracked files deliberately wear a secret-shaped name and carry no
+values (`.env.example`, `.secrets.local.example.json`,
+`seaweedfs/s3config.json`). They are listed by exact path in
+`COMMIT_ALLOWLIST` in that same module. If you add another placeholder file,
+add it there too. `git commit --no-verify` still bypasses the hook on
+purpose — it is git's escape hatch, and the goal is to stop the accident,
+not the deliberate act.
 
 ## Version
 
